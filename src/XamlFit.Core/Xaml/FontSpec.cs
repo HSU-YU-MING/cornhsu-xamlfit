@@ -14,8 +14,12 @@ namespace XamlFit.Core.Xaml;
 public readonly record struct FontSpec(
     string Family, double Size, int Weight, FontStyleKind Style, string? Unreadable)
 {
+    /// <summary>元素的 Language（xml:lang，會繼承）。沒寫是 WPF 的預設 en-US —— 跟 Windows 的語言無關。</summary>
+    public string Language { get; init; } = FontFallback.DefaultLanguage;
+
     /// <summary>字型屬性會繼承：本地 → 樣式 → 祖先，都沒有才用預設值。</summary>
-    public static FontSpec Read(StyleIndex styles, XElement el, string defaultFamily, double defaultSize)
+    public static FontSpec Read(StyleIndex styles, XElement el, string defaultFamily, double defaultSize,
+        string defaultLanguage = FontFallback.DefaultLanguage)
     {
         string? unreadable = null;
 
@@ -52,8 +56,23 @@ public readonly record struct FontSpec(
         if (weightText.Length > 0 && !FontResolver.TryParseWeight(weightText, out _))
             unreadable ??= $"FontWeight=\"{weightText}\" is not a weight this tool can read";
 
+        // xml:lang 與 Language 是同一個屬性，會繼承。App 在程式碼裡改預設值（常見於在地化的 App）時這裡看不到 ——
+        // 設定檔的 elementLanguage 處理那種情形。
+        var language = defaultLanguage;
+        for (var cur = el; cur is not null; cur = cur.Parent)
+        {
+            var raw = cur.Attribute(System.Xml.Linq.XNamespace.Xml + "lang")?.Value ?? cur.Attribute("Language")?.Value;
+            if (raw is null) continue;
+            if (raw.TrimStart().StartsWith('{')) unreadable ??= "Language is not statically readable";
+            else language = raw.Trim();
+            break;
+        }
+
         return new FontSpec(
-            family, size, FontResolver.ParseWeight(weightText), FontResolver.ParseStyle(styleText), unreadable);
+            family, size, FontResolver.ParseWeight(weightText), FontResolver.ParseStyle(styleText), unreadable)
+        {
+            Language = language,
+        };
     }
 
     private static bool WidthLike(string v, params string[] options)

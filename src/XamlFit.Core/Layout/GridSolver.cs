@@ -11,7 +11,8 @@ internal sealed record ColumnSpec(ColumnKind Kind, double Value, double Min, dou
 
 /// <summary>解不出來時說明卡在哪，報告要講得出原因。</summary>
 /// <param name="Unconstrained">文字自己在 Auto 欄裡：WPF 用無限寬量它，換行不會發生。</param>
-public sealed record GridSolveResult(double? Width, string Reason, bool Unconstrained = false);
+/// <param name="Squeezed">其他欄已經把 Grid 佔滿：這一欄拿到 0（WPF 照樣這樣排，文字被擠到看不見）。</param>
+public sealed record GridSolveResult(double? Width, string Reason, bool Unconstrained = false, bool Squeezed = false);
 
 /// <summary>
 /// 解 Grid 的 <c>Auto</c> 與 <c>*</c> 欄。
@@ -97,7 +98,10 @@ internal sealed class GridSolver
 
         return total > 0
             ? new GridSolveResult(total, span > 1 ? $"columns {col}..{col + span - 1}" : $"column {col}")
-            : new GridSolveResult(null, "the solved column width is zero");
+            // ⚠ 固定欄與 Auto 欄已經超過 Grid 的寬度時，星號欄拿到 0 —— 那是確定的答案，不是「解不開」。
+            //   CorpusRender 實測 ScreenToGif 的 Troubleshoot 視窗：希臘文的說明文字（Auto 欄）比整個視窗還寬，
+            //   標題（* 欄）寬度是 0。第一版回「解不開」，於是那一筆在希臘文裡默默沒有檢查。
+            : new GridSolveResult(0, $"column {col} (the other columns already take the whole grid)", Squeezed: true);
     }
 
     /// <summary>
@@ -131,7 +135,7 @@ internal sealed class GridSolver
         var width = Math.Min(specs[col].Max, available - others);
         return width > 0
             ? new GridSolveResult(width, $"column {col} (Auto: it can grow until the grid is full)", Unconstrained: true)
-            : new GridSolveResult(null, "the other columns already fill the grid");
+            : new GridSolveResult(0, $"column {col} (the other columns already take the whole grid)", Unconstrained: true, Squeezed: true);
     }
 
     /// <summary>

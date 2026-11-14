@@ -72,6 +72,9 @@ internal static class Usage
               "treatAs":  { "MyGrid": "Grid" }  a subclass that lays out exactly like its base
               "absentFonts": ["Segoe UI Variable"]   skip a family target machines do not have
               "defaultFontByCulture": { "th": "Leelawadee UI" }
+              "elementLanguage": "en-US"   the Language WPF uses to pick fallback fonts
+                                   (WPF's default is en-US on any Windows; "culture" = your
+                                   app sets Language to the UI culture)
               "assumeDefaultTheme": true
 
             EXIT CODES

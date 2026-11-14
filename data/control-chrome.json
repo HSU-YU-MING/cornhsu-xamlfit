@@ -7,11 +7,11 @@
   "fieldsNote": "chromeWidth already INCLUDES the default Padding and BorderThickness. 'padding' and 'border' are the values in effect with the default template (left + right). 'paddingMode' / 'borderMode' say what an explicit value does, as confirmed case by case with LayoutOracle: 'replace' = it replaces the default one-for-one; 'ignore' = the default template does not use the property at all; absent = not confirmed, so the explicit value is added on top (over-deducts, the safe direction). 'stylePadding' is what {TemplateBinding Padding} yields in a custom template when it differs from 'padding'.",
 
   "scrollBarWidth": 17.5,
-  "scrollBarWidthNote": "SystemParameters.VerticalScrollBarWidth in DIPs varies with display scaling (17 at 100%, 16.8 measured at 125%). This is a ceiling: under-deducting would over-estimate the available width.",
+  "scrollBarWidthNote": "SystemParameters.VerticalScrollBarWidth in DIPs varies with display scaling. prototype/DpiProbe (GetSystemMetricsForDpi): 17.00 at 100%, 16.80 at 125%, 17.33 at 150%, 17.14 at 175%, 17.00 at 200%. 17.5 is a ceiling over all of them: under-deducting would over-estimate the available width.",
 
   "windowFrame": 16,
   "windowFrameThreeD": 20,
-  "windowFrameNote": "Window.Width is the OUTER width. Measured at 125% scaling: standard frame 14.4 DIP (18 px), ThreeDBorderWindow 17.6 DIP (22 px), WindowStyle=None with a resizable frame 12.8 DIP; no frame for WindowStyle=None with NoResize/CanMinimize, AllowsTransparency, or WindowChrome. The values here are the 100%-scaling figures (16 px / 20 px), which are the largest in DIPs.",
+  "windowFrameNote": "Window.Width is the OUTER width. Measured at 125% scaling: standard frame 14.4 DIP (18 px), ThreeDBorderWindow 17.6 DIP (22 px), WindowStyle=None with a resizable frame 12.8 DIP; no frame for WindowStyle=None with NoResize/CanMinimize, AllowsTransparency, or WindowChrome. The values here are the 100%-scaling figures (16 px / 20 px), which are the largest in DIPs: prototype/DpiProbe (AdjustWindowRectExForDpi) gives the standard frame as 16 / 14.4 / 14.67 / 13 DIP at 100 / 125 / 150 / 200%, ThreeDBorderWindow 20 at 100%, WindowStyle=None resizable 14 at 100%.",
 
   "controls": {
     "Button": { "chromeWidth": 4, "padding": 2, "border": 2, "paddingMode": "replace", "borderMode": "replace" },

@@ -27,6 +27,16 @@ internal sealed class CommonOptions
     public Dictionary<string, string> TreatAs { get; } = new(StringComparer.Ordinal);
     public string? SourceCulture { get; set; }
 
+    /// <summary>沒寫 xml:lang 的元素的語言；"culture" = 跟著正在檢查的語言。</summary>
+    public string ElementLanguage { get; set; } = XamlFit.Core.Fonts.FontFallback.DefaultLanguage;
+
+    public bool ElementLanguageFollowsCulture =>
+        ElementLanguage.Equals("culture", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>掃描來源語言時用的元素語言。</summary>
+    public string SourceElementLanguage =>
+        ElementLanguageFollowsCulture ? SourceCulture ?? XamlFit.Core.Fonts.FontFallback.DefaultLanguage : ElementLanguage;
+
     /// <summary>專案套了外部佈景也照樣用內建的內距表。</summary>
     public bool AssumeDefaultTheme { get; set; }
 
@@ -175,6 +185,7 @@ internal sealed class CommonOptions
         if (!o.WasGiven("--assume-default-theme") && config.AssumeDefaultTheme is { } assume) o.AssumeDefaultTheme = assume;
 
         if (!o.WasGiven("--source-culture") && config.SourceCulture is { } sourceCulture) o.SourceCulture = sourceCulture;
+        if (config.ElementLanguage is { } elementLanguage) o.ElementLanguage = elementLanguage;
         if (config.DefaultFontByCulture is { Count: > 0 } byCulture)
             foreach (var (culture, font) in byCulture) o.DefaultFontByCulture[culture] = font;
 

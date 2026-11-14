@@ -19,7 +19,10 @@ xamlfit check  ./src --resx ./Resources   # after translation: fail CI on real o
 > no WPF and no native dependencies.
 >
 > ⚠ It has **not yet been executed on Linux**: the CI workflow that would prove it has never
-> run, because the repository is not published. See `docs/M5b-跨平台與CI驗證.md`.
+> run, because the repository is not published. What could be checked without Linux was: the
+> `linux-x64` build depends on nothing but `Microsoft.NETCore.App`, and the whole test suite
+> and two full corpus runs give identical results in globalization-invariant mode, which many
+> Linux CI images use. See `docs/M5b-跨平台與CI驗證.md` and `docs/M6-全面重讀.md`.
 >
 > **WPF only.** WinUI/UWP, Avalonia and MAUI files are recognised and reported as *not
 > analysed* — their chrome, default font and layout rules are different, and numbers computed
@@ -62,7 +65,7 @@ Measured out of the box, no configuration, on eleven projects:
 | Cornea (maintainer app) | 68 | 59 | 0 | 9 | **100%** |
 | QuillNest (maintainer app) | 685 | 487 | 55 | 116 | **89.9%** |
 | Kindling (maintainer app) | 150 | 57 | 18 | 75 | **76.0%** |
-| Playnite | 1,107 | 194 | 220 | 506 | **46.9%** |
+| Playnite | 1,107 | 136 | 278 | 506 | **32.9%** |
 | ScreenToGif | 1,277 | 99 | 375 | 790 | **20.9%** |
 | HandyControl | 210 | 11 | 61 | 123 | 15.3% |
 | MahApps.Metro | 1,613 | 53 | 749 | 718 | 6.6% |
@@ -108,8 +111,18 @@ assumed vertical scroll bar, the window frame at its widest display scaling. Thi
 found most of what the last audit fixed; it needs Windows, so its conclusions are restated as
 portable unit tests.
 
+**Real projects, against real WPF windows.** `prototype/CorpusRender` loads a real project's
+windows into WPF — with the project's own `App.xaml` dictionaries and each language's strings —
+and records how wide every text needs to be and how much of it is actually visible. Playnite,
+9 windows, 2,025 comparisons: **71 clipped by both, 4 false alarms, 0 missed**, 1,950 fit by
+both. Two of the false alarms are within 0.5 px; the other two are the same button, 0.7 and 7.7 px on the safe side.
+Where both agree, XamlFit's text width is −0.02 to +1.74 px off WPF's, and the width it
+believes is available is never more than 0.02 px too generous. ScreenToGif, 5 windows: 5
+clipped by both, 0 false alarms, 0 missed. This found eleven more bugs, listed in
+`docs/M6-全面重讀.md`.
+
 **False positives, against shipped software.** Hard-coded text in a released app presumably
-fits. So the tool checks the *source* language too: **958 source-language measurements across
+fits. So the tool checks the *source* language too: **929 source-language measurements across
 the corpus, 0 overflows.** While it was being built this number was not zero twice, and both
 times the tool was wrong.
 
@@ -194,6 +207,16 @@ It will not substitute a font it has for one it lacks:
 
 Each of these makes the site unmeasurable and names the font to export.
 
+**Characters the font cannot draw** are drawn the way WPF draws them, which was measured, not
+assumed: first from **another face of the same family** (Microsoft JhengHei UI Regular has no
+Cyrillic; its Light face does, and WPF uses it even for bold text), then from WPF's own
+fallback table (`GlobalUserInterface.CompositeFont`, MIT-licensed, bundled as
+`data/font-fallback.json`). That table depends on the element's `Language` — `en-US` unless
+`xml:lang` says otherwise — **not** on the Windows display language: on any Windows, an app
+that does not set `Language` draws Chinese with Yu Gothic UI. A character none of WPF's
+candidates in the metrics file can draw is unmeasurable, and the report names the candidates.
+Invisible characters (variation selectors, zero-width space and joiner, BOM) have no width.
+
 ## `budget` — before translation
 
 The unit is the **string**, not the UI slot:
@@ -254,11 +277,16 @@ Three things that are easy to get wrong and are checked against WPF:
 - **Access keys.** In `_Save` on a `Button`, `Label`, `CheckBox`, `MenuItem`… the underscore is
   not drawn. On a `TextBlock` or `ListBoxItem` it is.
 
-On two public projects with their real translations — Playnite (37 languages, 5,953
-measurements, 11 seconds) and ScreenToGif (29 languages, 1,229 measurements, 9 seconds) — it
-reported 148 overflows at 20 sites and 7 at 6, with none in the source language of either.
-In Playnite, 142 of the 148 are rows of controls that share their width: they fit in English
-and not in 28 of the other languages. These have not been confirmed by running the apps.
+On two public projects with their real translations — Playnite (38 languages, 4,989
+measurements) and ScreenToGif (29 languages, 1,231 measurements) — it reported 75 overflows at
+7 sites and 9 at 6, with none in the source language of either. All 75 in Playnite were
+checked by drawing the windows in WPF: 71 are really clipped, 4 are false alarms. 5 of the 9 in
+ScreenToGif were checked and are really clipped; the other 4 are in drop-down lists and a
+hidden panel that the harness cannot draw.
+
+A row of controls shares its width **in document order**: the ones written first get what they
+need, and a long translation pushes the ones after it out of the window. That is how WPF lays
+out a horizontal `StackPanel` or `DockPanel`, and it is what `check` reports.
 
 What is *not* judged is counted and printed: strings with run-time placeholders (`{0}`), text
 the metrics do not cover (with the code points, so you know which font to export), and
@@ -310,7 +338,11 @@ fail a build, because a guess should not block someone's pull request.
   "metrics": "xamlfit.fonts.json",
   "exclude": ["/Generated/"],
   "resx": ["Resources"],
-  "cultures": ["de", "fr"]
+  "cultures": ["de", "fr"],
+
+  // The element language WPF uses to pick fallback fonts. WPF's default is en-US whatever
+  // the Windows language. "culture" means: your app sets Language to the UI culture.
+  "elementLanguage": "en-US"
 }
 ```
 

@@ -13,5 +13,6 @@
   <!-- 控制項內距表：由 prototype/ChromeGen 量出來的（不是手抄）。重產方式見該專案的檔頭。 -->
   <ItemGroup>
     <EmbeddedResource Include="control-chrome.json" LogicalName="XamlFit.Core.control-chrome.json" />
+    <EmbeddedResource Include="font-fallback.json" LogicalName="XamlFit.Core.font-fallback.json" />
   </ItemGroup>
 </Project>

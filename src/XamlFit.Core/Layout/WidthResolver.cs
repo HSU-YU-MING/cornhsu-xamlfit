@@ -8,6 +8,25 @@ namespace XamlFit.Core.Layout;
 /// <summary>掛在 XDocument 上：這個檔案受哪個外部佈景影響（MaterialDesign、wpfui…）。</summary>
 public sealed record ExternalTheme(string Name);
 
+/// <summary>同一排（水平 StackPanel、DockPanel）的兄弟怎麼算進一個元素的寬度。</summary>
+public enum RowSharing
+{
+    /// <summary>
+    /// 扣掉整排其他所有兄弟：這個元素長到多寬，**整排**都還留在畫面裡。給譯者的預算用這個 ——
+    /// 一個按鈕的譯文把後面的按鈕擠出去，問題出在它身上。
+    /// </summary>
+    WholeRow,
+
+    /// <summary>
+    /// 只扣排在它**前面**的兄弟：WPF 實際的排法（依文件順序，前面的拿到它要的寬度，後面的被擠掉）。
+    /// 檢查模式用這個 —— 要報的是**哪一個真的被裁**。
+    ///
+    /// ⚠ CorpusRender 實測 Playnite 的崩潰視窗：用 WholeRow 檢查時工具把整排都報出來（111 筆誤報），
+    ///   而真正被擠掉的最後一個按鈕在空間變成 0 時被當成「算不出來」而漏報（43 筆）。
+    /// </summary>
+    Preceding,
+}
+
 /// <summary>
 /// 從文字元素往上走到根，算出它實際**看得見**的像素寬。
 ///
@@ -44,6 +63,8 @@ public sealed class WidthResolver
 
     /// <param name="measurer">給得出元素期望寬度時，Grid 的 <c>Auto</c>／<c>*</c> 欄與兄弟分寬度的面板就解得開。
     /// 傳 null 就退回量不到。</param>
+    public RowSharing Sharing { get; init; } = RowSharing.WholeRow;
+
     public WidthResolver(ChromeTable chrome, StyleIndex? styles = null, IElementMeasurer? measurer = null)
     {
         _chrome = chrome;
@@ -111,6 +132,10 @@ public sealed class WidthResolver
         private bool _assumedScrollBar;
         private bool _wrapDefeated;
 
+        /// <summary>扣過同一排兄弟的寬度。這時「沒有剩下空間」是真的結果（WPF 把它擠到看不見），
+        /// 不是「內距比上界還大、我們一定算錯了」。</summary>
+        private bool _rowShared;
+
         private (double Px, string Source, XElement At, double Deducted)? _best;
         private bool _anchored;                              // 手上有明寫 Width 的候選
         private (WidthStatus Status, string Reason)? _pending;   // 第一個擋路者
@@ -160,9 +185,17 @@ public sealed class WidthResolver
 
         private AvailableWidth Known((double Px, string Source, XElement At, double Deducted) b)
         {
-            if (b.Px <= 0)
+            if (b.Px <= 0 && !_rowShared)
                 return Blocked(WidthStatus.Unmeasurable,
                     $"insets ({b.Deducted:F1}) exceed the bound ({b.Source})");
+
+            if (b.Px <= 0)
+                return new AvailableWidth(WidthStatus.Known, 0, b.Source, LineOf(b.At), _usedChrome,
+                    "the siblings before it in the same row already take all the width")
+                {
+                    WrapDefeated = true,
+                    DependsOnNeighbourText = owner.ResourceLookups > _resourceLookupsAtStart,
+                };
 
             return new AvailableWidth(
                 WidthStatus.Known, b.Px, b.Source, LineOf(b.At), _usedChrome,
@@ -442,6 +475,7 @@ public sealed class WidthResolver
                 if (solved.Width is { } solvedWidth && ownWidth is not null)
                 {
                     _wrapDefeated |= solved.Unconstrained;
+                    _rowShared |= solved.Squeezed;
                     return ClosedVia(ownWidth, solvedWidth, $"solved Grid {solved.Reason}", parent);
                 }
 
@@ -464,9 +498,13 @@ public sealed class WidthResolver
         /// <summary>跟兄弟元素共用寬度：把符合條件的兄弟的期望寬度扣掉。算不出來就是擋路者。</summary>
         private void Share(XElement panel, XElement child, string what, Func<XElement, bool> counts, int depth)
         {
+            _rowShared = true;
+            var passedChild = false;
             foreach (var sibling in LayoutChildren(panel))
             {
-                if (ReferenceEquals(sibling, child) || !counts(sibling)) continue;
+                if (ReferenceEquals(sibling, child)) { passedChild = true; continue; }
+                if (passedChild && owner.Sharing == RowSharing.Preceding) break;
+                if (!counts(sibling)) continue;
 
                 if (owner._measurer?.DesiredWidth(sibling, depth + 1) is { } w)
                 {
@@ -513,16 +551,19 @@ public sealed class WidthResolver
                 return;
             }
 
-            // 靠上／靠下的子元素只受「排在它前面」的兄弟影響；
-            // 靠左右或填滿的則把其他所有靠左右的兄弟都扣掉（讓它們留在畫面裡）
+            // WPF 依文件順序排：每個子元素拿到「前面的兄弟佔剩的」。
+            // 預算模式（WholeRow）另外把後面靠左右的兄弟也扣掉，讓整排都留在畫面裡；
+            // 靠上／靠下的子元素不受後面的兄弟影響（它們排在它下面）。
             var childFills = lastFills && ReferenceEquals(child, last);
+            var onlyPreceding = owner.Sharing == RowSharing.Preceding || (!childHorizontal && !childFills);
+            _rowShared = true;
 
             for (var i = 0; i < children.Count; i++)
             {
                 var sibling = children[i];
                 if (ReferenceEquals(sibling, child)) continue;
                 if (lastFills && ReferenceEquals(sibling, last)) continue;
-                if (!childHorizontal && !childFills && i > childIndex) continue;
+                if (onlyPreceding && i > childIndex) continue;
 
                 if (Horizontal(sibling) is not { } siblingHorizontal)
                 {
@@ -858,11 +899,29 @@ public sealed class WidthResolver
             return new(0, false, false, null);
 
         var frame = 0.0;
-        if (ChromeTable.IsWpf(el, "Window"))
+        if (IsWindow(el))
         {
             var f = WindowFrame(el);
             if (f.Blocked is { } frameWhy) return new(0, false, false, frameWhy);
             frame = f.Sum;
+        }
+
+        // ⚠ 標籤列／標題放在左右兩側時會吃掉內容區的寬度，而那一欄多寬取決於標題文字。
+        //   這個檢查要在「從範本算」之前：範本通常靠觸發器依位置重排，靜態讀範本只會看到預設（上方）的排法。
+        //   （CorpusRender 實測 Playnite 的 DatabaseFieldsManagerWindow：換了範本的 TabControl、
+        //    TabStripPlacement="Left"，工具算 463、實際 294。）
+        if (EndsWithAny(local, "TabControl"))
+        {
+            var placement = _styles.ResolveEx(el, "TabStripPlacement", inheritable: false);
+            if (placement.IsUnreadable || (placement.IsValue && IsOneOf(placement.Value, "Left", "Right")))
+                return new(0, false, false, "the tab strip of <TabControl> is placed beside the content");
+        }
+
+        if (EndsWithAny(local, "Expander"))
+        {
+            var direction = _styles.ResolveEx(el, "ExpandDirection", inheritable: false);
+            if (direction.IsUnreadable || (direction.IsValue && IsOneOf(direction.Value, "Left", "Right")))
+                return new(0, false, false, "the header of <Expander> is placed beside the content");
         }
 
         // 範本被換掉了？換成專案裡看得到的範本就從它算；看不到就是不知道
@@ -944,21 +1003,6 @@ public sealed class WidthResolver
 
         if (padding.IsSet) sum += info.PaddingDelta(padding.Sum);
         if (border.IsSet) sum += info.BorderDelta(border.Sum);
-
-        if (ChromeTable.IsWpf(el, "TabControl"))
-        {
-            // 標籤列放在左右兩側時會吃掉內容區的寬度，而標籤多寬取決於標題文字
-            var placement = _styles.ResolveEx(el, "TabStripPlacement", inheritable: false);
-            if (placement.IsUnreadable || (placement.IsValue && IsOneOf(placement.Value, "Left", "Right")))
-                return new(0, false, false, "the tab strip of <TabControl> is placed beside the content");
-        }
-
-        if (ChromeTable.IsWpf(el, "Expander"))
-        {
-            var direction = _styles.ResolveEx(el, "ExpandDirection", inheritable: false);
-            if (direction.IsUnreadable || (direction.IsValue && IsOneOf(direction.Value, "Left", "Right")))
-                return new(0, false, false, "the header of <Expander> is placed beside the content");
-        }
 
         // ScrollViewer 的 chrome 就是垂直捲軸：Disabled／Hidden 時不佔空間
         if (ChromeTable.IsWpf(el, "ScrollViewer"))
@@ -1249,9 +1293,13 @@ public sealed class WidthResolver
     /// </summary>
     private ThicknessResult WindowFrame(XElement window)
     {
-        // WindowChrome：內容畫滿整個視窗
+        // WindowChrome：內容畫滿整個視窗。
+        // ⚠ 常常是寫在**樣式**裡（實查 Playnite 的 StandardWindowStyle），不只看元素本身。
+        //   Setter 的值是一個物件（<Setter.Value><WindowChrome …/>），讀出來是「讀不出來」——
+        //   那仍然代表有設定，而 WindowChrome 一設就沒有標準邊框。
         if (window.Attributes().Any(a => a.Name.LocalName.EndsWith("WindowChrome.WindowChrome", StringComparison.Ordinal))
-            || window.Elements().Any(e => e.Name.LocalName.EndsWith("WindowChrome.WindowChrome", StringComparison.Ordinal)))
+            || window.Elements().Any(e => e.Name.LocalName.EndsWith("WindowChrome.WindowChrome", StringComparison.Ordinal))
+            || _styles.ResolveEx(window, "WindowChrome.WindowChrome", inheritable: false).Kind != ResolveKind.NotSet)
             return new(0, null);
 
         var style = _styles.ResolveEx(window, "WindowStyle", inheritable: false);
@@ -1274,6 +1322,18 @@ public sealed class WidthResolver
             ? new(_chrome.WindowFrameThreeD, null)
             : new(_chrome.WindowFrame, null);
     }
+
+    /// <summary>
+    /// 這個元素是不是一個 WPF 視窗（會有作業系統畫的邊框）：WPF 的 <c>Window</c>，
+    /// 或檔案的根元素是名字以 Window 結尾、帶 <c>x:Class</c> 的子類別。
+    ///
+    /// ⚠ 實查 ScreenToGif：每個視窗都是專案自訂的 <c>&lt;n:ExWindow x:Class=…&gt;</c>，繼承自 Window、
+    ///   沒有用 WindowChrome。第一版只對 WPF 內建的 Window 扣邊框，於是每個以視窗寬為上界的位置都多算 16 DIP。
+    /// </summary>
+    private static bool IsWindow(XElement el) =>
+        ChromeTable.IsWpf(el, "Window")
+        || (el.Parent is null && el.Name.LocalName.EndsWith("Window", StringComparison.Ordinal)
+            && el.Attribute(XName.Get("Class", "http://schemas.microsoft.com/winfx/2006/xaml")) is not null);
 
     /// <summary>給訊息用的名稱：第三方元素帶上命名空間前綴（ui:Card），使用者才找得到。</summary>
     private static string DisplayName(XElement el)

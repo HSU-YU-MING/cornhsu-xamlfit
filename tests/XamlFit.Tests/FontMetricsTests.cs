@@ -214,7 +214,9 @@ public class FontResolverTests
             absentFamilies: ["Nonexistent UI"]);
         var lookup = r.Resolve("Nonexistent UI, Test Sans", 400, FontStyleKind.Normal, "x");
         Assert.Equal("Test Sans", lookup.Chain[0].Family);
-        Assert.Equal(1, lookup.DeclaredCount);
+        // 鏈裡只有 Test Sans 的字面（含同家族的其他字面，WPF 會先從那裡補字）；不存在的家族不佔位置
+        Assert.All(lookup.Chain, f => Assert.Equal("Test Sans", f.Family));
+        Assert.Equal(lookup.Chain.Count, lookup.DeclaredCount);
     }
 
     [Fact]
@@ -223,19 +225,22 @@ public class FontResolverTests
         var r = Resolver();
         var lookup = r.Resolve("Test Sans, Nonexistent UI", 400, FontStyleKind.Normal, "x");
         Assert.Equal("Test Sans", lookup.Chain[0].Family);
-        Assert.Equal(1, lookup.DeclaredCount);
+        // Test Sans 的三個字面（同家族的其他字面排在後面，WPF 先從那裡補字）；不存在的家族不佔位置
+        Assert.Equal(3, lookup.Chain.Count);
+        Assert.All(lookup.Chain, f => Assert.Equal("Test Sans", f.Family));
+        Assert.Equal(3, lookup.DeclaredCount);
     }
 
     [Fact]
-    public void Auto_fallback_appends_other_families_and_marks_them()
+    public void A_family_outside_WPFs_fallback_table_is_never_used_as_fallback()
     {
-        // WPF 會做系統層級的自動字型後備（Segoe UI 畫不出中文時 Windows 自己補一支）。
-        // 只認明寫的清單會讓真實專案的中文字串大量變成「量不到」。
+        // ⚠ 第一版把度量檔裡其他所有字型依字母順序接在後面。WPF 只照它自己的複合字型表補字 ——
+        //   表裡沒有的字型（這裡的 Fallback Sans），WPF 不會拿來補。
         var r = Resolver();
         var lookup = r.Resolve("Test Sans", 400, FontStyleKind.Normal, "x");
-        Assert.True(lookup.Chain.Count > lookup.DeclaredCount,
-            "auto fallback should append the other families in the metrics file");
-        Assert.Contains(lookup.Chain, f => f.Family == "Fallback Sans");
+        Assert.All(lookup.Chain, f => Assert.Equal("Test Sans", f.Family));
+        // 「中」：WPF 會找 Yu Gothic UI、Meiryo UI…，都不在這份度量裡 → 沒有後備
+        Assert.Null(lookup.Fallback!(0x4E2D));
     }
 
     [Fact]

@@ -25,6 +25,12 @@ public sealed record ScanOptions
     /// <summary>使用者明確指定了預設字型（設定檔或旗標）。視窗之間對字型的設定不一致時，
     /// 以使用者指定的為準，不再把 UserControl 裡的文字判成「不知道繼承到什麼」。</summary>
     public bool DefaultFontPinned { get; init; }
+
+    /// <summary>同一排的兄弟怎麼算（見 <see cref="RowSharing"/>）。budget 用整排，check 用 WPF 的實際順序。</summary>
+    public RowSharing Sharing { get; init; } = RowSharing.WholeRow;
+
+    /// <summary>沒有寫 xml:lang 的元素的語言。WPF 的預設是 en-US；App 在程式碼裡改了預設值時由設定檔指定。</summary>
+    public string ElementLanguage { get; init; } = Fonts.FontFallback.DefaultLanguage;
 }
 
 /// <summary>一個不是 WPF 的 XAML 檔（WinUI／UWP、Avalonia、MAUI）。不分析，但要講出來。</summary>
@@ -70,6 +76,7 @@ public sealed partial class XamlScanner
     private WidthResolver _width = null!;
     private StyleIndex _styles = new();
     private string _defaultFont = "Segoe UI";
+    private string _language = Fonts.FontFallback.DefaultLanguage;
 
     // 第一趟的結果。換預設字型或換語言重掃時不必重做。
     private List<string> _files = [];
@@ -130,7 +137,7 @@ public sealed partial class XamlScanner
     public ScanResult Scan(string root)
     {
         Prepare(root);
-        return Rescan(_options.DefaultFontFamily, null);
+        return Rescan(_options.DefaultFontFamily, null, _options.ElementLanguage);
     }
 
     /// <summary>
@@ -210,8 +217,10 @@ public sealed partial class XamlScanner
     /// 也跟著 Windows 的語言走（見 <see cref="CultureFonts"/>）。
     /// </summary>
     /// <param name="strings">資源鍵 → 這個語言的文字。null = 只用掃描時找到的來源語言字串。</param>
-    public ScanResult Rescan(string defaultFontFamily, IReadOnlyDictionary<string, string>? strings)
+    /// <param name="language">沒寫 xml:lang 的元素的語言（null = 設定的預設）。</param>
+    public ScanResult Rescan(string defaultFontFamily, IReadOnlyDictionary<string, string>? strings, string? language = null)
     {
+        _language = language ?? _options.ElementLanguage;
         var files = _files;
         var rels = _rels;
         var dialects = _dialects;
@@ -222,12 +231,13 @@ public sealed partial class XamlScanner
             ? null
             : new ElementMeasurer(_fonts, _styles, _chrome, defaultFontFamily, _options.DefaultFontSize)
             {
+                DefaultLanguage = _language,
                 ResourceText = key =>
                     strings is not null && strings.TryGetValue(key, out var localized) ? localized
                     : _sourceStrings.TryGetValue(key, out var source) ? source
                     : null,
             };
-        _width = new WidthResolver(_chrome, _styles, measurer);
+        _width = new WidthResolver(_chrome, _styles, measurer) { Sharing = _options.Sharing };
         _missingFonts.Clear();
 
         // ── 第二趟：文字位置 ──
@@ -618,7 +628,8 @@ public sealed partial class XamlScanner
         }
         catch (System.Globalization.CultureNotFoundException)
         {
-            return ResxReader.NeutralCulture;
+            // sr_SP 這種 .NET 不認得的舊代碼：當成一個語言，不要當成來源語言（見 ResxReader.LooksLikeCultureTag）
+            return ResxReader.LooksLikeCultureTag(name) ? name : ResxReader.NeutralCulture;
         }
     }
 
@@ -781,7 +792,7 @@ public sealed partial class XamlScanner
             : key is not null && _sourceStrings.TryGetValue(key, out var known) ? known : null;
         var localizable = source != TextSource.DataBound && BudgetAnalyzer.HasLetter(sourceText ?? text);
 
-        var font = FontSpec.Read(_styles, el, _defaultFont, _options.DefaultFontSize);
+        var font = FontSpec.Read(_styles, el, _defaultFont, _options.DefaultFontSize, _language);
         var width = FinalWidth(el, font, localizable);
 
         // 換行與裁切是 TextBlock 自己的屬性，不會繼承。Run 的換行由它所在的 TextBlock 決定；
@@ -805,6 +816,7 @@ public sealed partial class XamlScanner
             FontSize = font.Size,
             FontWeight = font.Weight,
             FontStyle = font.Style,
+            Language = font.Language,
             Wrap = textHost is null ? WrapMode.NoWrap : ParseWrap(_styles.Resolve(textHost, "TextWrapping", inheritable: false)),
             Trim = textHost is null ? TrimMode.None : ParseTrim(_styles.Resolve(textHost, "TextTrimming", inheritable: false)),
             Height = HeightOf(textHost ?? el),
@@ -834,7 +846,7 @@ public sealed partial class XamlScanner
 
         if (_fonts is not null)
         {
-            var lookup = _fonts.Resolve(font.Family, font.Weight, font.Style, _defaultFont);
+            var lookup = _fonts.Resolve(font.Family, font.Weight, font.Style, _defaultFont, font.Language);
             if (lookup.Chain.Count == 0)
             {
                 // 圖示字型上的符號不是翻譯對象 —— 不要為了它叫使用者去匯出 Segoe MDL2 Assets

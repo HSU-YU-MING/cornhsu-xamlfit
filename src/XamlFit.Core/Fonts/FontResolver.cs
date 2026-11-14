@@ -19,6 +19,15 @@ public sealed record FontLookup(
     /// <summary>Chain 的前幾支是 XAML 明寫的；其餘是自動補的後備。</summary>
     int DeclaredCount = int.MaxValue)
 {
+    /// <summary>
+    /// 明寫的字型都畫不出來的字，WPF 會拿哪支補（照 WPF 自己的複合字型規則，見 <see cref="FontFallback"/>）。
+    /// 回傳 null 是 WPF 那張表裡的字型都不在度量檔裡（或沒有一支有這個字）—— 那個字量不到。
+    /// </summary>
+    public Func<int, (FontMetrics Face, double Scale)?>? Fallback { get; init; }
+
+    /// <summary>某個字 WPF 會依序嘗試的後備字型（給「該匯出哪支字型」的提示用）。</summary>
+    public Func<int, IReadOnlyList<string>>? FallbackCandidates { get; init; }
+
     /// <summary>給使用者看的缺漏說明；有度量時是 null。</summary>
     public string? MissDescription => Miss switch
     {
@@ -83,7 +92,9 @@ public sealed class FontResolver
     /// 解析一個 FontFamily 字串（可能是逗號分隔的後備清單）。
     /// </summary>
     /// <param name="fontFamily">XAML 裡的值。null／空字串代表沒寫，走 <paramref name="defaultFamily"/>。</param>
-    public FontLookup Resolve(string? fontFamily, int weight, FontStyleKind style, string defaultFamily)
+    /// <param name="language">元素的 Language（xml:lang）。決定 WPF 拿哪支字型補中日韓的字；WPF 預設是 en-US。</param>
+    public FontLookup Resolve(string? fontFamily, int weight, FontStyleKind style, string defaultFamily,
+        string language = FontFallback.DefaultLanguage)
     {
         var names = SplitFamilies(fontFamily);
         if (names.Count == 0) names = [defaultFamily];
@@ -98,10 +109,12 @@ public sealed class FontResolver
             FontMetrics? face = null;
             var known = false;
 
+            List<FontMetrics>? siblings = null;
             if (_byFamily.TryGetValue(key, out var faces))
             {
                 known = true;
                 face = PickFace(faces, weight, style, strict: true);
+                siblings = faces;
             }
             else if (_byLegacy.TryGetValue(key, out var legacy))
             {
@@ -110,7 +123,18 @@ public sealed class FontResolver
                 if (weight == 400) face = PickStyle(legacy, style)?.FirstOrDefault();
             }
 
-            if (face is not null) { chain.Add(face); continue; }
+            if (face is not null)
+            {
+                chain.Add(face);
+                // ⚠ 這個字面畫不出來的字，WPF 先找**同一個家族的其他字面**，才換下一個家族或全域後備。
+                //   實測：微軟正黑體 UI 的 Regular 沒有西里爾字母，Light（msjhl.ttc）有 —— WPF 用 Light 的寬度，
+                //   粗體文字也一樣（不加寬）；Segoe UI Black 缺的字用 Bold 的、Italic 缺的字用 Regular 的。
+                //   沒做這一步時，ScreenToGif 的烏克蘭文說明在正黑體下少算 13.6 px。
+                if (siblings is not null)
+                    foreach (var s in OrderedFaces(siblings, weight, style))
+                        if (!ReferenceEquals(s, face)) chain.Add(s);
+                continue;
+            }
 
             // ⚠ 主要字型（清單裡第一支可用的）不知道就不能量 —— 後面那支只是它畫不出來時的後備。
             //   主要字型已經找到之後，後面的缺漏只影響後備，交給自動後備並標記。
@@ -123,28 +147,40 @@ public sealed class FontResolver
 
         var declared = chain.Count;
 
-        // ⚠ WPF 會做**系統層級的自動字型後備**：Segoe UI 畫不出中文時，Windows 會自己
-        //   從字型連結表找一支補上，XAML 裡不必寫任何東西。
-        //   只認明寫的後備清單，會讓真實專案裡大量中文字串變成「量不到」——
-        //   實測 QuillNest 的可量測字串因此掉到個位數。
-        //   所以這裡自動把度量檔裡其他家族接在後面，並標記「用到自動後備」：
-        //   Windows 實際選哪一支我們不知道，報告要講出來。
-        if (AutoFallback)
+        // ⚠ 明寫的字型都畫不出來的字，WPF 照它自己的複合字型規則補（GlobalUserInterface.CompositeFont）：
+        //   依字的範圍與元素的語言挑一串候選字型。只認明寫的後備清單會讓真實專案的中文字串大量變成
+        //   「量不到」（實測 QuillNest 掉到個位數）；而第一版「度量檔裡的其他字型依字母順序」
+        //   跟 WPF 無關，日文假名量寬了 40%（CorpusRender 實測）。
+        if (!AutoFallback) return new FontLookup(chain, FontMissReason.None, null, declared);
+
+        var cache = new Dictionary<int, (FontMetrics, double)?>();
+        (FontMetrics Face, double Scale)? Fallback(int cp)
         {
-            var already = new HashSet<string>(chain.Select(c => Normalize(c.Family)), StringComparer.Ordinal);
-            foreach (var family in _byFamily)
+            if (cache.TryGetValue(cp, out var hit)) return hit;
+            (FontMetrics, double)? found = null;
+            var (targets, scale) = FontFallback.For(cp, language);
+            foreach (var target in targets)
             {
-                var face = PickFace(family.Value, weight, style, strict: false);
-                // 別名與本名指向同一組字面，用字面的家族名去重
-                if (face is not null && already.Add(Normalize(face.Family))) chain.Add(face);
+                var key = Normalize(target);
+                if (_absent.Contains(key) || !_byFamily.TryGetValue(key, out var faces)) continue;
+                // 後備的那個家族也一樣：挑最接近、而且畫得出這個字的字面
+                foreach (var face in OrderedFaces(faces, weight, style))
+                    if (face.TryAdvance(cp, out _)) { found = (face, scale); break; }
+                if (found is not null) break;
             }
+            cache[cp] = found;
+            return found;
         }
 
-        return new FontLookup(chain, FontMissReason.None, null, declared);
+        return new FontLookup(chain, FontMissReason.None, null, declared)
+        {
+            Fallback = Fallback,
+            FallbackCandidates = cp => FontFallback.For(cp, language).Targets,
+        };
     }
 
-    /// <summary>自動補上度量檔裡的其他字型當後備（模仿 Windows 的字型連結）。
-    /// 關掉它會讓缺字的位置一律變成不可量測 —— 更保守，但覆蓋率會大幅下降。</summary>
+    /// <summary>照 WPF 的複合字型規則補字（見 <see cref="FontFallback"/>）。
+    /// 關掉它會讓明寫字型畫不出來的字一律量不到。</summary>
     public bool AutoFallback { get; init; } = true;
 
     /// <summary>字重相差超過這個值就不算同一個字面（Regular 400 與 Bold 700 之間不能互相代替）。</summary>
@@ -174,6 +210,22 @@ public sealed class FontResolver
             .First();
 
         return strict && Math.Abs(best.Weight - weight) > MaxWeightDistance ? null : best;
+    }
+
+    /// <summary>
+    /// 一個家族的所有字面，依 WPF（DirectWrite 的 GetMatchingFonts）比對的接近程度排序：
+    /// 寬度 Normal 優先、再來樣式（正體／斜體）對得上的、再來字重最接近的。
+    /// 可變字型只收字重剛好的那一筆 —— 其他字重的寬度不在度量檔裡。
+    /// </summary>
+    internal static IEnumerable<FontMetrics> OrderedFaces(List<FontMetrics> faces, int weight, FontStyleKind style)
+    {
+        var wantUpright = style == FontStyleKind.Normal;
+        return faces
+            .Where(f => !f.Variable || f.Weight == weight)
+            .OrderBy(f => f.Stretch.Equals("Normal", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(f => (f.Style == FontStyleKind.Normal) == wantUpright ? 0 : 1)
+            .ThenBy(f => Math.Abs(f.Weight - weight))
+            .ThenBy(f => weight >= 500 ? -f.Weight : f.Weight);
     }
 
     /// <summary>寬度 Normal、樣式對得上的字面。要斜體但沒有真斜體時退回正體 ——

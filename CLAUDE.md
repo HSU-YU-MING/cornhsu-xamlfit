@@ -89,7 +89,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 6 | **`SizeToContent` 會讓視窗的 `Width` 失效** | 語料裡 46 個檔案同時寫了兩者 → 錯誤的預算 | 驗證者實跑 |
 | 7 | **水平捲動的 `ScrollViewer` 讓上界失效**（文字可捲動不會被裁） | 語料 60 處 | 驗證者實跑 |
 | 8 | **不解析 Style 的 Setter** | `SectionHint` 設 `FontSize=11`，用預設 12 去量，高估 9%，報出假的「已溢出 2.9px」 | QuillNest `WorkloadExportOptionsDialog.xaml:94` |
-| 9 | 只認明寫的字型後備清單 | WPF 會做**系統層級自動後備**；不做的話真實專案的中文字串大量變成「量不到」 | QuillNest |
+| 9 | 只認明寫的字型後備清單 | WPF 會做**系統層級自動後備**；不做的話真實專案的中文字串大量變成「量不到」。⚠ 當時的解法（度量檔裡其他字型依字母順序）是錯的，見第 49 條 | QuillNest |
 | 10 | `{x:Static p:Strings.Save}` 的命名空間前綴讓 regex 比對失敗（`\w` 不含冒號） | **所有**資源字串被誤判成「綁資料」然後濾掉；示範專案第一次跑是 0 個位置 | 示範專案 |
 | 11 | check 只量每個字串**最窄**的位置 | 同一字串在別處的 `vertical-clip` 漏掉 | 示範專案 |
 | 12 | 純符號／數字（`→ ▲ : 00`）進了「最擠的位置」清單 | 最有用的欄位被雜訊佔滿 | QuillNest 實跑 |
@@ -129,6 +129,15 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 45 | **WinUI 與 WPF 的預設 xmlns 是同一個 URI** | 唯一可靠的記號是 `using:` 對 `clr-namespace:`；沒有記號的小檔案看鄰居 | WinUI-Gallery |
 | 46 | **寫檔時自動建立目錄** | Git Bash 下 `/tmp/x/out.json` 被 .NET 當成目前磁碟根目錄底下的 `\tmp\x`，於是在 D 槽根目錄建出目錄樹。不替使用者建目錄 | CLI 煙霧測試 |
 | 47 | **Bash 的 heredoc 會吃掉反斜線、太長會被截斷** | 寫程式碼檔一律用 Write 工具；要改既有檔案就寫一支 `.js` 用 `split/join` 取代，找不到錨點要報錯 | 這一輪反覆踩到 |
+| 48 | **`XamlReader.Parse` 會刪掉單獨的 `&#x0d;`，編譯後的 BAML 會保留** | 執行期載入的對照程式看到一行、真的 App 是兩行。CorpusRender 要先把單獨的 CR 換成 LF 來模擬 BAML | CorpusRender |
+| 49 | **WPF 怎麼補字型畫不出來的字** | 先找**同家族的其他字面**（正黑體 UI 的 Regular 沒有西里爾字母、Light 有），再照 `GlobalUserInterface.CompositeFont`，而且看**元素的 Language**（預設 en-US），不看 Windows 的語言。依字母順序挑字型讓日文假名寬了 40%；沒找同家族字面讓烏克蘭文少算 13.6 px（高估） | CorpusRender、LayoutOracle `--probe` |
+| 50 | **Linux CI 常開 globalization-invariant 模式** | `CultureInfo.GetCultureInfo("zh-TW")` 會丟例外。執行路徑上不能靠文化資料庫做判斷；測試要切文化時先 try/catch。每次改到語言相關的程式都要用 `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1` 再跑一次測試 | invariant 模式重跑 |
+| 51 | **舊式底線語言碼（`sr_SP`、`pt_BR`）** | .NET 不認得 `sr-SP`，被當成中性語言，整個語言默默沒檢查。用 `ResxReader.LooksLikeCultureTag` | Playnite |
+| 52 | **水平排列依文件順序分寬度** | 前面的先拿、後面的被擠出去。把一整排一起算是 111 筆誤報、43 筆漏報。check 用 `RowSharing.Preceding` | CorpusRender（Playnite） |
+| 53 | **側邊頁籤的判斷要在「自訂範本」分支之前** | 不然專案自己重寫了 TabControl 範本時，頁籤列寬度沒扣，58 個位置高估 | Playnite |
+| 54 | **專案自己的 Window 子類別也有邊框；`WindowChrome` 可以寫在樣式裡** | `ExWindow`／`WindowBase` 沒扣邊框是高估 16 px；樣式裡的 WindowChrome 沒看到是誤報 | ScreenToGif |
+| 55 | **看不見的字寬度是 0** | U+FE0F、200B、200D、FEFF、2060 在 WPF 是 0 寬。⚠ U+FEFF 落在阿拉伯表現形式的範圍裡，要**先**判斷看不見的字 | LayoutOracle `--fallback` |
+| 56 | **對照程式的字型假設要跟工具一樣** | 在繁中 Windows 上畫法文、希臘文會用正黑體 UI；工具假設那些語言的 Windows 用 Segoe UI。差距是字型不是版面 —— 比對前用 `defaultFontByCulture` 對齊 | CorpusRender（ScreenToGif） |
 
 ### 環境層級的坑
 
@@ -145,7 +154,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 453 個單元測試
+dotnet test XamlFit.slnx -c Release          # 486 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 42 條 CLI 路徑的退出碼
@@ -156,10 +165,17 @@ dotnet run -c Release --project prototype/LayoutOracle   # 138 案 vs 真的 WPF
 `xamlfit check <root> --source-only`。寫死的文字理應都裝得下 —— 報出溢出就先懷疑工具。
 M6 裡它兩次不是零，兩次都是工具錯。
 
-`prototype/` 底下六個是**拋棄式**工具，不要從裡面複製程式碼：
+`prototype/` 底下八個是**拋棄式**工具，不要從裡面複製程式碼：
 
 - `LayoutOracle` —— **版面語意的真值**：同一段 XAML 給真的 WPF 視窗（顯示在螢幕外）與解析器，逐案比對。
-  `-- --defaults` 印佈景預設的 Padding／Border，`-- --text` 印快速鍵、模擬粗體、Display 模式的實測（Windows only）
+  `-- --defaults` 印佈景預設的 Padding／Border，`-- --text` 印快速鍵、模擬粗體、Display 模式的實測，
+  `-- --fallback` 印補字與看不見的字，`-- --probe "家族|字重|Italic" 字級 "文字"` 印整句與逐字的寬度、
+  主字型缺哪些字、哪支已安裝的字型寬度完全一樣（找 WPF 實際拿來補字的字面）（Windows only）
+- `CorpusRender` —— **真實專案的真值**：把專案的 XAML 連同它的 `App.xaml` 合併字典、來源與各語言字串載進真的 WPF，
+  量每段文字需要多寬、看得見多寬，輸出 CSV。輸入是一份 JSON 規格（`root`、`app`、`source`、`cultures`、`window`、
+  `lines`、`replace`、`output`）；跟工具的判斷逐筆比對的腳本不在 repo 裡（它要語料）。畫不出下拉選單的內容與資料範本（Windows only）
+- `DpiProbe` —— 各縮放比例下的視窗邊框與捲軸寬度（`AdjustWindowRectExForDpi`、`GetSystemMetricsForDpi`）。
+  內距表裡的 16／20／17.5 就是從這裡確認的（Windows only）
 
 - `M0Survey` —— 可量測比例調查（已修過五個 bug，結論在 `docs/`）
 - `WpfOracle` —— 拿 WPF 的 `FormattedText` 當真值驗量測（Windows only）

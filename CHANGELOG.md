@@ -34,8 +34,11 @@ that over-estimated the available width.
   `StackPanel`, `DockPanel`, `UniformGrid`, `WrapPanel`, `BulletDecorator`; window frames;
   header chrome for `GroupBox`, `Expander` and column headers.
 - Things the tool cannot see are declared in `xamlfit.config.json`: `chrome`, `treatAs`,
-  `absentFonts`, `sourceCulture`, `defaultFontByCulture`, `assumeDefaultTheme`.
-  Every run lists the controls whose chrome it could not determine.
+  `absentFonts`, `sourceCulture`, `defaultFontByCulture`, `elementLanguage`,
+  `assumeDefaultTheme`. Every run lists the controls whose chrome it could not determine.
+- Characters the requested font cannot draw are measured with the font WPF would use: another
+  face of the same family first, then WPF's own composite fallback table
+  (`data/font-fallback.json`, from dotnet/wpf, MIT), chosen by the element's `Language`.
 - Detection of non-WPF XAML (WinUI/UWP, Avalonia, MAUI) and of external themes merged from
   other assemblies; both are reported instead of being measured with the wrong assumptions.
 - Baseline (`--baseline` / `--write-baseline`) and `<!-- xamlfit-ignore: reason -->`.
@@ -51,14 +54,28 @@ that over-estimated the available width.
   under-estimate 0.068%, worst over-estimate 1.43% (a single kerning pair).
 - **Layout** against real off-screen WPF windows, 138 cases: 113 exact, 25 conservative,
   0 over-estimates (`prototype/LayoutOracle`).
-- **False positives** against shipped software: 958 source-language measurements over ten
+- **Real project windows** drawn by WPF with their own themes and translations
+  (`prototype/CorpusRender`): Playnite, 2,025 comparisons — 71 clipped by both, 4 false
+  alarms, **0 missed**; ScreenToGif, 28 comparisons — 5 clipped by both, 0 false alarms,
+  0 missed. Eleven bugs found this way are fixed (see `docs/M6-全面重讀.md` §2.6), among
+  them: rows now share width in document order; side tab strips and project `Window`
+  subclasses are no longer over-estimated; characters a font lacks are drawn as WPF draws
+  them (other faces of the same family first, then WPF's composite fallback table, chosen by
+  the element's `Language`); invisible characters have no width.
+- **Window frame and scroll bar widths** per display scaling, from `AdjustWindowRectExForDpi`
+  (`prototype/DpiProbe`): the table's 16 / 20 / 17.5 DIP are the maxima across scalings.
+- **Globalization-invariant mode** (common on Linux CI): all tests pass, and two full corpus
+  runs give identical results.
+- **False positives** against shipped software: 929 source-language measurements over ten
   projects, 0 overflows.
-- 453 unit tests.
+- 486 unit tests.
 
 ### Not verified
 
-- Execution on Linux, the release workflow and the composite GitHub Action: the repository is
-  not published, so none of them has ever run.
+- Execution on Linux, nuget.org installation, Trusted Publishing and GitHub-hosted runners:
+  the repository is not published. The release steps and the Action's script were rehearsed
+  locally.
 - The default UI fonts for Japanese, Korean and Simplified Chinese Windows: taken from
   Windows' font configuration, not measured on those systems.
-- The overflows reported on the public corpus: computed, not confirmed by running the apps.
+- Text in drop-down lists, data templates and hidden panels: the render harness cannot draw
+  it, so those judgements have not been compared against WPF.

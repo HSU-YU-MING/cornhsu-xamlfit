@@ -181,9 +181,13 @@ public class DiagnosticsTests
     {
         // de-DE 下小數點會變成逗號，消費端解析會壞
         var original = Thread.CurrentThread.CurrentCulture;
+        // globalization-invariant 模式（很多 Linux CI 映像檔）根本切不到 de-DE —— 那裡也就不會出現逗號小數點
+        System.Globalization.CultureInfo german;
+        try { german = new System.Globalization.CultureInfo("de-DE"); }
+        catch (System.Globalization.CultureNotFoundException) { return; }
         try
         {
-            Thread.CurrentThread.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+            Thread.CurrentThread.CurrentCulture = german;
             var sarif = CheckDiagnostics.ToSarif([Finding()], "0.0.0-test");
             Assert.Contains("83.6 px", sarif);
             Assert.DoesNotContain("83,6 px", sarif);

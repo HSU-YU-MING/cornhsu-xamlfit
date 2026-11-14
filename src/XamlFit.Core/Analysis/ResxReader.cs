@@ -72,7 +72,17 @@ public static class ResxReader
         }
         catch (System.Globalization.CultureNotFoundException)
         {
-            return NeutralCulture;
+            return LooksLikeCultureTag(tag) ? tag : NeutralCulture;
         }
     }
+
+    /// <summary>
+    /// 形狀像語言代碼（<c>sr-SP</c>、<c>pt_BR</c>、<c>de</c>），即使 .NET 不認得它。
+    ///
+    /// ⚠ CorpusRender 對照時抓到的：Playnite 的 <c>sr_SP.xaml</c> 用的是已經廢止的「塞爾維亞與蒙特內哥羅」代碼，
+    ///   .NET 不認得，於是那份譯文被當成**來源語言**併進去，整個塞爾維亞文默默沒有檢查。
+    ///   一份看起來是譯文的檔案寧可當成一個不認得的語言，也不要當成來源語言。
+    /// </summary>
+    internal static bool LooksLikeCultureTag(string tag) =>
+        System.Text.RegularExpressions.Regex.IsMatch(tag, "^[a-z]{2,3}([-_]([A-Z]{2}|[A-Z][a-z]{3}|[0-9]{3}))?([-_]([A-Z]{2}|[0-9]{3}))?$");
 }

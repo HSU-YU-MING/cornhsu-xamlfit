@@ -246,6 +246,31 @@ public class CheckSemanticsTests
     // ───────────────────────── 合併 ─────────────────────────
 
     [Fact]
+    public void A_site_that_only_this_language_makes_unmeasurable_is_counted()
+    {
+        // 來源語言量得到，譯文把版面撐到算不出來：要算進「沒有判定」，不能默默消失
+        var dir = TempProject(("Main.xaml", Window($"""
+            <Border Width="300">
+              <Border Margin="{Key}"><TextBlock Text="{Key}"/></Border>
+            </Border>
+            """)));
+        try
+        {
+            var fonts = Fonts();
+            var scan = new XamlScanner(Chrome, new ScanOptions { DefaultFontFamily = MonoFamily, DefaultFontSize = MonoSize }, fonts).Scan(dir);
+            var budget = new BudgetAnalyzer(fonts, MonoFamily).Analyze(scan, "test");
+            var site = scan.Sites.Single();
+            var measurableInSource = new HashSet<string> { site.Location };   // 假設來源語言時量得到
+
+            var result = new CheckAnalyzer(fonts, MonoFamily, 5)
+                .Analyze(scan, budget, [Table("de", ("K", "AA"))], pseudo: false, judgeSource: false, measurableInSource);
+            Assert.Equal(1, result.Summary.Unreliable);
+            Assert.Equal(("de", 0, 1), result.Summary.PerCulture.Single());
+        }
+        finally { Cleanup(dir); }
+    }
+
+    [Fact]
     public void Results_from_several_passes_merge_into_one()
     {
         const string site = "<TextBlock Width=\"100\" Text=\"{x:Static p:Strings.K}\"/>";
@@ -455,6 +480,17 @@ public class GridSolverOracleTests
         var w = Grid("<ColumnDefinition/><ColumnDefinition Width=\"0\" MinWidth=\"{DynamicResource {x:Static SystemParameters.VerticalScrollBarWidthKey}}\"/>",
             "<TextBlock x:Name=\"probe\"/>", 300);
         Assert.Equal(300 - Chrome.ScrollBarWidth, w.Px, 3);
+    }
+
+    [Fact]
+    public void A_star_column_squeezed_out_by_the_others_has_zero_width()
+    {
+        // ⚠ CorpusRender 實測 ScreenToGif：希臘文的說明文字（Auto 欄）比整個視窗寬，標題（* 欄）寬度是 0。
+        //   第一版回「解不開」，那一筆在希臘文裡默默沒有檢查。
+        var w = Grid("<ColumnDefinition/><ColumnDefinition Width=\"Auto\"/>",
+            "<TextBlock x:Name=\"probe\"/><TextBlock Grid.Column=\"1\" Text=\"" + new string('A', 120) + "\"/>", 300);
+        Assert.Equal(WidthStatus.Known, w.Status);
+        Assert.Equal(0, w.Px);
     }
 
     [Fact]

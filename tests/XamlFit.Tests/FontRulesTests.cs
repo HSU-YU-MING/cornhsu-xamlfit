@@ -78,12 +78,104 @@ public class StrictFontResolutionTests
     }
 
     [Fact]
-    public void An_alias_does_not_appear_twice_in_the_fallback_chain()
+    public void Characters_the_font_lacks_are_drawn_with_WPFs_choice()
     {
-        var fonts = Fonts(Mono("Mono"), Mono("Other", aliases: ["其他"]));
-        var chain = Resolve(fonts, "Mono").Chain;
-        Assert.Equal(2, chain.Count);
+        // ⚠ CorpusRender 實測：WPF 補日文假名用 Yu Gothic UI（元素語言是預設的 en-US 時），
+        //   補韓文用 Malgun Gothic —— 照它自己的 GlobalUserInterface.CompositeFont。
+        //   第一版依字母順序挑度量檔裡的字型，日文量寬了 40%。
+        var fonts = Fonts(
+            Mono("Latin", cjk: false),
+            Mono("Microsoft JhengHei UI"),                                   // 字母順序在前，但 WPF 不拿它補假名
+            KanaFont("Yu Gothic UI", 700),
+            KanaFont("Malgun Gothic", 900));
+
+        var lookup = fonts.Resolve("Latin", 400, FontStyleKind.Normal, "x");
+        Assert.Equal("Yu Gothic UI", lookup.Fallback!(0x30A2)!.Value.Face.Family);   // カタカナ
+        Assert.Equal(7, TextMeasure.Measure("ア", lookup, 10).WidthPx, 3);
+        Assert.True(TextMeasure.Measure("ア", lookup, 10).UsedAutoFallback);
     }
+
+    private static FontMetrics Face(string family, int weight, int start, int end, int advance) => new()
+    {
+        Family = family, Weight = weight, UnitsPerEm = 1000, Ascender = 800, Descender = -200, DefaultAdvance = 500,
+        Ranges = [new AdvanceRange(0x20, 0x7E, 500), new AdvanceRange(start, end, advance)],
+    };
+
+    [Theory]
+    [InlineData(400)]
+    [InlineData(700)]
+    public void A_character_the_face_lacks_comes_from_another_face_of_the_same_family_first(int weight)
+    {
+        // ⚠ LayoutOracle 實測：微軟正黑體 UI 的 Regular 與 Bold 都沒有西里爾字母，Light 有 ——
+        //   WPF 用 Light 的寬度（粗體文字也一樣），不是先跳到 Segoe UI。
+        //   寫成 "正黑體, Segoe UI" 也一樣：同家族的其他字面排在清單的下一個家族前面。
+        var fonts = Fonts(
+            Face("Hei", 400, 0x4E00, 0x9FFF, 1000),
+            Face("Hei", 700, 0x4E00, 0x9FFF, 1000),
+            Face("Hei", 290, 0x0400, 0x04FF, 640),
+            Face("Segoe UI", 400, 0x0400, 0x04FF, 600),
+            Face("Segoe UI", 700, 0x0400, 0x04FF, 620));
+
+        foreach (var family in new[] { "Hei", "Hei, Segoe UI" })
+        {
+            var m = TextMeasure.Measure("а", fonts.Resolve(family, weight, FontStyleKind.Normal, "x"), 10);
+            Assert.True(m.IsReliable);
+            Assert.False(m.UsedAutoFallback);
+            Assert.Equal(6.4, m.WidthPx, 3);
+        }
+    }
+
+    [Fact]
+    public void The_closest_face_that_has_the_character_wins()
+    {
+        // Segoe UI Black 缺的字，WPF 用 Bold 的寬度（不是 Regular）
+        var fonts = Fonts(
+            Face("S", 900, 0x4E00, 0x4E00, 1000),
+            Face("S", 400, 0x0370, 0x0373, 500),
+            Face("S", 700, 0x0370, 0x0373, 540));
+        Assert.Equal(5.4, TextMeasure.Measure("Ͱ", fonts.Resolve("S", 900, FontStyleKind.Normal, "x"), 10).WidthPx, 3);
+    }
+
+    [Fact]
+    public void The_element_language_changes_the_fallback()
+    {
+        var fonts = Fonts(Mono("Latin", cjk: false), KanaFont("Yu Gothic UI", 700), KanaFont("Microsoft JhengHei UI", 1000));
+        Assert.Equal("Yu Gothic UI", fonts.Resolve("Latin", 400, FontStyleKind.Normal, "x", "en-US").Fallback!(0x30A2)!.Value.Face.Family);
+        Assert.Equal("Yu Gothic UI", fonts.Resolve("Latin", 400, FontStyleKind.Normal, "x", "ja-JP").Fallback!(0x30A2)!.Value.Face.Family);
+        Assert.Equal("Microsoft JhengHei UI", fonts.Resolve("Latin", 400, FontStyleKind.Normal, "x", "zh-TW").Fallback!(0x30A2)!.Value.Face.Family);
+    }
+
+    [Theory]
+    [InlineData("zh-TW", "zh-Hant", true)]
+    [InlineData("zh-HK", "zh-HK", true)]
+    [InlineData("zh-HK", "zh-Hant", true)]
+    [InlineData("zh-CN", "zh-Hans", true)]
+    [InlineData("zh-Hant-TW", "zh-Hant", true)]
+    [InlineData("ja-JP", "ja", true)]
+    [InlineData("ko-KR", "ko", true)]
+    [InlineData("en-US", "ja", false)]
+    [InlineData("zh-TW", "zh-Hans", false)]
+    public void Language_matching_does_not_depend_on_the_culture_database(string element, string map, bool expected)
+    {
+        // Linux 的 CI 常開 globalization-invariant 模式，那裡查不到任何文化資料
+        Assert.Equal(expected, FontFallback.LanguageMatches(map, element));
+    }
+
+    [Fact]
+    public void Without_WPFs_fallback_font_the_character_is_unmeasurable()
+    {
+        // WPF 會用 Yu Gothic UI 補，而度量檔裡沒有它：量不到，不是拿別支代替
+        var fonts = Fonts(Mono("Latin", cjk: false), Mono("Microsoft JhengHei UI"));
+        var m = TextMeasure.Measure("ア", fonts.Resolve("Latin", 400, FontStyleKind.Normal, "x"), 10);
+        Assert.False(m.IsReliable);
+        Assert.Equal(0x30A2, m.FirstMissing);
+    }
+
+    private static FontMetrics KanaFont(string family, int kanaAdvance) => new()
+    {
+        Family = family, UnitsPerEm = 1000, Ascender = 800, Descender = -200, DefaultAdvance = 500,
+        Ranges = [new AdvanceRange(0x20, 0x7E, 500), new AdvanceRange(0x3040, 0x30FF, kanaAdvance), new AdvanceRange(0x4E00, 0x9FFF, 1000)],
+    };
 
     [Theory]
     [InlineData("Bold", true, 700)]
@@ -104,6 +196,21 @@ public class StrictFontResolutionTests
         Assert.Equal(1, m.MissingGlyphs);
         Assert.Equal(0x2603, m.FirstMissing);
         Assert.False(m.IsReliable);
+    }
+
+    [Theory]
+    [InlineData(0xFE0F)]   // ☀️ 的變體選擇符
+    [InlineData(0x200B)]   // 零寬空白
+    [InlineData(0x200D)]   // 零寬連接符
+    [InlineData(0xFEFF)]   // BOM
+    [InlineData(0x2060)]   // word joiner
+    public void Invisible_characters_have_no_width_and_are_not_missing(int cp)
+    {
+        // LayoutOracle 實測：WPF 給這些字的寬度都是 0
+        var text = "AA" + char.ConvertFromUtf32(cp);
+        var m = TextMeasure.Measure(text, [Mono(cjk: false)], 10);
+        Assert.True(m.IsReliable);
+        Assert.Equal(10, m.WidthPx, 3);
     }
 
     [Theory]

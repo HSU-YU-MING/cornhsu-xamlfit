@@ -58,5 +58,6 @@ public sealed record AvailableWidth(
     public static AvailableWidth NotKnown(WidthStatus status, string reason) =>
         new(status, 0, "", 0, false, reason);
 
-    public bool IsMeasurable => Status == WidthStatus.Known && Px > 0;
+    /// <summary>算得出來。⚠ Px 可以是 0：同一排前面的兄弟已經佔滿，這個元素被擠到看不見。</summary>
+    public bool IsMeasurable => Status == WidthStatus.Known && Px >= 0;
 }

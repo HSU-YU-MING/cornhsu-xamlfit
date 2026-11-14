@@ -24,6 +24,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
 using System.Xml.Linq;
@@ -63,6 +64,175 @@ internal static class Program
 
         if (args.Length > 0 && args[0] == "--text") { TextChecks(); app.Shutdown(); return 0; }
         if (args.Length > 0 && args[0] == "--defaults") { Defaults(); app.Shutdown(); return 0; }
+        if (args.Length > 0 && args[0] == "--newlines")
+        {
+            // 字串裡的換行字元，TextBlock 真的會換行嗎？（ScreenToGif 的字串用 &#x0d; 換行）
+            var cr = ((char)13).ToString();
+            var lf = ((char)10).ToString();
+            foreach (var (name, sep) in new[] { ("CR", cr), ("LF", lf), ("CRLF", cr + lf), ("U+2028", ((char)0x2028).ToString()), ("none", "") })
+            {
+                var tb = new TextBlock { Text = "AAAAAAAAAA" + sep + "BBBBBBBBBB", FontFamily = new FontFamily("Segoe UI"), FontSize = 12 };
+                tb.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                Console.WriteLine($"{name,-7} width {tb.DesiredSize.Width,7:F2}  height {tb.DesiredSize.Height,6:F2}");
+            }
+            // 從資源字典（xml:space=preserve、&#x0d;）載入的字串
+            var dict = (ResourceDictionary)XamlReader.Parse(
+                "<ResourceDictionary xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' xmlns:s='clr-namespace:System;assembly=mscorlib' xml:space='preserve'>" +
+                "<s:String x:Key='k'>AAAAAAAAAA&#x0d;BBBBBBBBBB</s:String></ResourceDictionary>");
+            foreach (var (label, body, preserve) in new[]
+                     {
+                         ("&#x0d; preserve", "AA&#x0d;BB", true), ("&#x0a; preserve", "AA&#x0a;BB", true), ("&#10; preserve", "AA&#10;BB", true),
+                         ("&#x0d;&#x0a; preserve", "AA&#x0d;&#x0a;BB", true), ("literal newline preserve", "AA" + (char)10 + "BB", true),
+                         ("&#x0d; default", "AA&#x0d;BB", false), ("&#x0a; default", "AA&#x0a;BB", false),
+                     })
+            {
+                var x = "<ResourceDictionary xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' xmlns:s='clr-namespace:System;assembly=mscorlib'" +
+                        (preserve ? " xml:space='preserve'" : "") + "><s:String x:Key='k'>" + body + "</s:String>" +
+                        "<TextBlock x:Key='t' Text='" + body + "'/></ResourceDictionary>";
+                var viaParse = (string)((ResourceDictionary)XamlReader.Parse(x))["k"];
+                var viaLoad = (string)((ResourceDictionary)XamlReader.Load(System.Xml.XmlReader.Create(new StringReader(x))))["k"];
+                var attr = ((TextBlock)((ResourceDictionary)XamlReader.Parse(x))["t"]).Text;
+                string Hex(string v) => string.Join(" ", v.Select(c => ((int)c).ToString("X2")));
+                Console.WriteLine($"{label,-26} element: Parse [{Hex(viaParse)}]  Load [{Hex(viaLoad)}]   attribute: [{Hex(attr)}]");
+            }
+            var text = (string)dict["k"];
+            Console.WriteLine("from dictionary: " + string.Join(" ", text.Select(c => ((int)c).ToString("X2"))));
+            var t2 = new TextBlock { Text = text, FontFamily = new FontFamily("Segoe UI"), FontSize = 12 };
+            t2.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            Console.WriteLine($"dictionary string: width {t2.DesiredSize.Width:F2} height {t2.DesiredSize.Height:F2}");
+            app.Shutdown();
+            return 0;
+        }
+
+        if (args.Length > 0 && args[0] == "--composite")
+        {
+            // WPF 自帶的複合字型：主字型畫不出來的字照這張表補
+            var asm = typeof(FontFamily).Assembly;
+            foreach (var n in asm.GetManifestResourceNames()) Console.WriteLine("resource: " + n);
+            using (var g = asm.GetManifestResourceStream("PresentationCore.g.resources")!)
+            using (var reader = new System.Resources.ResourceReader(g))
+            {
+                foreach (System.Collections.DictionaryEntry e in reader)
+                {
+                    var key = (string)e.Key;
+                    Console.WriteLine("  g: " + key);
+                    if (key.EndsWith(".compositefont", StringComparison.OrdinalIgnoreCase) && e.Value is Stream st)
+                    {
+                        var outPath = Path.Combine(args.Length > 1 ? args[1] : ".", Path.GetFileName(key));
+                        using var fsOut = File.Create(outPath);
+                        st.CopyTo(fsOut);
+                    }
+                }
+            }
+            var dir = Path.GetDirectoryName(asm.Location)!;
+            foreach (var file in Directory.EnumerateFiles(dir, "*.CompositeFont", SearchOption.AllDirectories)) Console.WriteLine("file: " + file);
+            app.Shutdown();
+            return 0;
+        }
+
+        if (args.Length > 3 && args[0] == "--probe")
+        {
+            // --probe <family> <size> <text>：整句與逐字的 TextBlock 寬度，以及主字型有沒有那個字
+            // family 可以寫成 "Family|700|Italic"
+            var spec = args[1].Split('|');
+            var fam = spec[0]; var size = double.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture); var text = args[3];
+            var weight = spec.Length > 1 ? FontWeight.FromOpenTypeWeight(int.Parse(spec[1])) : FontWeights.Normal;
+            var fstyle = spec.Length > 2 && spec[2] == "Italic" ? FontStyles.Italic : FontStyles.Normal;
+            double W(string t) { var tb = new TextBlock { Text = t, FontFamily = new FontFamily(fam), FontSize = size, FontWeight = weight, FontStyle = fstyle }; tb.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity)); return tb.DesiredSize.Width; }
+            new Typeface(new FontFamily(fam), fstyle, weight, FontStretches.Normal).TryGetGlyphTypeface(out var gt);
+            Console.WriteLine($"whole {W(text):F2}");
+            foreach (var tf in new FontFamily(fam).GetTypefaces())
+                if (tf.TryGetGlyphTypeface(out var g))
+                    Console.WriteLine($"face {tf.Weight}/{tf.Style}/{tf.Stretch} {g.FontUri.LocalPath} has U+0430: {g.CharacterToGlyphMap.ContainsKey('а')}");
+            foreach (var m in new FontFamily(fam).FamilyMaps) Console.WriteLine($"familymap {m.Unicode} -> {m.Target}");
+            var sum = 0.0;
+            foreach (var ch in text.Distinct().OrderBy(c => c))
+            {
+                var has = gt is not null && gt.CharacterToGlyphMap.ContainsKey(ch);
+                var n = text.Count(c => c == ch); var w = W(ch.ToString());
+                if (ch == ' ') w = W("a a") - W("aa");
+                sum += w * n;
+                Console.WriteLine($"U+{(int)ch:X4} {(ch == ' ' ? "sp" : ch.ToString())} x{n} {w:F3} {(has ? "" : "MISSING")}");
+            }
+            Console.WriteLine($"sum of chars {sum:F2}");
+            // 逐字寬度跟哪一支已安裝的字型完全一致（找出 WPF 實際拿來補字的字型）
+            var missing = text.Distinct().Where(c => gt is not null && !gt.CharacterToGlyphMap.ContainsKey(c)).Take(8).ToArray();
+            if (missing.Length > 0)
+                foreach (var ff in Fonts.SystemFontFamilies.OrderBy(x => x.Source))
+                {
+                    var ok = missing.All(c =>
+                    {
+                        var tb = new TextBlock { Text = c.ToString(), FontFamily = ff, FontSize = size, FontWeight = weight, FontStyle = fstyle };
+                        tb.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                        return Math.Abs(tb.DesiredSize.Width - W(c.ToString())) < 0.002;
+                    });
+                    if (ok) Console.WriteLine($"same widths as: {ff.Source}");
+                }
+            app.Shutdown();
+            return 0;
+        }
+
+        if (args.Length > 0 && args[0] == "--fallback")
+        {
+            // 主字型畫不出來的字，WPF 拿哪一支補？跟元素的 Language（xml:lang）有沒有關係？
+            // 看不見的字（變體選擇符、零寬空白、BOM）：WPF 給它們寬度嗎？
+            foreach (var (label, text) in new[]
+                     {
+                         ("sun", "☀"), ("sun+VS16", "☀️"), ("A+ZWSP+A", "A​A"), ("AA", "AA"),
+                         ("A+ZWJ+A", "A‍A"), ("A+BOM+A", "A﻿A"), ("A+WJ+A", "A⁠A"), ("moon", "U0001F319"),
+                     })
+            {
+                var tb = new TextBlock { Text = text, FontFamily = new FontFamily("Segoe UI"), FontSize = 14 };
+                tb.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                Console.WriteLine($"ignorable {label,-10} width {tb.DesiredSize.Width:F2}");
+            }
+            foreach (var fam in new[] { "Segoe UI", "Segoe UI Emoji", "Segoe UI Symbol" })
+            foreach (var (label, text) in new[] { ("moon", char.ConvertFromUtf32(0x1F319)), ("sun", "☀"), ("grin", char.ConvertFromUtf32(0x1F600)), ("check", "✔") })
+            {
+                var tb = new TextBlock { Text = text, FontFamily = new FontFamily(fam), FontSize = 14 };
+                tb.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                var ft = TextWidth(text, fam, FontWeights.Normal, TextFormattingMode.Ideal, 14);
+                Console.WriteLine($"emoji {fam,-16} {label,-6} TextBlock {tb.DesiredSize.Width,7:F2}  FormattedText {ft,7:F2}  utf16 len {text.Length}");
+            }
+            string[] samples = ["クラッシュレポート", "診断情報を送信", "再起動", "설정 저장", "Перезапуск", "設定儲存", "设置保存", "ภาษาไทย"];
+            string[] langs = ["en-us", "ja-jp", "zh-tw", "zh-cn", "ko-kr"];
+            string[] candidates = ["Yu Gothic UI", "Meiryo UI", "Meiryo", "MS UI Gothic", "Microsoft JhengHei UI", "Microsoft YaHei UI", "Malgun Gothic", "Segoe UI", "Microsoft JhengHei", "Microsoft YaHei", "SimSun", "Leelawadee UI"];
+            foreach (var primary in new[] { "Trebuchet MS", "Segoe UI" })
+            foreach (var sample in samples)
+            {
+                Console.Write($"{primary,-14} {sample,-12}");
+                foreach (var lang in langs)
+                {
+                    var tb = new TextBlock { Text = sample, FontFamily = new FontFamily(primary), FontSize = 14, Language = XmlLanguage.GetLanguage(lang) };
+                    tb.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    var w = tb.DesiredSize.Width;
+                    var match = candidates.FirstOrDefault(c => Math.Abs(TextWidth(sample, c, FontWeights.Normal, TextFormattingMode.Ideal, 14) - w) < 0.01);
+                    Console.Write($"  {lang}:{w,7:F2}={match ?? "?"}");
+                }
+                Console.WriteLine();
+            }
+            app.Shutdown();
+            return 0;
+        }
+
+        if (args.Length > 0 && args[0] == "--font-source")
+        {
+            // 沒寫 FontFamily 的文字到底用哪一支：相依屬性的預設值、實際排出來的字型、系統訊息字型
+            var tb = new TextBlock { Text = "Name:" };
+            var host = Host();
+            host.Content = tb;
+            host.Show();
+            host.UpdateLayout();
+            Console.WriteLine($"TextElement.FontFamily default metadata : {TextElement.FontFamilyProperty.DefaultMetadata.DefaultValue}");
+            Console.WriteLine($"TextElement.FontSize   default metadata : {TextElement.FontSizeProperty.DefaultMetadata.DefaultValue}");
+            Console.WriteLine($"Control.FontFamily     default metadata : {Control.FontFamilyProperty.DefaultMetadata.DefaultValue}");
+            Console.WriteLine($"SystemFonts.MessageFontFamily           : {SystemFonts.MessageFontFamily.Source} {SystemFonts.MessageFontSize}");
+            Console.WriteLine($"a TextBlock in a window actually uses  : {tb.FontFamily.Source} {tb.FontSize}  (ActualWidth of 'Name:' = {tb.ActualWidth:F2})");
+            Console.WriteLine($"CurrentUICulture                        : {System.Globalization.CultureInfo.CurrentUICulture.Name}");
+            host.Close();
+            app.Shutdown();
+            return 0;
+        }
 
         var cases = BuildCases();
         var fonts = LoadFonts();

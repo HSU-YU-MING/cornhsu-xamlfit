@@ -37,6 +37,13 @@ public sealed class FitConfig
     /// </summary>
     [JsonPropertyName("sourceCulture")] public string? SourceCulture { get; set; }
 
+    /// <summary>
+    /// 沒寫 xml:lang 的元素是什麼語言。WPF 的預設是 en-US（跟 Windows 的語言無關），它決定中日韓的字用哪支字型補。
+    /// 在地化的 App 常在程式碼裡把它改成目前的文化（<c>FrameworkElement.LanguageProperty.OverrideMetadata</c>），
+    /// 那種情形寫 <c>"culture"</c>：檢查每個語言時就用那個語言。
+    /// </summary>
+    [JsonPropertyName("elementLanguage")] public string? ElementLanguage { get; set; }
+
     /// <summary>各語言 Windows 的預設 UI 字型，蓋掉內建的對應：<c>{ "th": "Leelawadee UI" }</c>。</summary>
     [JsonPropertyName("defaultFontByCulture")] public Dictionary<string, string>? DefaultFontByCulture { get; set; }
 
@@ -114,6 +121,9 @@ public sealed class FitConfig
                 if (string.IsNullOrWhiteSpace(list[i]))
                     problems.Add(new Problem($"{field}[{i}]", "must not be empty"));
         }
+
+        if (config.ElementLanguage is { Length: 0 })
+            problems.Add(new Problem("elementLanguage", "must be a language tag such as \"en-US\", or \"culture\""));
 
         if (config.SourceCulture is { Length: 0 })
             problems.Add(new Problem("sourceCulture", "must not be empty"));

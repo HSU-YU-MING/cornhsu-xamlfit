@@ -43,6 +43,9 @@ public sealed class TextSite
     public int FontWeight { get; init; } = 400;
     public FontStyleKind FontStyle { get; init; } = FontStyleKind.Normal;
 
+    /// <summary>元素的 Language（xml:lang）。決定 WPF 拿哪支字型補中日韓的字。</summary>
+    public string Language { get; init; } = FontFallback.DefaultLanguage;
+
     public WrapMode Wrap { get; init; } = WrapMode.NoWrap;
     public TrimMode Trim { get; init; } = TrimMode.None;
 

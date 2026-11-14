@@ -31,6 +31,7 @@ public class ResxReaderTests
     [InlineData("Strings.de-DE.resx", "de-DE")]
     [InlineData("Strings.zh-Hant.resx", "zh-Hant")]
     [InlineData("My.App.Strings.resx", "(neutral)")]
+    [InlineData("Strings.sr-SP.resx", "sr-SP")]
     public void Culture_comes_from_the_file_name(string file, string expected) =>
         Assert.Equal(expected, ResxReader.CultureOf(file));
 

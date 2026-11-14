@@ -98,6 +98,50 @@ public static class TextMeasure
     /// </summary>
     /// <param name="declaredCount">鏈的前幾支是 XAML 明寫的；其餘是自動後備。
     /// 用到自動後備的量測會標記出來 —— Windows 的字型連結表可能選到別支字型。</param>
+    /// <summary>用一次字型解析的結果去量：明寫的字型鏈畫不出來的字，照 WPF 的規則補。</summary>
+    public static Measurement Measure(string text, FontLookup lookup, double fontSizePx)
+    {
+        if (string.IsNullOrEmpty(text) || lookup.Chain.Count == 0) return new Measurement(0, 0, false);
+
+        double totalUnits = 0;
+        var missing = 0;
+        var complex = false;
+        var usedFallback = false;
+        var firstMissing = -1;
+        var primary = lookup.Chain[0];
+
+        foreach (var rune in text.AsSpan().EnumerateRunes())
+        {
+            var cp = rune.Value;
+            if (IsDefaultIgnorable(cp)) continue;   // 先判斷：U+FEFF 落在阿拉伯表現形式的範圍裡
+            if (IsComplexScript(cp)) complex = true;
+
+            var found = false;
+            foreach (var f in lookup.Chain)
+            {
+                if (!f.TryAdvance(cp, out var adv)) continue;
+                totalUnits += adv * (double)primary.UnitsPerEm / f.UnitsPerEm;
+                found = true;
+                break;
+            }
+
+            if (!found && lookup.Fallback?.Invoke(cp) is { } fb && fb.Face.TryAdvance(cp, out var fbAdv))
+            {
+                totalUnits += fbAdv * fb.Scale * (double)primary.UnitsPerEm / fb.Face.UnitsPerEm;
+                usedFallback = true;
+                found = true;
+            }
+
+            if (!found)
+            {
+                missing++;
+                if (firstMissing < 0) firstMissing = cp;
+            }
+        }
+
+        return new Measurement(totalUnits * fontSizePx / primary.UnitsPerEm, missing, complex, usedFallback) { FirstMissing = firstMissing };
+    }
+
     public static Measurement Measure(
         string text, IReadOnlyList<FontMetrics> fallbackChain, double fontSizePx, int declaredCount = int.MaxValue)
     {
@@ -115,6 +159,7 @@ public static class TextMeasure
         {
             var cp = rune.Value;
 
+            if (IsDefaultIgnorable(cp)) continue;   // 先判斷：U+FEFF 落在阿拉伯表現形式的範圍裡
             if (IsComplexScript(cp)) complex = true;
 
             // 字型後備鏈：第一支畫得出來的就用它
@@ -140,6 +185,20 @@ public static class TextMeasure
         var px = totalUnits * fontSizePx / primary.UnitsPerEm;
         return new Measurement(px, missing, complex, usedAuto) { FirstMissing = firstMissing };
     }
+
+    /// <summary>
+    /// 看不見、不佔寬度的字：變體選擇符（☀️ 後面的 U+FE0F）、零寬空白／連接符、BOM、方向控制字元。
+    /// LayoutOracle 實測：WPF 給它們的寬度都是 0。第一版把它們當成「度量檔裡沒有的字」，
+    /// 於是任何帶表情符號變體的字串都變成量不到。
+    /// </summary>
+    public static bool IsDefaultIgnorable(int cp) =>
+        cp is 0x00AD or 0x034F or 0x061C or 0xFEFF
+           or (>= 0x180B and <= 0x180F)
+           or (>= 0x200B and <= 0x200F)
+           or (>= 0x202A and <= 0x202E)
+           or (>= 0x2060 and <= 0x206F)
+           or (>= 0xFE00 and <= 0xFE0F)
+           or (>= 0xE0000 and <= 0xE0FFF);
 
     /// <summary>字形會依上下文變形的文字系統 —— 把 advance 加起來完全不對。
     /// 這類一律標成不可量測，不猜（規畫書 §4.3）。</summary>

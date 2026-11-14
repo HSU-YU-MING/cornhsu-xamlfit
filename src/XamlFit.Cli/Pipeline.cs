@@ -11,7 +11,9 @@ internal sealed record Prepared(ChromeTable Chrome, FontResolver Fonts, XamlScan
 
 internal static class Pipeline
 {
-    public static Prepared? Prepare(CommonOptions opts, out int exitCode)
+    /// <param name="sharing">budget：整排（給譯者的預算要讓後面的按鈕也留在畫面裡）；
+    /// check：WPF 實際的順序（要報的是哪一個真的被裁）。</param>
+    public static Prepared? Prepare(CommonOptions opts, out int exitCode, RowSharing sharing = RowSharing.WholeRow)
     {
         exitCode = 0;
 
@@ -36,6 +38,8 @@ internal static class Pipeline
             TrustDefaultChrome = opts.AssumeDefaultTheme,
             TreatAs = opts.TreatAs,
             DefaultFontPinned = opts.DefaultFontPinned,
+            ElementLanguage = opts.SourceElementLanguage,
+            Sharing = sharing,
         }, fonts);
 
         return new Prepared(chrome, fonts, scanner, scanner.Scan(opts.Root!));

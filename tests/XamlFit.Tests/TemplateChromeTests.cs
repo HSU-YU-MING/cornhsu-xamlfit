@@ -170,6 +170,24 @@ public class TemplateChromeTests
     }
 
     [Fact]
+    public void A_side_tab_strip_is_not_guessed_even_with_a_custom_template()
+    {
+        // 範本靠觸發器依 TabStripPlacement 重排；靜態讀範本只看得到預設（上方）的排法
+        var w = Page("""
+            <TabControl Width="400" TabStripPlacement="Left">
+              <TabControl.Template>
+                <ControlTemplate TargetType="TabControl">
+                  <DockPanel><TabPanel DockPanel.Dock="Top" IsItemsHost="True"/><ContentPresenter ContentSource="SelectedContent"/></DockPanel>
+                </ControlTemplate>
+              </TabControl.Template>
+              <TabItem Header="A"><TextBlock x:Name="probe"/></TabItem>
+            </TabControl>
+            """);
+        Assert.Equal(WidthStatus.Unmeasurable, w.Status);
+        Assert.Contains("beside the content", w.Reason);
+    }
+
+    [Fact]
     public void A_template_with_no_content_host_is_not_guessed()
     {
         var w = Button("Style=\"{StaticResource NoHost}\"");
@@ -348,7 +366,8 @@ public class TemplateChromeTests
             """;
 
         var themed = Resolve(window, dictionaries: [("Themes/Generic.xaml", Dictionary("20,0"))]);
-        Assert.Equal(360, themed.Px, 3);
+        // 400 − 範本的 Padding 20×2 − 視窗邊框（它是 Window 的子類別，沒有 WindowChrome）
+        Assert.Equal(400 - 40 - Chrome.WindowFrame, themed.Px, 3);
 
         var appLevel = Resolve(window, dictionaries: [("Styles/Windows.xaml", Dictionary("20,0"))]);
         Assert.Equal(WidthStatus.Unmeasurable, appLevel.Status);   // 沒有套得到的樣式 → 第三方型別、內距不明

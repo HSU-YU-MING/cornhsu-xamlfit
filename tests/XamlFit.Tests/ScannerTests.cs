@@ -170,6 +170,9 @@ public class ScannerTests
     [InlineData("de_DE.xaml", "de-DE")]
     [InlineData("pt-BR.xaml", "pt-BR")]
     [InlineData("LocSource.xaml", "(neutral)")]
+    [InlineData("sr_SP.xaml", "sr-SP")]          // .NET 不認得的舊代碼：仍然是一個語言，不是來源語言
+    [InlineData("Strings.sr-SP.xaml", "sr-SP")]
+    [InlineData("Colors.xaml", "(neutral)")]
     [InlineData("Buttons.xaml", "(neutral)")]
     public void A_string_dictionary_takes_its_culture_from_the_file_name(string file, string culture) =>
         Assert.Equal(culture, XamlScanner.CultureOfDictionary(file));

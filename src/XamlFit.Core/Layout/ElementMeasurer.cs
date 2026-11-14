@@ -43,6 +43,9 @@ public sealed class ElementMeasurer : IElementMeasurer
     /// </summary>
     public Func<string, string?>? ResourceText { get; set; }
 
+    /// <summary>沒寫 xml:lang 的元素的語言（決定中日韓的字用哪支字型補）。</summary>
+    public string DefaultLanguage { get; set; } = FontFallback.DefaultLanguage;
+
     /// <summary>成功查到在地化字串的次數。解析器用它判斷「這個寬度取決於兄弟的譯文」。</summary>
     public int ResourceLookups { get; private set; }
 
@@ -183,16 +186,16 @@ public sealed class ElementMeasurer : IElementMeasurer
     {
         if (text.Length == 0) return 0;
 
-        var font = FontSpec.Read(_styles, element, _defaultFamily, _defaultSize);
+        var font = FontSpec.Read(_styles, element, _defaultFamily, _defaultSize, DefaultLanguage);
         if (font.Unreadable is not null) return null;
 
-        var lookup = _fonts.Resolve(font.Family, font.Weight, font.Style, _defaultFamily);
+        var lookup = _fonts.Resolve(font.Family, font.Weight, font.Style, _defaultFamily, font.Language);
         if (lookup.Chain.Count == 0) return null;
 
         double widest = 0;
         foreach (var line in TextRules.Lines(TextRules.Display(element.Name.LocalName, text)))
         {
-            var m = TextMeasure.Measure(line, lookup.Chain, font.Size, lookup.DeclaredCount);
+            var m = TextMeasure.Measure(line, lookup, font.Size);
             if (!m.IsReliable) return null;
             widest = Math.Max(widest, m.WidthPx);
         }

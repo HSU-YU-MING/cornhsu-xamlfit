@@ -25,7 +25,7 @@ internal static class CheckCommand
         if (opts.BaselinePath is not null && !File.Exists(opts.BaselinePath))
         { Console.Error.WriteLine($"baseline not found: {opts.BaselinePath}"); return 2; }
 
-        if (Pipeline.Prepare(opts, out var prepareCode) is not { } prepared) return prepareCode;
+        if (Pipeline.Prepare(opts, out var prepareCode, XamlFit.Core.Layout.RowSharing.Preceding) is not { } prepared) return prepareCode;
         var scan = prepared.Scan;
 
         // ===== 字串表：.resx 加上掃描時找到的 XAML 字串字典 =====
@@ -85,6 +85,8 @@ internal static class CheckCommand
         var neutralTables = cultures.Where(c => c.Culture == ResxReader.NeutralCulture).ToList();
         var byCulture = CheckAnalyzer.MergeByCulture(cultures);
 
+        var measurableInSource = scan.Sites.Where(s => s.Width.IsMeasurable).Select(s => s.Location).ToHashSet(StringComparer.Ordinal);
+
         var parts = new List<CheckResult>
         {
             // 來源語言自己（--pseudo 也在這裡：拿來源字串去膨脹）
@@ -117,15 +119,16 @@ internal static class CheckCommand
                 }
 
                 XamlFit.Core.Xaml.ScanResult localized;
-                if (scan.NeighbourTextUses > 0)
-                    localized = prepared.Scanner.Rescan(font, Pipeline.Overlay(neutral, byCulture[culture]));
+                var language = opts.ElementLanguageFollowsCulture ? culture : null;
+                if (scan.NeighbourTextUses > 0 || language is not null)
+                    localized = prepared.Scanner.Rescan(font, Pipeline.Overlay(neutral, byCulture[culture]), language);
                 else if (!scansByFont.TryGetValue(font, out localized!))
                     scansByFont[font] = localized = prepared.Scanner.Rescan(font, null);
 
                 parts.Add(new CheckAnalyzer(prepared.Fonts, font, opts.MarginPercent)
                     .Analyze(localized, budget,
                         [.. neutralTables, .. cultures.Where(c => c.Culture.Equals(culture, StringComparison.OrdinalIgnoreCase))],
-                        pseudo: false, judgeSource: false));
+                        pseudo: false, judgeSource: false, measurableInSource));
             }
         }
 

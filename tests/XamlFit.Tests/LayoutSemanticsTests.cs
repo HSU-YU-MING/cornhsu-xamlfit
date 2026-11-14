@@ -49,6 +49,40 @@ public class WindowFrameTests
     }
 
     [Fact]
+    public void WindowChrome_set_by_a_style_removes_the_frame()
+    {
+        // 實查 Playnite：WindowChrome 寫在 StandardWindowStyle 裡
+        var w = Resolve($"""
+            <Window {Ns} xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework" Width="400">
+              <Window.Style>
+                <Style TargetType="Window">
+                  <Setter Property="WindowChrome.WindowChrome"><Setter.Value><shell:WindowChrome CaptionHeight="25"/></Setter.Value></Setter>
+                </Style>
+              </Window.Style>
+              <TextBlock x:Name="probe" Text="hi"/>
+            </Window>
+            """);
+        Assert.Equal(400, w.Px);
+    }
+
+    [Fact]
+    public void A_project_window_subclass_has_the_standard_frame()
+    {
+        // ⚠ 實查 ScreenToGif：<n:ExWindow x:Class=…> 繼承自 Window、沒有 WindowChrome。
+        //   第一版只對 WPF 內建的 Window 扣邊框。
+        var w = Resolve($"""
+            <c:ExWindow {Ns} xmlns:c="clr-namespace:App.Controls" x:Class="App.Main" Width="400">
+              <c:ExWindow.Template>
+                <ControlTemplate TargetType="c:ExWindow"><Border><ContentPresenter/></Border></ControlTemplate>
+              </c:ExWindow.Template>
+              <TextBlock x:Name="probe" Text="hi"/>
+            </c:ExWindow>
+            """);
+        Assert.Equal(WidthStatus.Known, w.Status);
+        Assert.Equal(400 - Chrome.WindowFrame, w.Px);
+    }
+
+    [Fact]
     public void An_unreadable_frame_setting_is_not_guessed()
     {
         var w = Window("ResizeMode=\"{Binding Mode}\"");
@@ -289,10 +323,51 @@ public class SharedPanelTests
     }
 
     [Fact]
-    public void Siblings_after_the_text_count_too()
+    public void Siblings_after_the_text_count_too_in_a_budget()
     {
         // WPF 不會裁文字，而是把後面的按鈕推出畫面。預算要讓整排都留在畫面裡。
         Assert.Equal(200, Row(Text + "<Button Width=\"100\"/>").Px);
+    }
+
+    private static AvailableWidth Checked(string xaml)
+    {
+        var doc = System.Xml.Linq.XDocument.Parse($"<Grid {Ns}>{xaml}</Grid>");
+        var styles = new XamlFit.Core.Xaml.StyleIndex();
+        styles.Add(doc);
+        var resolver = new WidthResolver(Chrome, styles, new ElementMeasurer(Fonts(), styles, Chrome, MonoFamily, MonoSize))
+        {
+            Sharing = RowSharing.Preceding,
+        };
+        return resolver.Resolve(Probe(doc));
+    }
+
+    [Fact]
+    public void A_check_blames_the_sibling_that_is_actually_pushed_out()
+    {
+        // ⚠ CorpusRender 實測 Playnite：WPF 依文件順序排，前面的拿到它要的寬度，後面的被擠掉。
+        //   檢查時照整排算，會把前面那些（其實完整顯示）也報成溢出。
+        const string row = "<Border Width=\"300\"><StackPanel Orientation=\"Horizontal\">{0}</StackPanel></Border>";
+        Assert.Equal(300, Checked(string.Format(row, Text + "<Button Width=\"100\"/>")).Px);
+        Assert.Equal(200, Checked(string.Format(row, "<Button Width=\"100\"/>" + Text)).Px);
+    }
+
+    [Fact]
+    public void A_sibling_pushed_completely_out_has_zero_width_not_an_unknown_one()
+    {
+        // ⚠ 前面的兄弟已經佔滿整排時，第一版回「內距比上界還大，算不出來」——
+        //   而那正是「完全看不見」的情形（CorpusRender：Playnite 有 43 筆因此漏報）。
+        var w = Checked("<Border Width=\"300\"><StackPanel Orientation=\"Horizontal\"><Button Width=\"350\"/><TextBlock x:Name=\"probe\" Text=\"AA\"/></StackPanel></Border>");
+        Assert.Equal(WidthStatus.Known, w.Status);
+        Assert.Equal(0, w.Px);
+        Assert.True(w.IsMeasurable);
+    }
+
+    [Fact]
+    public void A_dock_panel_in_a_check_only_counts_children_that_come_first()
+    {
+        const string dock = "<DockPanel Width=\"300\" LastChildFill=\"False\">{0}</DockPanel>";
+        Assert.Equal(300, Checked(string.Format(dock, "<TextBlock x:Name=\"probe\"/><Button DockPanel.Dock=\"Right\" Width=\"100\"/>")).Px);
+        Assert.Equal(200, Checked(string.Format(dock, "<Button DockPanel.Dock=\"Right\" Width=\"100\"/><TextBlock x:Name=\"probe\"/>")).Px);
     }
 
     [Fact]

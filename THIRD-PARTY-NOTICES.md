@@ -14,6 +14,34 @@ default Aero2 theme's layout behaviour, not a copy of Microsoft's theme files.
 
 No Microsoft source code, theme XAML, or binaries are redistributed.
 
+### `data/font-fallback.json`
+
+The fallback table WPF applies to characters the requested font cannot draw, transcribed from
+WPF's own composite font `GlobalUserInterface.CompositeFont` (the `Windows10RS5` section),
+which ships as a resource of PresentationCore in Microsoft.WindowsDesktop.App 10.0.10.
+WPF is published by the .NET Foundation at <https://github.com/dotnet/wpf> under the MIT
+licence:
+
+> Copyright (c) .NET Foundation and Contributors
+>
+> Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+> and associated documentation files (the "Software"), to deal in the Software without
+> restriction, including without limitation the rights to use, copy, modify, merge, publish,
+> distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the
+> Software is furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in all copies or
+> substantial portions of the Software.
+>
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+> BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+> NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+> DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+> OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Only the Unicode ranges, language tags, scale factors and font family names are kept; no font
+data is included.
+
 ## Not bundled
 
 ### Font metrics
@@ -29,6 +57,11 @@ outlines, hinting instructions, or any other part of the font software.
 > and committing them to a repository. The maintainer's reading is that metrics are facts
 > rather than the creative expression a font licence protects, but that reading has not been
 > verified by counsel. Until it is, XamlFit ships metrics for **no** proprietary font.
+>
+> What has been checked so far: Microsoft's font redistribution FAQ forbids redistributing or
+> converting the fonts and says nothing about extracting metrics; the U.S. Copyright Office's
+> 1988 position, as summarised by Richard Kinch, is that font metrics are not copyrightable;
+> metric-compatible fonts (Liberation and others) exist. None of this is legal advice.
 
 ### Corpora
 

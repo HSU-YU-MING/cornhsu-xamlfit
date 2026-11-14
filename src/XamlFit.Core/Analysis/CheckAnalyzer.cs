@@ -131,12 +131,15 @@ public sealed class CheckAnalyzer
     /// </summary>
     /// <param name="judgeSource">要不要也判定來源語言自己。同一個專案用不同的預設字型掃好幾次時
     /// （見 <see cref="CultureFonts"/>），來源語言只在第一次判。</param>
+    /// <param name="measurableInSource">來源語言的掃描裡量得到的位置（檔案:行）。換成這個語言重排之後
+    /// 量不到的，要算進「沒有判定」—— 不能默默消失。</param>
     public CheckResult Analyze(
         ScanResult scan,
         BudgetResult budget,
         IReadOnlyList<CultureStrings> cultures,
         bool pseudo,
-        bool judgeSource = true)
+        bool judgeSource = true,
+        IReadOnlySet<string>? measurableInSource = null)
     {
         var findings = new List<FitFinding>();
         var missing = new HashSet<(string Key, string Culture)>();
@@ -159,10 +162,25 @@ public sealed class CheckAnalyzer
 
         foreach (var site in scan.Sites)
         {
-            if (!BudgetAnalyzer.IsLocalizable(site) || !site.Width.IsMeasurable) continue;
+            if (!BudgetAnalyzer.IsLocalizable(site)) continue;
+            if (!site.Width.IsMeasurable)
+            {
+                // ⚠ 來源語言量得到、這個語言卻量不到：版面跟著譯文變了（例如旁邊的欄被譯文撐爆）。
+                //   第一版直接略過 —— 這個語言的這一筆就默默沒有檢查。
+                if (measurableInSource is not null && measurableInSource.Contains(site.Location) && site.SuppressedReason is null)
+                    foreach (var (culture, _) in translated)
+                    {
+                        if (site.Source != TextSource.Resource) break;
+                        var why = "the layout could not be resolved with this language's strings";
+                        unreliable[(culture, why)] = unreliable.GetValueOrDefault((culture, why)) + 1;
+                        var u = perCulture.GetValueOrDefault(culture);
+                        perCulture[culture] = (u.Measured, u.Unreliable + 1);
+                    }
+                continue;
+            }
             if (site.SuppressedReason is not null) { suppressed++; continue; }
 
-            var lookup = _fonts.Resolve(site.FontFamily, site.FontWeight, site.FontStyle, _defaultFamily);
+            var lookup = _fonts.Resolve(site.FontFamily, site.FontWeight, site.FontStyle, _defaultFamily, site.Language);
             if (lookup.Chain.Count == 0) continue;   // 可量測的位置掃描時已經確認過字型；防禦用
 
             var key = site.ResourceKey ?? site.Text;
@@ -347,7 +365,7 @@ public sealed class CheckAnalyzer
     }
 
     private static bool Wraps(TextSite site) =>
-        site.Wrap != WrapMode.NoWrap && !site.Width.WrapDefeated;
+        site.Wrap != WrapMode.NoWrap && !site.Width.WrapDefeated && site.Width.Px > 0;
 
     private TextLayout Layout(TextSite site, string text, FontLookup lookup)
     {
@@ -362,7 +380,7 @@ public sealed class CheckAnalyzer
 
         foreach (var line in TextRules.Lines(display))
         {
-            var whole = TextMeasure.Measure(line, lookup.Chain, site.FontSize, lookup.DeclaredCount);
+            var whole = TextMeasure.Measure(line, lookup, site.FontSize);
             if (!whole.IsReliable)
                 return new TextLayout(0, 0, 0, false, false, whole.ComplexScript
                     ? "complex script (advance widths do not sum correctly)"
@@ -377,12 +395,12 @@ public sealed class CheckAnalyzer
             // 中日韓文字每個字之間都可以斷。
             double used = 0;
             var lineCount = 1;
-            var space = TextMeasure.Measure(" ", lookup.Chain, site.FontSize, lookup.DeclaredCount).WidthPx;
+            var space = TextMeasure.Measure(" ", lookup, site.FontSize).WidthPx;
 
             foreach (var word in BreakUnits(line))
             {
                 if (word.Text.Length == 0) continue;
-                var w = TextMeasure.Measure(word.Text, lookup.Chain, site.FontSize, lookup.DeclaredCount).WidthPx;
+                var w = TextMeasure.Measure(word.Text, lookup, site.FontSize).WidthPx;
                 widestWord = Math.Max(widestWord, w);
 
                 var lead = used > 0 && word.SpaceBefore ? space : 0;
@@ -510,7 +528,7 @@ public sealed class CheckAnalyzer
 
         var warnings = new List<string>();
         if (layout.UsedAutoFallback)
-            warnings.Add("measured with an automatic fallback font; Windows font linking may pick a different one");
+            warnings.Add("some characters are drawn with WPF's fallback font for them (taken from WPF's own fallback table)");
         if (site.Width.WrapDefeated && site.Wrap != WrapMode.NoWrap)
             warnings.Add("TextWrapping has no effect here: the text is measured with unlimited width (horizontal StackPanel, Auto column or WrapPanel)");
         if (site.Width.AssumedScrollBar)
@@ -537,7 +555,7 @@ public sealed class CheckAnalyzer
     /// <summary>行高（DIP）。度量檔有 ascender/descender/lineGap 就用它。</summary>
     private double LineHeightOf(TextSite site)
     {
-        var lookup = _fonts.Resolve(site.FontFamily, site.FontWeight, site.FontStyle, _defaultFamily);
+        var lookup = _fonts.Resolve(site.FontFamily, site.FontWeight, site.FontStyle, _defaultFamily, site.Language);
         if (lookup.Chain.Count == 0) return 0;
         var f = lookup.Chain[0];
         return f.UnitsPerEm == 0 ? 0 : (double)f.LineHeight * site.FontSize / f.UnitsPerEm;

@@ -16,7 +16,7 @@
     <RepositoryUrl>https://github.com/HSU-YU-MING/cornhsu-xamlfit</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageTags>xaml;wpf;winui;localization;i18n;text-overflow;truncation;static-analysis;ci;dotnet-tool</PackageTags>
+    <PackageTags>xaml;wpf;localization;i18n;text-overflow;truncation;static-analysis;ci;dotnet-tool</PackageTags>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
     <IncludeSymbols>true</IncludeSymbols>

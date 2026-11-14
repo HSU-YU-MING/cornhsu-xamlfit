@@ -247,7 +247,7 @@ public sealed class BudgetAnalyzer
                     {
                         sourceWidth = Math.Round(m.WidthPx, 2);
                         if (m.UsedAutoFallback)
-                            warning = "measured with an automatic fallback font; Windows font linking may pick a different one";
+                            warning = "some characters are drawn with WPF's fallback font for them (taken from WPF's own fallback table)";
                     }
                     else warning = m.ComplexScript
                         ? "complex script: advance widths do not sum correctly"
@@ -338,7 +338,7 @@ public sealed class BudgetAnalyzer
 
     private SiteFit? Fit(TextSite site, string? source)
     {
-        var lookup = _fonts.Resolve(site.FontFamily, site.FontWeight, site.FontStyle, _defaultFamily);
+        var lookup = _fonts.Resolve(site.FontFamily, site.FontWeight, site.FontStyle, _defaultFamily, site.Language);
         if (lookup.Chain.Count == 0) return null;
 
         var average = AverageCharWidth(lookup.Chain, site.FontSize);
@@ -484,7 +484,7 @@ public static class SiteMeasure
 
         foreach (var line in TextRules.Lines(TextRules.Display(site.Element, text)))
         {
-            var m = TextMeasure.Measure(line, lookup.Chain, site.FontSize, lookup.DeclaredCount);
+            var m = TextMeasure.Measure(line, lookup, site.FontSize);
             widest = Math.Max(widest, m.WidthPx);
             missing += m.MissingGlyphs;
             complex |= m.ComplexScript;
