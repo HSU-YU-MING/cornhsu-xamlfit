@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <data name="Save"><value>Save</value></data>
+  <data name="Delete"><value>Delete</value></data>
+  <data name="Description"><value>Shows the computed value for each entry.</value></data>
+  <data name="Settings"><value>Settings</value></data>
+  <data name="Ok"><value>OK</value></data>
+  <data name="Caption"><value>Optional</value></data>
+  <data name="Unbounded"><value>This label has no width bound at all.</value></data>
+</root>

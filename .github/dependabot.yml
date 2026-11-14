@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # ⚠ Actions 釘 40 碼 commit SHA；dependabot 會更新釘選並保留行尾的版本註解。
+  #   不要為了方便改回 @v7 這種移動 tag。
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: monthly

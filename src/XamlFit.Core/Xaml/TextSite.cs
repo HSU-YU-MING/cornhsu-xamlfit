@@ -1,0 +1,56 @@
+using XamlFit.Core.Fonts;
+using XamlFit.Core.Layout;
+
+namespace XamlFit.Core.Xaml;
+
+/// <summary>文字從哪裡來。只有前兩種是翻譯對象。</summary>
+public enum TextSource
+{
+    /// <summary>XAML 裡寫死的字串。</summary>
+    Literal,
+    /// <summary>指向資源字串（{x:Static p:Resources.K}、本地化標記延伸…）。</summary>
+    Resource,
+    /// <summary>綁到資料。不是翻譯對象，但仍可能溢出。</summary>
+    DataBound,
+}
+
+/// <summary>換行與裁切的組合決定「塞不下」會長什麼樣（規畫書 §4.5 的判定矩陣）。</summary>
+public enum WrapMode { NoWrap, Wrap, WrapWithOverflow }
+
+public enum TrimMode { None, CharacterEllipsis, WordEllipsis }
+
+/// <summary>一個會顯示文字的位置。</summary>
+public sealed class TextSite
+{
+    public required string File { get; init; }
+    public required int Line { get; init; }
+    public required string Element { get; init; }
+
+    public required TextSource Source { get; init; }
+
+    /// <summary>字面文字，或資源鍵的原始寫法。</summary>
+    public required string Text { get; init; }
+
+    /// <summary>Source 是 Resource 時，抽出來的資源鍵（抽不出來是 null）。</summary>
+    public string? ResourceKey { get; init; }
+
+    public string? FontFamily { get; init; }
+    public double FontSize { get; init; }
+    public int FontWeight { get; init; } = 400;
+    public FontStyleKind FontStyle { get; init; } = FontStyleKind.Normal;
+
+    public WrapMode Wrap { get; init; } = WrapMode.NoWrap;
+    public TrimMode Trim { get; init; } = TrimMode.None;
+
+    /// <summary>宣告的高度（垂直裁切判定要用）。</summary>
+    public double? Height { get; init; }
+
+    public required AvailableWidth Width { get; init; }
+
+    /// <summary>被 ignore 註解壓掉的理由。</summary>
+    public string? SuppressedReason { get; set; }
+
+    public string Location => $"{File}:{Line}";
+
+    public override string ToString() => $"<{Element}> \"{Text}\" @ {Location}";
+}

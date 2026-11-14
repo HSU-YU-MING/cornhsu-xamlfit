@@ -1,0 +1,62 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:p="clr-namespace:Demo.Resources"
+        Title="XamlFit demo" Width="420" SizeToContent="Height"
+        FontFamily="XamlFit Demo Sans">
+
+  <!-- 刻意做壞的示範專案：每一種判定各一個。
+       寬度是用工具量出來的德文實際寬度校準的，CI 會斷言計數（見 .github/workflows/ci.yml）。
+
+       字型是 samples/demo/xamlfit.fonts.json 裡的合成字型「XamlFit Demo Sans」——
+       CI 跑在 Linux，沒有 Segoe UI；用合成字型才能在任何機器上得到同一組數字。
+       重產方式見 prototype/DemoMetrics（⚠ XML 註解裡不能出現連續兩個減號，所以這裡不寫指令）
+
+       德文實測寬度（XamlFit Demo Sans 12）：
+         Save        "Speichern unter"                83.6 px
+         Delete      "Alle Elemente löschen"         118.3 px
+         Description "Zeigt den berechneten Wert…"   309.7 px
+         Settings    "Einstellungen"                  71.9 px
+         Caption     "Optionale Angabe"               84.8 px  @ FontSize 11（樣式提供）
+                                                      92.5 px  @ FontSize 12（樣式沒生效）
+         Ok          "OK"                             14.9 px
+  -->
+
+  <Window.Resources>
+    <Style x:Key="Caption" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="11"/>
+    </Style>
+  </Window.Resources>
+
+  <StackPanel Margin="10">
+
+    <!-- [overflow / fail] 固定寬 70、不換行、不裁切 → 德文 83.6 px 直接疊出去。
+         ⚠ 這一類連執行期的 IsTextTrimmedChanged 都不會觸發，只有靜態量得出來。 -->
+    <TextBlock Width="70" Text="{x:Static p:Strings.Save}"/>
+
+    <!-- [trimmed / warn] 一樣塞不下，但有省略號 → 資訊遺失而非溢出 -->
+    <TextBlock Width="90" TextTrimming="CharacterEllipsis" Text="{x:Static p:Strings.Delete}"/>
+
+    <!-- [reflow / info] 會換行、高度自動 → 只是把版面撐高，水平沒事 -->
+    <TextBlock Width="90" TextWrapping="Wrap" Text="{x:Static p:Strings.Description}"/>
+
+    <!-- [vertical-clip / fail] 會換行但高度寫死 20 → 四行塞進一行的高度 -->
+    <TextBlock Width="90" Height="20" TextWrapping="Wrap" Text="{x:Static p:Strings.Description}"/>
+
+    <!-- [tight / warn] 德文 70.7 px 塞得進 73 px，但餘裕只有 3%，低於預設 5% 邊界 -->
+    <TextBlock Width="73" Text="{x:Static p:Strings.Settings}"/>
+
+    <!-- [沒有 finding] 樣式把字級設成 11 → 88.5 px，塞得進 92。
+         ⚠ 若工具沒解析樣式而用預設 12 去量，會得到 96.5 px 並誤報 overflow。
+         這一筆就是「樣式解析有沒有生效」的斷言。 -->
+    <TextBlock Width="92" Style="{StaticResource Caption}" Text="{x:Static p:Strings.Caption}"/>
+
+    <!-- [沒有 finding] 空間充裕 -->
+    <TextBlock Width="300" Text="{x:Static p:Strings.Ok}"/>
+
+    <!-- [no-declared-limit] 水平可捲動 → 文字不會被裁，上界沒有意義 -->
+    <ScrollViewer HorizontalScrollBarVisibility="Auto">
+      <TextBlock Text="{x:Static p:Strings.Unbounded}"/>
+    </ScrollViewer>
+
+  </StackPanel>
+</Window>

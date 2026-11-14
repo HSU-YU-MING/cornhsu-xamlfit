@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      # ⚠ Actions 一律釘 40 碼 commit SHA（2026-10 稽核的規矩）。
+      #   dependabot 的 github-actions 會更新釘選；不要改回 @v4 這種移動 tag。
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: dotnet build XamlFit.slnx -c Release
+
+      - name: Test
+        run: dotnet test XamlFit.slnx -c Release --no-build
+
+      # 示範專案是**刻意做壞的**，所以預期 exit 1 —— 這正是守門員該有的行為。
+      # 計數斷言同時驗證「工具真的會擋」跟「擋的數量沒有莫名其妙變動」。
+      - name: Audit the demo (expects exit 1 and exact counts)
+        run: bash scripts/verify-demo.sh
+
+      - name: Budget mode on the demo
+        run: bash scripts/verify-budget.sh

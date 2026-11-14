@@ -1,0 +1,48 @@
+name: 'XamlFit text-fit check'
+description: 'Fails the build when a translated string does not fit its XAML slot.'
+branding:
+  icon: 'maximize-2'
+  color: 'blue'
+
+inputs:
+  root:
+    description: 'Directory to scan'
+    required: true
+  resx:
+    description: 'Directory holding .resx files'
+    required: false
+  pseudo:
+    description: 'Simulate expansion instead of using real translations'
+    required: false
+    default: 'false'
+  metrics:
+    description: 'Path to xamlfit.fonts.json'
+    required: false
+  baseline:
+    description: 'Path to a baseline file'
+    required: false
+  fail-on:
+    description: "'fail' (default) or 'warn'"
+    required: false
+    default: 'fail'
+  min-coverage:
+    description: 'Resolution floor; below it the run exits 3'
+    required: false
+    default: '60'
+  json:
+    description: 'Write the full report here'
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        dotnet tool install -g Cornhsu.XamlFit
+        args=(check "${{ inputs.root }}" --fail-on "${{ inputs.fail-on }}" --min-coverage "${{ inputs.min-coverage }}")
+        [ -n "${{ inputs.resx }}" ]     && args+=(--resx "${{ inputs.resx }}")
+        [ "${{ inputs.pseudo }}" = "true" ] && args+=(--pseudo)
+        [ -n "${{ inputs.metrics }}" ]  && args+=(--metrics "${{ inputs.metrics }}")
+        [ -n "${{ inputs.baseline }}" ] && args+=(--baseline "${{ inputs.baseline }}")
+        [ -n "${{ inputs.json }}" ]     && args+=(--json "${{ inputs.json }}")
+        xamlfit "${args[@]}"

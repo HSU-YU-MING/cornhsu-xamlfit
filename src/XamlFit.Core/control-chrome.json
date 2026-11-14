@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "generatedOn": "2026-11-14",
+  "theme": "Aero2.NormalColor (default on Windows 8+)",
+  "dotnet": "10.0.10",
+  "note": "Horizontal chrome in DIPs: how much width a control consumes around its content (padding + border + glyph + dropdown). Measured, not hand-copied: a Border of known width is placed in each control and WPF is asked to measure it. Regenerate with prototype/ChromeGen on Windows.",
+  "controls": {
+    "Button": { "chromeWidth": 4, "paddingBorder": 0, "minWidth": 0 },
+    "ToggleButton": { "chromeWidth": 4, "paddingBorder": 0, "minWidth": 0 },
+    "RepeatButton": { "chromeWidth": 4, "paddingBorder": 0, "minWidth": 0 },
+    "CheckBox": { "chromeWidth": 19.975, "paddingBorder": 0, "minWidth": 0 },
+    "RadioButton": { "chromeWidth": 19, "paddingBorder": 0, "minWidth": 0 },
+    "Label": { "chromeWidth": 10, "paddingBorder": 0, "minWidth": 0 },
+    "ContentControl": { "chromeWidth": 0, "paddingBorder": 0, "minWidth": 0 },
+    "ComboBox": { "chromeWidth": null, "paddingBorder": 0, "minWidth": 0, "note": "content width does not propagate (slope=0.000); chrome unknown — sites inside are unmeasurable" },
+    "ComboBoxItem": { "chromeWidth": 10, "paddingBorder": 0, "minWidth": 0 },
+    "ListBoxItem": { "chromeWidth": 10, "paddingBorder": 0, "minWidth": 0 },
+    "ListViewItem": { "chromeWidth": 10, "paddingBorder": 0, "minWidth": 0 },
+    "TreeViewItem": { "chromeWidth": 20, "paddingBorder": 0, "minWidth": 0 },
+    "MenuItem": { "chromeWidth": 85, "paddingBorder": 0, "minWidth": 0 },
+    "TabItem": { "chromeWidth": 12, "paddingBorder": 0, "minWidth": 0 },
+    "GroupBox": { "chromeWidth": 12, "paddingBorder": 0, "minWidth": 0 },
+    "Expander": { "chromeWidth": 2, "paddingBorder": 0, "minWidth": 0 },
+    "TextBox": { "chromeWidth": null, "paddingBorder": 0, "minWidth": 0, "note": "content width does not propagate (slope=0.000); chrome unknown — sites inside are unmeasurable" },
+    "PasswordBox": { "chromeWidth": null, "paddingBorder": 0, "minWidth": 0, "note": "content width does not propagate (slope=0.000); chrome unknown — sites inside are unmeasurable" },
+    "StatusBarItem": { "chromeWidth": 6, "paddingBorder": 0, "minWidth": 0 },
+    "HeaderedContentControl": { "chromeWidth": 0, "paddingBorder": 0, "minWidth": 0 },
+    "ScrollViewer": { "chromeWidth": 16.8, "paddingBorder": 0, "minWidth": 0 },
+    "Border": { "chromeWidth": 0, "paddingBorder": 0, "minWidth": 0 }
+  }
+}

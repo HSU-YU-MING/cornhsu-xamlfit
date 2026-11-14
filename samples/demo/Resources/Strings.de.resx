@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <data name="Save"><value>Speichern unter</value></data>
+  <data name="Delete"><value>Alle Elemente löschen</value></data>
+  <data name="Description"><value>Zeigt den berechneten Wert für jeden einzelnen Eintrag an.</value></data>
+  <data name="Settings"><value>Einstellungen</value></data>
+  <data name="Ok"><value>OK</value></data>
+  <data name="Caption"><value>Optionale Angabe</value></data>
+  <data name="Unbounded"><value>Diese Beschriftung hat überhaupt keine Breitenbegrenzung.</value></data>
+</root>

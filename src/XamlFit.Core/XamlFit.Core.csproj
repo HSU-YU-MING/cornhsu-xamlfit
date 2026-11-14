@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>XamlFit.Core</RootNamespace>
+    <!-- 零原生相依：字型度量是自己讀 OpenType 的五張表，不經 SkiaSharp／WPF。
+         理由見規畫書第 8 節「為什麼不用 SkiaSharp」。Linux CI 跑得動。 -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="XamlFit.Tests" />
+  </ItemGroup>
+
+  <!-- 控制項內距表：由 prototype/ChromeGen 量出來的（不是手抄）。重產方式見該專案的檔頭。 -->
+  <ItemGroup>
+    <EmbeddedResource Include="control-chrome.json" LogicalName="XamlFit.Core.control-chrome.json" />
+  </ItemGroup>
+</Project>

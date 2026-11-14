@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>XamlFit.Cli</RootNamespace>
+    <AssemblyName>xamlfit</AssemblyName>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>xamlfit</ToolCommandName>
+    <PackageId>Cornhsu.XamlFit</PackageId>
+    <!-- ⚠ tag 才是版本真相源；不要改成真版號，也不要刪掉這一格。 -->
+    <Version>0.0.0-dev</Version>
+    <Description>XamlFit — static text-fit audit for XAML. Computes the pixel budget of every text slot without launching the app: export limits for translators before translation, fail CI on real overflow after.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\XamlFit.Core\XamlFit.Core.csproj" />
+  </ItemGroup>
+</Project>
