@@ -3,7 +3,6 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 using XamlFit.Core.Fonts;
-using XamlFit.Core.Fonts;
 using XamlFit.Core.Layout;
 
 namespace XamlFit.Core.Xaml;

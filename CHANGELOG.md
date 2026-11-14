@@ -28,6 +28,10 @@ Everything below is the initial implementation; nothing has been released yet.
   (6.0, 6.0 and 27.8 DIP). The `ComboBox` figure is confirmed twice over: by stretching its
   content presenter, and geometrically from the dropdown button's position.
 - A breakdown of **why** sites are blocked, so coverage is actionable rather than just a number.
+- Items inside a `ListBox`, `ListView` or `ItemsControl` resolve, assuming a visible vertical
+  scroll bar (the safe direction, and stated on every affected site). `DataGrid` and `TreeView`
+  stay blocked on purpose: their item widths come from a separate sizing system and from
+  runtime nesting depth respectively.
 - A deliberately broken demo project with CI count assertions.
 
 ### Verified

@@ -54,6 +54,11 @@ internal static class Program
             ("HeaderedContentControl", () => new HeaderedContentControl(), (c, v) => ((HeaderedContentControl)c).Content = v),
             ("ScrollViewer", () => new ScrollViewer(), (c, v) => ((ScrollViewer)c).Content = v),
             ("Border", () => new Border(), (c, v) => ((Border)c).Child = v),
+            // ItemsControl 家族：chrome 是「控制項寬 − ItemsPresenter 寬」，不含捲軸
+            //（捲軸另外記在 scrollBarWidth，因為它出不出現是執行期才知道的）
+            ("ListBox", () => new ListBox(), (c, v) => ((ListBox)c).Items.Add(new ListBoxItem { Content = v })),
+            ("ListView", () => new ListView(), (c, v) => ((ListView)c).Items.Add(new ListViewItem { Content = v })),
+            ("ItemsControl", () => new ItemsControl(), (c, v) => ((ItemsControl)c).Items.Add(v)),
         ];
 
         var rows = new List<(string Name, double Chrome, double PaddingBorder, double MinWidth, string Note)>();
@@ -65,6 +70,11 @@ internal static class Program
                 // 兩點量測：內容寬 100 與 200 各量一次。
                 // 斜率必須是 1（控制項把內容寬度原封不動往外傳），chrome 才有意義。
                 // 斜率不是 1 → 這個控制項不以內容決定寬度（例如 TextBox），不給數字，改讀屬性。
+                // ⚠ ItemsControl 家族一定要走內容宿主那條路。兩點量法對它們「成功」，
+                //   但量到的是「控制項 chrome ＋ 項目容器 chrome」（ListBox 得到 14 而不是 4），
+                //   而解析器會另外再扣一次項目容器 → 重複計算。
+                var forceContentHost = name is "ListBox" or "ListView" or "ItemsControl";
+
                 var d1 = MeasureWith(make, setContent, ProbeWidth);
                 var d2 = MeasureWith(make, setContent, ProbeWidth * 2);
                 var slope = (d2 - d1) / ProbeWidth;
@@ -72,7 +82,7 @@ internal static class Program
                 double chrome;
                 var note = "";
 
-                if (Math.Abs(slope - 1.0) < 0.001)
+                if (!forceContentHost && Math.Abs(slope - 1.0) < 0.001)
                 {
                     chrome = d1 - ProbeWidth;
                 }
@@ -128,6 +138,7 @@ internal static class Program
         sb.Append($"  \"generatedOn\": \"{DateTime.Now:yyyy-MM-dd}\",\n");
         sb.Append($"  \"theme\": \"{DetectTheme()}\",\n");
         sb.Append($"  \"dotnet\": \"{Environment.Version}\",\n");
+        sb.Append($"  \"scrollBarWidth\": {VerticalScrollBarWidth().ToString(CultureInfo.InvariantCulture)},\n");
         sb.Append("  \"note\": \"Horizontal chrome in DIPs: how much width a control consumes around its content (padding + border + glyph + dropdown). Measured, not hand-copied: a Border of known width is placed in each control and WPF is asked to measure it. Regenerate with prototype/ChromeGen on Windows.\",\n");
         sb.Append("  \"controls\": {\n");
 
@@ -190,6 +201,8 @@ internal static class Program
             //   那只改變內容在區域裡的對齊，不改變區域大小，所以量出來的就是可用寬度。
             //   （試過的無效做法：空內容 → presenter 排成 0 寬；
             //     塞 10000 寬的內容 → ComboBox 不排它，presenter 仍是 0。）
+            "ListBox" or "ListView" or "ItemsControl" =>
+                $"<{controlName} {Ns} Width=\"{Fixed}\" Height=\"60\" HorizontalContentAlignment=\"Stretch\"/>",
             "ComboBox" => $"<ComboBox {Ns} Width=\"{Fixed}\" Height=\"40\" SelectedIndex=\"0\" " +
                           "HorizontalContentAlignment=\"Stretch\">" +
                           "<ComboBoxItem><Border/></ComboBoxItem></ComboBox>",
@@ -226,6 +239,9 @@ internal static class Program
         if (Search(root, fe => fe.GetType().Name == "TextBoxView") is { } tbv) return tbv;
         // 第二層：範本宣告的內容宿主
         if (Search(root, fe => fe.Name is "PART_ContentHost" or "ContentSite") is { } part) return part;
+        // 第三層：ItemsControl 的項目區（要排在 ContentPresenter 前面 ——
+        // 否則會找到項目容器裡面的 ContentPresenter，量到的是項目內容而不是項目區）
+        if (Search(root, fe => fe.GetType().Name == "ItemsPresenter") is { } items) return items;
         // 第三層：一般的 ContentPresenter
         return Search(root, fe => fe is ContentPresenter && fe.ActualWidth > 0);
     }
@@ -262,6 +278,24 @@ internal static class Program
             if (found is not null) return found;
         }
         return null;
+    }
+
+    /// <summary>垂直捲軸的寬度。⚠ 捲軸出不出現取決於執行期的項目數，靜態不可知 ——
+    /// 解析器預設「假設它在」（偏保守：少算可用寬度會誤報，多算會漏報）。</summary>
+    private static double VerticalScrollBarWidth()
+    {
+        const string Ns = "xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"";
+        try
+        {
+            var root = (FrameworkElement)XamlReader.Parse(
+                $"<Grid {Ns}><ListBox Width=\"300\" Height=\"60\" ScrollViewer.VerticalScrollBarVisibility=\"Visible\"/></Grid>");
+            root.Measure(new Size(600, 200));
+            root.Arrange(new Rect(0, 0, 600, 200));
+            root.UpdateLayout();
+            var bar = Search(root, fe => fe is System.Windows.Controls.Primitives.ScrollBar && fe.ActualWidth > 0);
+            return bar is null ? 0 : Math.Round(bar.ActualWidth, 3);
+        }
+        catch { return 0; }
     }
 
     private static string DetectTheme()

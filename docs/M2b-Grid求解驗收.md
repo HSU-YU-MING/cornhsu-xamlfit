@@ -171,3 +171,77 @@ M0 預測「解掉 Grid 會把有風險覆蓋率從 75.9% 推到約 97.5%」。*
 我在第 4 節寫下「三種量法都失敗」並決定停手，那個決定本身是對的（不猜比猜好），
 但**結論下得太早**。真正的差別是：前三種都在問「內容有多寬」，第四種改問
 「可用區域有多寬」—— 而那才是要量的東西。
+
+---
+
+## 7. ItemsControl 的項目（同日）
+
+第 6 節的第一順位是「`ItemsControl` 裡的項目」（MahApps 116 筆）。做掉了。
+
+### 結構
+
+`ListBox` 300 寬的視覺樹：
+
+```
+Border Bd          300.0     ← BorderThickness + Padding
+  ScrollViewer     296.0     ← ListBox chrome = 300 − 296 = 4.0
+    ScrollContentPresenter / ItemsPresenter
+      ListBoxItem  296.0     pad=4,1,4,1 → 項目容器 chrome 10（表裡已有）
+```
+
+捲軸出現時 `ScrollContentPresenter` 變成 279.2，差額 **16.8** 就是捲軸寬。
+
+所以：**項目可用寬 = 清單寬 − 清單 chrome(4) − 捲軸(16.8) − 項目容器 chrome(10)**。
+
+### 捲軸：一個必須明說的假設
+
+`VerticalScrollBarVisibility` 預設是 `Auto` —— **捲軸出不出現取決於執行期的項目數，
+靜態不可知。** 兩個選擇都是猜：
+
+| 假設 | 後果 |
+|---|---|
+| 假設捲軸**在** | 少算 16.8px 可用寬度 → 偶爾誤報「太擠」 |
+| 假設捲軸**不在** | 多算 16.8px → **漏報溢出** |
+
+依憲法第二條（最嚴重的失敗是「說裝得下但其實裝不下」），**假設它在**，
+並且把這個假設寫進每一筆受影響位置的 `reason`。
+明寫 `Disabled`／`Hidden` 時才確定它不佔空間，那時不扣。
+
+### 刻意不解的兩個
+
+| 控制項 | 為什麼 |
+|---|---|
+| `DataGrid` | 儲存格寬度來自 `DataGridColumn` 自己的 Auto／star／SizeToHeader 尺寸系統，跟 DataGrid 的寬度不是同一回事 |
+| `TreeView` | 項目依巢狀深度往右縮排（每層約 19 DIP），而深度對綁資料的項目是執行期才知道的 |
+
+### 又一次「探針設計錯了」
+
+第一版的 ChromeGen 探針把 `Border` 包在 `ListBoxItem` 裡，兩點量法「成功」了，
+量到 **14.0** —— 那是 `4.0 + 10.0`，把項目容器的 chrome 混了進去。
+解析器會另外再扣一次項目容器 → 重複計算。
+修法是讓 ItemsControl 家族**強制走內容宿主那條路**（找 `ItemsPresenter`），得到乾淨的 4.0。
+
+這跟第 6 節的 ComboBoxItem 是同一類錯誤：**量到的到底是哪一層的 chrome。**
+
+### 驗證與成效
+
+GridOracle 加了兩個案例，都與 WPF 真實版面完全吻合：
+
+| 案例 | 我們 | WPF |
+|---|---|---|
+| 固定寬 ListBox 裡的項目（捲軸可見） | 269.20 | 269.20 |
+| 同上但捲軸 Disabled | 286.00 | 286.00 |
+
+**16 / 16 全部差 0.000。**
+
+| 專案 | ComboBox 之後 | **ItemsControl 之後** |
+|---|---|---|
+| Playnite | 100.0% | **100.0%** |
+| WinUI-Gallery | 99.2% | **99.2%** |
+| HandyControl | 97.3% | **97.3%** |
+| 自家-QuillNest | 96.4% | **96.4%** |
+| MahApps.Metro | 81.9% | **93.8%** |
+| ScreenToGif | 77.5% | **77.5%** |
+
+剩下的全部是「刻意不做」或「靜態真的不可知」：`SharedSizeGroup` 26、`TreeView` 12、
+跨欄子元素 11、`DataGrid` 2、Auto 欄裡綁資料的子元素 16。

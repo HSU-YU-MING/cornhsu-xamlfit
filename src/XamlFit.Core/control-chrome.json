@@ -3,6 +3,7 @@
   "generatedOn": "2026-11-14",
   "theme": "Aero2.NormalColor (default on Windows 8+)",
   "dotnet": "10.0.10",
+  "scrollBarWidth": 16.8,
   "note": "Horizontal chrome in DIPs: how much width a control consumes around its content (padding + border + glyph + dropdown). Measured, not hand-copied: a Border of known width is placed in each control and WPF is asked to measure it. Regenerate with prototype/ChromeGen on Windows.",
   "controls": {
     "Button": { "chromeWidth": 4, "paddingBorder": 0, "minWidth": 0 },
@@ -26,6 +27,9 @@
     "StatusBarItem": { "chromeWidth": 6, "paddingBorder": 0, "minWidth": 0 },
     "HeaderedContentControl": { "chromeWidth": 0, "paddingBorder": 0, "minWidth": 0 },
     "ScrollViewer": { "chromeWidth": 16.8, "paddingBorder": 0, "minWidth": 0 },
-    "Border": { "chromeWidth": 0, "paddingBorder": 0, "minWidth": 0 }
+    "Border": { "chromeWidth": 0, "paddingBorder": 0, "minWidth": 0 },
+    "ListBox": { "chromeWidth": 4, "paddingBorder": 0, "minWidth": 0, "note": "measured via the templated content host (content width does not propagate)" },
+    "ListView": { "chromeWidth": 4, "paddingBorder": 0, "minWidth": 0, "note": "measured via the templated content host (content width does not propagate)" },
+    "ItemsControl": { "chromeWidth": 0, "paddingBorder": 0, "minWidth": 0, "note": "measured via the templated content host (content width does not propagate)" }
   }
 }

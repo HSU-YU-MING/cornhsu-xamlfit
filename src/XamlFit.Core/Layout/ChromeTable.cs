@@ -20,12 +20,20 @@ public sealed class ChromeTable
     public string Theme { get; }
     public string GeneratedOn { get; }
 
-    private ChromeTable(Dictionary<string, double?> chrome, Dictionary<string, double> minWidth, string theme, string on)
+    /// <summary>垂直捲軸的寬度（DIP）。
+    /// ⚠ 捲軸出不出現取決於執行期的項目數，靜態不可知 ——
+    /// 解析器預設「假設它在」：少算可用寬度只會誤報，多算會**漏報溢出**。</summary>
+    public double ScrollBarWidth { get; }
+
+    private ChromeTable(
+        Dictionary<string, double?> chrome, Dictionary<string, double> minWidth,
+        string theme, string on, double scrollBarWidth)
     {
         _chrome = chrome;
         _minWidth = minWidth;
         Theme = theme;
         GeneratedOn = on;
+        ScrollBarWidth = scrollBarWidth;
     }
 
     public static ChromeTable Parse(string json)
@@ -53,7 +61,9 @@ public sealed class ChromeTable
         return new ChromeTable(
             chrome, min,
             root.TryGetProperty("theme", out var t) ? t.GetString() ?? "" : "",
-            root.TryGetProperty("generatedOn", out var g) ? g.GetString() ?? "" : "");
+            root.TryGetProperty("generatedOn", out var g) ? g.GetString() ?? "" : "",
+            root.TryGetProperty("scrollBarWidth", out var sb) && sb.ValueKind == JsonValueKind.Number
+                ? sb.GetDouble() : 0);
     }
 
     /// <summary>內建的表（隨套件走）。</summary>

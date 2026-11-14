@@ -61,6 +61,19 @@ public sealed class WidthResolver
         "ItemsControl", "ListBox", "ListView", "DataGrid", "TreeView",
     };
 
+    /// <summary>
+    /// 項目寬度算得出來的 ItemsControl：可用寬度 = 自己的寬 − chrome − 捲軸 − 項目容器 chrome。
+    ///
+    /// ⚠ <c>DataGrid</c> 不在此列：儲存格的寬度來自**欄**（DataGridColumn 有自己的
+    ///   Auto／star／SizeToHeader 尺寸系統），跟 DataGrid 本身的寬度不是同一回事。
+    /// ⚠ <c>TreeView</c> 不在此列：項目會依巢狀深度往右縮排（每層約 19 DIP），
+    ///   而深度對綁資料的項目是執行期才知道的。
+    /// </summary>
+    private static readonly HashSet<string> SolvableItemsControls = new(StringComparer.Ordinal)
+    {
+        "ItemsControl", "ListBox", "ListView",
+    };
+
     public AvailableWidth Resolve(XElement site) => Resolve(site, 0);
 
     /// <param name="depth">解巢狀 Grid 時會再呼叫自己（Grid 裡的 Grid），這是遞迴深度上限。</param>
@@ -87,6 +100,8 @@ public sealed class WidthResolver
         var gridFlexible = false;
         var gridReason = "Auto/* Grid column in the chain";
         var inItems = false;
+        var itemsReason = "ItemsControl in the chain";
+        var assumedScrollBar = false;
 
         XElement? cur = site;
 
@@ -128,11 +143,12 @@ public sealed class WidthResolver
                         $"insets ({total:F1}) exceed the bound ({bound:F1}) on <{local}>");
 
                 if (gridFlexible) return AvailableWidth.NotKnown(WidthStatus.NeedsGrid, gridReason);
-                if (inItems) return AvailableWidth.NotKnown(WidthStatus.NeedsItems, "ItemsControl in the chain");
+                if (inItems) return AvailableWidth.NotKnown(WidthStatus.NeedsItems, itemsReason);
 
                 return new AvailableWidth(
                     WidthStatus.Known, px, $"{which}={bound:G} on <{local}>", LineOf(cur), usedChrome,
-                    $"minus {total:F1} DIP of insets{(usedChrome ? " and control chrome" : "")}");
+                    $"minus {total:F1} DIP of insets{(usedChrome ? " and control chrome" : "")}" +
+                    (assumedScrollBar ? $", assuming a visible vertical scroll bar ({_chrome.ScrollBarWidth:F1} DIP)" : ""));
             }
 
             // 要往上走了：這個元素的 Margin 與內距都吃掉寬度
@@ -158,7 +174,29 @@ public sealed class WidthResolver
                 return AvailableWidth.NotKnown(WidthStatus.NoDeclaredLimit, $"content-sized host <{pLocal}>");
 
             // 規則 4：不中止，繼續往上找 ItemsControl 自己的上界
-            if (MatchesSuffix(pLocal, ItemsControls)) inItems = true;
+            if (MatchesSuffix(pLocal, ItemsControls))
+            {
+                if (MatchesSuffix(pLocal, SolvableItemsControls))
+                {
+                    // ⚠ 垂直捲軸出不出現取決於執行期的項目數，靜態不可知。
+                    //   **假設它在**：少算可用寬度只會誤報，多算會漏報溢出。
+                    //   只有明寫 Disabled／Hidden 時才確定它不佔空間。
+                    var vis = Attr(parent, "ScrollViewer.VerticalScrollBarVisibility");
+                    var barHidden = vis is not null &&
+                        (vis.Equals("Disabled", StringComparison.OrdinalIgnoreCase) ||
+                         vis.Equals("Hidden", StringComparison.OrdinalIgnoreCase));
+                    if (!barHidden)
+                    {
+                        deductions += _chrome.ScrollBarWidth;
+                        assumedScrollBar = true;
+                    }
+                }
+                else
+                {
+                    inItems = true;
+                    itemsReason = $"inside <{pLocal}>, whose item width comes from a separate sizing system";
+                }
+            }
 
             if (IsGrid(pLocal))
             {
@@ -168,11 +206,12 @@ public sealed class WidthResolver
                     var px = fixedWidth - deductions;
                     if (px <= 0)
                         return AvailableWidth.NotKnown(WidthStatus.Unmeasurable, "insets exceed the Grid column width");
-                    if (inItems) return AvailableWidth.NotKnown(WidthStatus.NeedsItems, "ItemsControl in the chain");
+                    if (inItems) return AvailableWidth.NotKnown(WidthStatus.NeedsItems, itemsReason);
 
                     return new AvailableWidth(
                         WidthStatus.Known, px, $"fixed Grid column ({why})", LineOf(parent), usedChrome,
-                        $"minus {deductions:F1} DIP of insets{(usedChrome ? " and control chrome" : "")}");
+                        $"minus {deductions:F1} DIP of insets{(usedChrome ? " and control chrome" : "")}" +
+                        (assumedScrollBar ? $", assuming a visible vertical scroll bar ({_chrome.ScrollBarWidth:F1} DIP)" : ""));
                 }
                 if (state == GridState.Flexible)
                 {
@@ -184,11 +223,12 @@ public sealed class WidthResolver
                         if (px <= 0)
                             return AvailableWidth.NotKnown(WidthStatus.Unmeasurable,
                                 "insets exceed the solved Grid column width");
-                        if (inItems) return AvailableWidth.NotKnown(WidthStatus.NeedsItems, "ItemsControl in the chain");
+                        if (inItems) return AvailableWidth.NotKnown(WidthStatus.NeedsItems, itemsReason);
 
                         return new AvailableWidth(
                             WidthStatus.Known, px, $"solved Grid {solved.Reason}", LineOf(parent), usedChrome,
-                            $"minus {deductions:F1} DIP of insets{(usedChrome ? " and control chrome" : "")}");
+                            $"minus {deductions:F1} DIP of insets{(usedChrome ? " and control chrome" : "")}" +
+                        (assumedScrollBar ? $", assuming a visible vertical scroll bar ({_chrome.ScrollBarWidth:F1} DIP)" : ""));
                     }
 
                     gridFlexible = true;

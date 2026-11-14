@@ -15,15 +15,18 @@
 
 ## 0.x（介面凍結前）
 
-**第一順位：ItemsControl 裡的項目。** 實測 MahApps 有 **116 筆**卡在這，HandyControl 8 筆。
-固定寬的 ListBox 裡的項目理論上算得出來（扣掉項目容器內距與捲軸寬），只是還沒做。
+**第一順位：Auto 欄裡綁資料或自訂控制項的子元素**（ScreenToGif 14 筆、MahApps 2 筆）。
+現在是最大的「有機會做」的一項。
 
-**第二順位：Auto 欄裡綁資料或自訂控制項的子元素**（ScreenToGif 14 筆、MahApps 2 筆）。
+**第二順位：TreeView 的縮排**（MahApps 12 筆）。XAML 裡看得到巢狀結構的那些算得出來，
+綁資料的算不出來 —— 要能分辨這兩種。
 
 **不打算做的**：`SharedSizeGroup`（26 筆，欄寬由整個 scope 的其他 Grid 共同決定，
-靜態看不到那些）、Auto 欄裡的跨欄子元素（11 筆，WPF 的分攤規則複雜，算錯會連帶弄錯星號分配）。
+靜態看不到那些）、Auto 欄裡的跨欄子元素（11 筆，WPF 的分攤規則複雜，算錯會連帶弄錯星號分配）、
+`DataGrid` 的儲存格（2 筆，寬度來自 DataGridColumn 自己的尺寸系統）。
 
-~~解 Grid 的 Auto/星號欄~~ 與 ~~ComboBox/TextBox 的 chrome~~ —— **都已完成**。
+~~解 Grid 的 Auto/星號欄~~、~~ComboBox/TextBox 的 chrome~~、~~ListBox/ListView/ItemsControl 的項目~~
+—— **都已完成**（16/16 與 WPF 真實版面吻合）。
 ⚠ M0 預測「解掉 Grid 會推到 97.5%」是錯的，而且錯在歸因：真正的瓶頸是 ComboBox。
 前後對照見 `docs/M2b-Grid求解驗收.md`。
 

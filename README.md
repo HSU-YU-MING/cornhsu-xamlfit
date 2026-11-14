@@ -59,14 +59,21 @@ resolves, per project — of the sites that *should* yield a number:
 | WinUI-Gallery | 99.2% |
 | HandyControl | 97.3% |
 | QuillNest (maintainer) | 96.4% |
-| MahApps.Metro | 81.9% |
+| MahApps.Metro | 93.8% |
 | ScreenToGif | 77.5% |
 
 Every run prints a breakdown of **why** the remaining sites are blocked, so coverage is an
-actionable list rather than just a number. What is left is genuinely hard: items inside an
-`ItemsControl` (116 sites in MahApps), `SharedSizeGroup` columns whose width is decided across
-grids (26), `Auto` columns a spanning child contributes to (11), and `Auto` columns holding a
-data-bound or custom child (14 in ScreenToGif).
+actionable list rather than just a number. What is left is either deliberate or genuinely
+unknowable: `SharedSizeGroup` columns whose width is decided across several grids (26 sites in
+MahApps), `TreeView` items whose indentation depends on runtime nesting depth (12), `DataGrid`
+cells sized by their column rather than the grid (2), `Auto` columns a spanning child
+contributes to (11), and `Auto` columns holding a data-bound or custom child (14 in ScreenToGif).
+
+⚠ Items inside a `ListBox`/`ListView`/`ItemsControl` are measured **assuming a visible vertical
+scroll bar** (16.8 DIP), because whether one appears depends on the item count at runtime.
+That is the safe direction — it can report a slot as tight that is not, but it will not call an
+overflow safe. Set `ScrollViewer.VerticalScrollBarVisibility="Disabled"` and the deduction goes
+away. The assumption is stated on every affected site.
 
 `Auto`/`*` Grid columns are solved and verified against WPF's own layout, 14 cases exact.
 
@@ -183,7 +190,8 @@ a guess should not block someone's pull request.
 
 | | effect | handling |
 |---|---|---|
-| items inside an `ItemsControl` | **the biggest remaining gap** — 116 sites in MahApps | `blocked`, counted; roadmap item 1 |
+| `TreeView` items | indentation depends on runtime nesting depth (~19 DIP per level) | `blocked`, counted |
+| `DataGrid` cells | width comes from `DataGridColumn`, a separate sizing system | `blocked`, counted |
 | `SharedSizeGroup` columns | width is decided across several grids, which the analysis cannot see | `blocked`, counted |
 | `Auto` / `*` Grid columns | solved, verified against WPF layout (14/14 exact). 2–12 sites per project still blocked because an Auto column holds data-bound text or a custom control | `blocked`, counted |
 | `ControlTemplate` / `DataTemplate` contents | width comes from the consumer | `not-analysed` |

@@ -168,6 +168,23 @@ internal static class Program
                 </Grid>
                 """, 0),
 
+            // ItemsControl：項目的可用寬度 = 清單寬 − 清單 chrome − 捲軸 − 項目容器 chrome。
+            // ⚠ 真值側要明寫 VerticalScrollBarVisibility="Visible"，因為我們的解析器
+            //   對預設的 Auto 是「假設捲軸在」—— 兩邊要比的是同一個情境。
+            new("list item in a fixed-width ListBox", """
+                <ListBox Width="300" Height="60" ScrollViewer.VerticalScrollBarVisibility="Visible"
+                         HorizontalContentAlignment="Stretch">
+                  <ListBoxItem><Border x:Name="probe"/></ListBoxItem>
+                </ListBox>
+                """, 0),
+
+            new("list item with the scroll bar disabled", """
+                <ListBox Width="300" Height="60" ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                         HorizontalContentAlignment="Stretch">
+                  <ListBoxItem><Border x:Name="probe"/></ListBoxItem>
+                </ListBox>
+                """, 0),
+
             new("auto column fed by a horizontal stackpanel", """
                 <Grid Width="500">
                   <Grid.ColumnDefinitions>
