@@ -23,11 +23,25 @@ public readonly record struct FontSpec(
     {
         string? unreadable = null;
 
+        // ⚠ 欄（DataGridTextColumn…）身上的 FontSize／FontWeight 是給**儲存格**的，不是給標題的。
+        //   LayoutOracle --header-font 實測：欄寫 FontSize=20 FontWeight=Light，標題照樣是
+        //   標題樣式的 16 SemiBold；沒有標題樣式時是 DataGrid 的字型。
+        var headerKey = Layout.WidthResolver.ColumnHeaderKey(el.Name.LocalName);
+
         string Get(string property, string fallback)
         {
-            var r = styles.ResolveEx(el, property, inheritable: true);
+            var r = headerKey is null
+                ? styles.ResolveEx(el, property, inheritable: true)
+                : HeaderFont(property);
             if (r.IsUnreadable) { unreadable ??= $"{property} is not statically readable ({r.Why})"; return fallback; }
             return r.IsValue ? r.Value! : fallback;
+        }
+
+        Resolved HeaderFont(string property)
+        {
+            var fromStyle = styles.ImplicitSetter(el, headerKey!, property);
+            if (fromStyle.Kind != ResolveKind.NotSet) return fromStyle;
+            return el.Parent is { } parent ? styles.ResolveEx(parent, property, inheritable: true) : Resolved.NotSet;
         }
 
         var family = Get("FontFamily", defaultFamily);

@@ -778,6 +778,11 @@ public sealed class WidthResolver
                 $"chrome of <{headerKey}> is unknown: " +
                 (theme is not null ? $"the external theme {theme} restyles it" : "there is no chrome data for it"));
 
+        var (stylePadding, styleBlocks) = ImplicitHeaderStyle(column, headerKey);
+        if (styleBlocks is not null)
+            return Blocked(WidthStatus.Unmeasurable, $"chrome of <{headerKey}> is unknown: {styleBlocks}");
+        if (stylePadding is { } padding) chrome = padding;
+
         var available = boundPx - chrome;
         return available > 0
             ? new AvailableWidth(WidthStatus.Known, available, $"{which}={boundPx:G} on <{local}>", LineOf(column), true,
@@ -801,7 +806,42 @@ public sealed class WidthResolver
             if (EndsWithAny(name, "DataGrid", "ListView")) break;
         }
 
-        return _styles.HasImplicitStyle(column, headerKey) ? $"the project defines an implicit Style for {headerKey}" : null;
+        return null;
+    }
+
+    /// <summary>
+    /// 專案的隱含標題樣式沒換範本時，DataGridColumnHeader 的內距算得出來。
+    /// 回傳 Padding 的左右和（樣式沒設 Padding、或設成全 0 時是 null = 用表裡的值）。
+    ///
+    /// LayoutOracle 實測（150 寬的欄）：預設範本（DataGridHeaderBorder）的 Padding 全是 0 時自己用 5,0,5,0，
+    /// 表裡的 10 就是這個；Padding 只要有一邊不是 0 就照它的左右和（4,0 → 8、9,0,0,0 → 9、1,0,30,0 → 31）。
+    /// BorderThickness 不影響寬度（6,0 照樣是 10）。
+    ///
+    /// ⚠ 第一版只要專案有隱含標題樣式就整個放棄：QuillNest 的 14 個欄標題都是這樣，
+    ///   而它們的樣式只設了顏色、字型、Padding 與底線。
+    /// 換了範本、設了 Margin 或寬度，或是 GridViewColumnHeader（沒有實測）→ 不知道。
+    /// </summary>
+    private (double? Padding, string? Blocks) ImplicitHeaderStyle(XElement column, string headerKey)
+    {
+        if (!_styles.HasImplicitStyle(column, headerKey)) return (null, null);
+        if (headerKey != "DataGridColumnHeader") return (null, $"the project defines an implicit Style for {headerKey}");
+
+        if (_styles.ImplicitStyleMaySetTemplate(column, headerKey))
+            return (null, $"the project's implicit Style for {headerKey} replaces its template");
+
+        foreach (var property in (ReadOnlySpan<string>)["ContentTemplate", "ContentTemplateSelector", "Margin", "Width", "MinWidth", "MaxWidth"])
+            if (_styles.ImplicitSetter(column, headerKey, property).Kind != ResolveKind.NotSet)
+                return (null, $"the project's implicit Style for {headerKey} sets {property}");
+
+        var padding = _styles.ImplicitSetter(column, headerKey, "Padding");
+        if (padding.IsUnreadable) return (null, $"Padding in the project's implicit Style for {headerKey} is not statically readable");
+        if (!padding.IsValue) return (null, null);
+
+        var (l, r, ok) = ParseThickness(padding.Value);
+        if (!ok) return (null, $"Padding=\"{padding.Value}\" in the project's implicit Style for {headerKey} cannot be read");
+        var allZero = padding.Value!.Split([',', ' '], StringSplitOptions.RemoveEmptyEntries)
+            .All(p => double.TryParse(p, NumberStyles.Float, CultureInfo.InvariantCulture, out var n) && n == 0);
+        return (allZero ? null : l + r, null);
     }
 
     // ───────────────────────── 捲動 ─────────────────────────

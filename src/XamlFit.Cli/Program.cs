@@ -14,6 +14,12 @@ using XamlFit.Cli;
 // ⚠ exit 3 是本工具的核心防線：可量測比例低於下限時，「沒找到問題」這句話不可信。
 //   把它當成 0 放行，就是謊報健康。
 
+// ⚠ 輸出一律 UTF-8（不帶 BOM）。報告裡印的是使用者自己的介面文字 —— 中日韓、希臘文、表情符號。
+//   .NET 在 Windows 上被導向（管線、CI、檔案）時用系統字碼頁：繁中 Windows 是 Big5，
+//   實跑 QuillNest 時每一句中文與破折號都變成亂碼。GitHub Actions 的 log 也是 UTF-8。
+try { Console.OutputEncoding = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false); }
+catch (IOException) { }   // 沒有主控台（例如服務）時設不了：照原樣輸出
+
 if (args.Length == 0)
 {
     Usage.Print(Console.Out);

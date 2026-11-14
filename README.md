@@ -55,18 +55,22 @@ that comes from the hosting window. Each of those blocks the site and says why.
 
 **Resolution** = of the text sites that have a width bound and therefore *should* yield a
 number, the share that actually did. It is printed on every run and gated by `--min-coverage`.
+The table below is `budget`. `check` can resolve more, because it lays a row out in document order
+(the controls before a site are all it needs to know), while `budget` gives a row of controls
+whose widths it cannot all read no number at all — Kindling is 76.0% under `budget` and 86.7%
+under `check`.
 
 Measured out of the box, no configuration, on eleven projects:
 
 | project | localizable sites | measured | blocked | no width bound | resolution |
 |---|---:|---:|---:|---:|---:|
 | Cornea (maintainer app) | 68 | 59 | 0 | 9 | **100%** |
-| QuillNest (maintainer app) | 685 | 487 | 55 | 116 | **89.9%** |
+| QuillNest (maintainer app) | 685 | 533 | 9 | 116 | **98.3%** |
 | Kindling (maintainer app) | 150 | 57 | 18 | 75 | **76.0%** |
 | Playnite | 1,107 | 136 | 278 | 506 | **32.9%** |
-| ScreenToGif | 1,277 | 99 | 375 | 790 | **20.9%** |
+| ScreenToGif | 1,277 | 104 | 370 | 790 | **21.9%** |
 | HandyControl | 210 | 11 | 61 | 123 | 15.3% |
-| MahApps.Metro | 1,613 | 53 | 749 | 718 | 6.6% |
+| MahApps.Metro | 1,613 | 56 | 746 | 718 | 7.0% |
 | MaterialDesignInXamlToolkit | 2,339 | 0 | 867 | 1,432 | 0% |
 | wpfui | 440 | 0 | 15 | 405 | 0% |
 | WinUI-Gallery | — | — | — | — | not WPF |
@@ -102,9 +106,9 @@ strings in English, German, French, Chinese, Japanese and Korean): mean error **
 worst under-estimate **0.068%**, worst over-estimate 1.43% (one kerning pair). XamlFit does not
 apply kerning, which makes text measure slightly *wide* — it errs toward reporting.
 
-**Layout, against real WPF windows.** `prototype/LayoutOracle` feeds 138 XAML snippets to an
+**Layout, against real WPF windows.** `prototype/LayoutOracle` feeds 151 XAML snippets to an
 actual off-screen `Window` and to the resolver, and compares what is really visible:
-**113 exact, 25 conservative, 0 over-estimates.** The conservative ones are deliberate — an
+**126 exact, 25 conservative, 0 over-estimates.** The conservative ones are deliberate — an
 assumed vertical scroll bar, the window frame at its widest display scaling. This harness
 found most of what the last audit fixed; it needs Windows, so its conclusions are restated as
 portable unit tests.
@@ -115,14 +119,18 @@ and records how wide every text needs to be and how much of it is actually visib
 9 windows, 2,025 comparisons: **71 clipped by both, 4 false alarms, 0 missed**, 1,950 fit by
 both. Two of the false alarms are within 0.5 px; the other two are the same button, 0.7 and 7.7 px on the safe side.
 Where both agree, XamlFit's text width is −0.02 to +1.74 px off WPF's, and the width it
-believes is available is never more than 0.02 px too generous. ScreenToGif, 5 windows: 5
-clipped by both, 0 false alarms, 0 missed. This found eleven more bugs, listed in
-`docs/M6-全面重讀.md`.
+believes is available is never more than 0.02 px too generous. ScreenToGif, 5 windows
+including editable and plain drop-downs, 1,607 comparisons with the same font on both sides
+(this machine's): **11 clipped by both, 0 false alarms, 0 missed**. These comparisons found
+eleven bugs in one round and four more in the next, listed in `docs/M6-全面重讀.md`.
 
 **False positives, against shipped software.** Hard-coded text in a released app presumably
-fits. So the tool checks the *source* language too: **929 source-language measurements across
-the corpus, 0 overflows.** While it was being built this number was not zero twice, and both
-times the tool was wrong.
+fits. So the tool checks the *source* language too: **984 source-language measurements across
+the corpus.** While it was being built this number was not zero three times. Twice the tool was
+wrong. The third time — two overflows in the maintainer's own app, which appeared when the tool
+learned to measure Runs and restyled column headers — it was right: drawn by WPF, a note in a
+horizontal `StackPanel` needs 935.7 px and shows 563.5, and a column header needs exactly the
+126.16 px the tool computed in a 114 px slot.
 
 ## What you have to tell it
 
@@ -204,6 +212,13 @@ It will not substitute a font it has for one it lacks:
   metrics at all (measured against WPF: −37% to +45%).
 
 Each of these makes the site unmeasurable and names the font to export.
+
+**Inline text.** A `Run` on its own line (between `<LineBreak/>`s) is an ordinary line. On a line
+that does not wrap, a `Run` gets what the content before it leaves, because the line is drawn
+from the left and clipped on the right; whitespace between elements is one space in the
+TextBlock's font (measured: `--inlines`). A `Run` alone in a `Hyperlink`, `Span` or
+`Underline` is that link. A `Run` after a binding, or on a wrapping line with a height limit,
+is unmeasurable.
 
 **Characters the font cannot draw** are drawn the way WPF draws them, which was measured, not
 assumed: first from **another face of the same family** (Microsoft JhengHei UI Regular has no

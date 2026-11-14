@@ -195,9 +195,15 @@ internal static class CheckCommand
 
         Pipeline.PrintBlindSpots(scan, s.Budget);
 
+        // ⚠ 用 baseline 時要說清楚幾筆是新的：實際用在 QuillNest 時，摘要寫著「overflow 2」而退出碼是 0，看起來互相矛盾
         foreach (var kind in new[] { "overflow", "vertical-clip", "trimmed", "tight", "reflow" })
             if (s.Counts.TryGetValue(kind, out var n) && n > 0)
-                Console.WriteLine($"    {kind,-14} {n}");
+            {
+                var fresh = reported.Count(f => FitFinding.KindSlug(f.Kind) == kind);
+                Console.WriteLine(baselined > 0
+                    ? $"    {kind,-14} {n}  ({fresh} new, {n - fresh} already in the baseline)"
+                    : $"    {kind,-14} {n}");
+            }
 
         if (reported.Count > 0)
         {

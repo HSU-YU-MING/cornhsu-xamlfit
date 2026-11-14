@@ -130,6 +130,70 @@ internal static class Program
             return 0;
         }
 
+        if (args.Length > 0 && args[0] == "--header-font")
+        {
+            // DataGrid 欄標題的字型從哪裡來：標題樣式、DataGrid、還是欄自己的 FontSize？
+            const string xaml = "<Window xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" Width=\"600\" Height=\"300\" Left=\"-4000\" ShowInTaskbar=\"False\">" +
+                "<StackPanel>" +
+                "<DataGrid x:Name=\"a\" xmlns:x=\"http://schemas.microsoft.com/winfx/2006/xaml\" FontSize=\"14\" AutoGenerateColumns=\"False\">" +
+                "<DataGrid.Resources><Style TargetType=\"DataGridColumnHeader\"><Setter Property=\"FontWeight\" Value=\"SemiBold\"/><Setter Property=\"FontSize\" Value=\"16\"/></Style></DataGrid.Resources>" +
+                "<DataGrid.Columns><DataGridTextColumn Header=\"Styled\" FontSize=\"20\" FontWeight=\"Light\"/></DataGrid.Columns></DataGrid>" +
+                "<DataGrid x:Name=\"b\" xmlns:x=\"http://schemas.microsoft.com/winfx/2006/xaml\" FontSize=\"14\" AutoGenerateColumns=\"False\">" +
+                "<DataGrid.Columns><DataGridTextColumn Header=\"Inherited\" FontSize=\"20\" FontWeight=\"Light\"/></DataGrid.Columns></DataGrid>" +
+                "</StackPanel></Window>";
+            var win = (Window)System.Windows.Markup.XamlReader.Parse(xaml);
+            win.Show();
+            win.UpdateLayout();
+            foreach (var name in new[] { "a", "b" })
+            {
+                var grid = (FrameworkElement)win.FindName(name);
+                var header = Descendants(grid).OfType<System.Windows.Controls.Primitives.DataGridColumnHeader>().First(h => h.Column is not null);
+                var tb = Descendants(header).OfType<TextBlock>().First();
+                Console.WriteLine($"{name}: header text '{tb.Text}' FontSize {tb.FontSize} FontWeight {tb.FontWeight}");
+            }
+            win.Close();
+            app.Shutdown();
+            return 0;
+
+            static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+            {
+                for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+                {
+                    var child = VisualTreeHelper.GetChild(root, i);
+                    yield return child;
+                    foreach (var d in Descendants(child)) yield return d;
+                }
+            }
+        }
+
+        if (args.Length > 0 && args[0] == "--inlines")
+        {
+            // 行內內容的寬度：Run 之間的空白、LineBreak 兩側的空白、不同字重的 Run 加起來
+            const string ns = "xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"";
+            double Tb(string inner)
+            {
+                var tb = (TextBlock)System.Windows.Markup.XamlReader.Parse($"<TextBlock {ns} FontFamily=\"Segoe UI\" FontSize=\"12\">{inner}</TextBlock>");
+                tb.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                return tb.DesiredSize.Width;
+            }
+            foreach (var (label, inner) in new[]
+            {
+                ("text 'Save All'", "Save All"),
+                ("text 'SaveAll'", "SaveAll"),
+                ("text 'Save'", "Save"),
+                ("runs, newline between", "<Run Text=\"Save\"/>\n    <Run Text=\"All\"/>"),
+                ("runs, adjacent", "<Run Text=\"Save\"/><Run Text=\"All\"/>"),
+                ("runs around LineBreak", "<Run Text=\"Save\"/>\n    <LineBreak/>\n    <Run Text=\"All\"/>"),
+                ("run alone after LineBreak", "<Run Text=\"Save\"/>\n <LineBreak/>\n <Run Text=\"Everything\"/>"),
+                ("text 'Everything'", "Everything"),
+                ("bold run + run", "<Run Text=\"Save\" FontWeight=\"Bold\"/>\n    <Run Text=\"All\"/>"),
+                ("text bold 'Save'", "<Bold>Save</Bold>"),
+            })
+                Console.WriteLine($"{label,-28} {Tb(inner),8:F2}");
+            app.Shutdown();
+            return 0;
+        }
+
         if (args.Length > 3 && args[0] == "--probe")
         {
             // --probe <family> <size> <text>：整句與逐字的 TextBlock 寬度，以及主字型有沒有那個字
@@ -515,6 +579,20 @@ internal static class Program
         Add("ItemsControl", W($"<ItemsControl Width='200' HorizontalAlignment='Left'>{text}</ItemsControl>"));
         Add("ItemsControl custom ItemsPanel", W($"<ItemsControl Width='200' HorizontalAlignment='Left'><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation='Horizontal'/></ItemsPanelTemplate></ItemsControl.ItemsPanel>{text}</ItemsControl>"), Want.Blocked);
         Add("DataGrid column header 150", W($"<DataGrid Width='500' HorizontalAlignment='Left' AutoGenerateColumns='False'><DataGrid.Columns><DataGridTextColumn Width='150'><DataGridTextColumn.Header>{text}</DataGridTextColumn.Header></DataGridTextColumn></DataGrid.Columns></DataGrid>"));
+        // 專案的隱含標題樣式（QuillNest 的寫法）：只改 Padding／BorderThickness，範本不變
+        Add("DataGrid header, style Padding 8,7 + bottom border", W($"<DataGrid Width='500' HorizontalAlignment='Left' AutoGenerateColumns='False'><DataGrid.Resources><Style TargetType='DataGridColumnHeader'><Setter Property='Padding' Value='8,7'/><Setter Property='BorderThickness' Value='0,0,0,1'/><Setter Property='FontWeight' Value='SemiBold'/></Style></DataGrid.Resources><DataGrid.Columns><DataGridTextColumn Width='150'><DataGridTextColumn.Header>{text}</DataGridTextColumn.Header></DataGridTextColumn></DataGrid.Columns></DataGrid>"));
+        Add("DataGrid header, style Padding 20,0 + Border 3,0", W($"<DataGrid Width='500' HorizontalAlignment='Left' AutoGenerateColumns='False'><DataGrid.Resources><Style TargetType='DataGridColumnHeader'><Setter Property='Padding' Value='20,0'/><Setter Property='BorderThickness' Value='3,0'/></Style></DataGrid.Resources><DataGrid.Columns><DataGridTextColumn Width='150'><DataGridTextColumn.Header>{text}</DataGridTextColumn.Header></DataGridTextColumn></DataGrid.Columns></DataGrid>"));
+        Add("DataGrid header, style Padding 8,0 Height 36", W($"<DataGrid Width='500' HorizontalAlignment='Left' AutoGenerateColumns='False'><DataGrid.Resources><Style TargetType='DataGridColumnHeader'><Setter Property='Padding' Value='8,0'/><Setter Property='Height' Value='36'/><Setter Property='VerticalContentAlignment' Value='Center'/></Style></DataGrid.Resources><DataGrid.Columns><DataGridTextColumn Width='150'><DataGridTextColumn.Header>{text}</DataGridTextColumn.Header></DataGridTextColumn></DataGrid.Columns></DataGrid>"));
+        Add("DataGrid header, style Padding 0", W($"<DataGrid Width='500' HorizontalAlignment='Left' AutoGenerateColumns='False'><DataGrid.Resources><Style TargetType='DataGridColumnHeader'><Setter Property='Padding' Value='0'/></Style></DataGrid.Resources><DataGrid.Columns><DataGridTextColumn Width='150'><DataGridTextColumn.Header>{text}</DataGridTextColumn.Header></DataGridTextColumn></DataGrid.Columns></DataGrid>"));
+        Add("DataGrid header, style Border 6,0 only", W($"<DataGrid Width='500' HorizontalAlignment='Left' AutoGenerateColumns='False'><DataGrid.Resources><Style TargetType='DataGridColumnHeader'><Setter Property='BorderThickness' Value='6,0'/></Style></DataGrid.Resources><DataGrid.Columns><DataGridTextColumn Width='150'><DataGridTextColumn.Header>{text}</DataGridTextColumn.Header></DataGridTextColumn></DataGrid.Columns></DataGrid>"));
+        Add("DataGrid header, style Padding 1,0,30,0", W($"<DataGrid Width='500' HorizontalAlignment='Left' AutoGenerateColumns='False'><DataGrid.Resources><Style TargetType='DataGridColumnHeader'><Setter Property='Padding' Value='1,0,30,0'/></Style></DataGrid.Resources><DataGrid.Columns><DataGridTextColumn Width='150'><DataGridTextColumn.Header>{text}</DataGridTextColumn.Header></DataGridTextColumn></DataGrid.Columns></DataGrid>"));
+        Add("DataGrid header, style Padding 4,0", W($"<DataGrid Width='500' HorizontalAlignment='Left' AutoGenerateColumns='False'><DataGrid.Resources><Style TargetType='DataGridColumnHeader'><Setter Property='Padding' Value='4,0'/></Style></DataGrid.Resources><DataGrid.Columns><DataGridTextColumn Width='150'><DataGridTextColumn.Header>{text}</DataGridTextColumn.Header></DataGridTextColumn></DataGrid.Columns></DataGrid>"));
+        Add("DataGrid header, style Padding 6,0", W($"<DataGrid Width='500' HorizontalAlignment='Left' AutoGenerateColumns='False'><DataGrid.Resources><Style TargetType='DataGridColumnHeader'><Setter Property='Padding' Value='6,0'/></Style></DataGrid.Resources><DataGrid.Columns><DataGridTextColumn Width='150'><DataGridTextColumn.Header>{text}</DataGridTextColumn.Header></DataGridTextColumn></DataGrid.Columns></DataGrid>"));
+        Add("DataGrid header, style Padding 9,0,0,0", W($"<DataGrid Width='500' HorizontalAlignment='Left' AutoGenerateColumns='False'><DataGrid.Resources><Style TargetType='DataGridColumnHeader'><Setter Property='Padding' Value='9,0,0,0'/></Style></DataGrid.Resources><DataGrid.Columns><DataGridTextColumn Width='150'><DataGridTextColumn.Header>{text}</DataGridTextColumn.Header></DataGridTextColumn></DataGrid.Columns></DataGrid>"));
+        Add("DataGrid header, style Padding 0,0,11,0", W($"<DataGrid Width='500' HorizontalAlignment='Left' AutoGenerateColumns='False'><DataGrid.Resources><Style TargetType='DataGridColumnHeader'><Setter Property='Padding' Value='0,0,11,0'/></Style></DataGrid.Resources><DataGrid.Columns><DataGridTextColumn Width='150'><DataGridTextColumn.Header>{text}</DataGridTextColumn.Header></DataGridTextColumn></DataGrid.Columns></DataGrid>"));
+        Add("DataGrid header, style Padding 5,0", W($"<DataGrid Width='500' HorizontalAlignment='Left' AutoGenerateColumns='False'><DataGrid.Resources><Style TargetType='DataGridColumnHeader'><Setter Property='Padding' Value='5,0'/></Style></DataGrid.Resources><DataGrid.Columns><DataGridTextColumn Width='150'><DataGridTextColumn.Header>{text}</DataGridTextColumn.Header></DataGridTextColumn></DataGrid.Columns></DataGrid>"));
+        Add("DataGrid header, style Padding 0,7", W($"<DataGrid Width='500' HorizontalAlignment='Left' AutoGenerateColumns='False'><DataGrid.Resources><Style TargetType='DataGridColumnHeader'><Setter Property='Padding' Value='0,7'/></Style></DataGrid.Resources><DataGrid.Columns><DataGridTextColumn Width='150'><DataGridTextColumn.Header>{text}</DataGridTextColumn.Header></DataGridTextColumn></DataGrid.Columns></DataGrid>"));
+        Add("DataGrid header, style replaces Template", W($"<DataGrid Width='500' HorizontalAlignment='Left' AutoGenerateColumns='False'><DataGrid.Resources><Style TargetType='DataGridColumnHeader'><Setter Property='Template'><Setter.Value><ControlTemplate TargetType='DataGridColumnHeader'><Border Padding='30,0'><ContentPresenter/></Border></ControlTemplate></Setter.Value></Setter></Style></DataGrid.Resources><DataGrid.Columns><DataGridTextColumn Width='150'><DataGridTextColumn.Header>{text}</DataGridTextColumn.Header></DataGridTextColumn></DataGrid.Columns></DataGrid>"), Want.Blocked);
         Add("GridViewColumn header 150", W($"<ListView Width='500' HorizontalAlignment='Left'><ListView.View><GridView><GridViewColumn Width='150'><GridViewColumn.Header>{text}</GridViewColumn.Header></GridViewColumn></GridView></ListView.View></ListView>"));
 
         // ── 8. 快顯 ──

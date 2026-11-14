@@ -132,8 +132,9 @@ internal static partial class Program
             window = new Window { WindowStyle = WindowStyle.None, AllowsTransparency = true, Width = width, Height = 2000, Content = loadedRoot };
             log.Add($"<{loadedRoot.GetType().Name}> hosted in a {width}-wide frameless window");
         }
-        if (Environment.GetEnvironmentVariable("XF_LOG") is not null)
-            foreach (var l in log.Where(l => l.Contains("gave up") || l.Contains("not merged") || l.Contains("not found"))) Console.WriteLine("    ! " + l);
+        // XF_LOG=1：只印放棄／沒合併的；XF_LOG=<字串>：印所有含這個字串的修補紀錄
+        if (Environment.GetEnvironmentVariable("XF_LOG") is { } logFilter)
+            foreach (var l in log.Where(l => logFilter == "1" ? l.Contains("gave up") || l.Contains("not merged") || l.Contains("not found") : l.Contains(logFilter))) Console.WriteLine("    ! " + l);
 
         window.Left = -20000;
         window.Top = -20000;
@@ -164,13 +165,88 @@ internal static partial class Program
 
             foreach (var (line, name) in probes.OrderBy(p => p.Key))
             {
+                // DataGrid 的欄不是畫面元素：找它的 DataGrid，量 DataGrid 為它產生的欄標題
+                if (loadedRoot.FindName(name) is DataGridColumn column)
+                {
+                    var grid = LogicalDescendants(loadedRoot).OfType<DataGrid>().FirstOrDefault(g => g.Columns.Contains(column));
+                    if (grid is null) { rows.Add($"{culture},{line},DataGridColumn,no-grid,,,"); continue; }
+                    Reveal(grid);
+                    window.UpdateLayout();
+                    var header = Descendants(grid).OfType<DataGridColumnHeader>().FirstOrDefault(h => h.Column == column);
+                    var headerText = header is null ? null : FindText(header);
+                    if (headerText is null) { rows.Add($"{culture},{line},DataGridColumnHeader,no-text,,,"); continue; }
+                    var neededH = NeededWidth(headerText);
+                    var visibleH = VisibleWidth(headerText, window);
+                    rows.Add($"{culture},{line},DataGridColumnHeader,\"{TextOf(headerText).Replace("\"", "'")}\",{neededH:F2},{visibleH:F2},{(neededH > visibleH + 0.5 ? 1 : 0)}");
+                    continue;
+                }
                 if (loadedRoot.FindName(name) is not FrameworkElement el) { rows.Add($"{culture},{line},,removed,,,"); continue; }
                 Reveal(el);
                 // 關起來的 ComboBox 顯示的是選中的那一項 —— XamlFit 量的就是那個框。選它，量框裡的文字。
+                // 直接放在 ComboBox 裡的元素（不是 ComboBoxItem）：選它，看關起來的框裡實際顯示什麼
+                // 選項可以是一整塊（StackPanel 裡有圖示與文字）：往上找到「直接放在 ComboBox 裡」的那一層才是選項
+                var itemRoot = (DependencyObject)el;
+                while (itemRoot is FrameworkElement && LogicalTreeHelper.GetParent(itemRoot) is { } up && up is not ComboBox && up is not Window)
+                    itemRoot = up;
+                if (el is not ComboBoxItem && itemRoot is FrameworkElement itemElement && itemRoot is not ComboBoxItem
+                    && LogicalTreeHelper.GetParent(itemRoot) is ComboBox ownerCombo)
+                {
+                    Reveal(ownerCombo);
+                    // ⚠ 框裡畫的是選項的 VisualBrush，大小照選項自己的版面。下拉清單從沒打開過的選項沒排過版，
+                    //   寬度是 0 —— 第一版因此把英文的「Top」量成看得見 0 px。先打開一次讓每個選項排版。
+                    ownerCombo.IsDropDownOpen = true;
+                    window.UpdateLayout();
+                    // 文字在選項裡的位置（選項打開時才有版面）
+                    var offsetInItem = ReferenceEquals(el, itemElement) || !el.IsDescendantOf(itemElement) ? 0
+                        : el.TransformToAncestor(itemElement).Transform(new Point()).X;
+                    ownerCombo.SelectedItem = itemElement;
+                    ownerCombo.IsDropDownOpen = false;
+                    window.UpdateLayout();
+                    var site = ownerCombo.Template.FindName("contentPresenter", ownerCombo) as FrameworkElement;
+                    var shownItem = ownerCombo.SelectionBoxItem;
+                    if (Environment.GetEnvironmentVariable("XF_DEBUG") is { } dbgC && (culture == dbgC || culture == "(source)" && dbgC == "1"))
+                        Console.WriteLine($"  line {line}: SelectionBoxItem {shownItem?.GetType().Name}; box {site?.ActualWidth:F2}; item natural {(el as FrameworkElement)?.DesiredSize.Width:F2}; " +
+                                          string.Join(" ", site is null ? [] : Descendants(site).Select(d => d is FrameworkElement fe ? $"{d.GetType().Name}:{fe.ActualWidth:F2}@{fe.TransformToAncestor(ownerCombo).Transform(new Point()).X:F2} clip={(System.Windows.Controls.Primitives.LayoutInformation.GetLayoutClip(fe)?.Bounds.Width.ToString("F2") ?? "-")}" : d.GetType().Name).Take(6)) + $" presenter@{site?.TransformToAncestor(ownerCombo).Transform(new Point()).X:F2} clip={(site is null ? "-" : System.Windows.Controls.Primitives.LayoutInformation.GetLayoutClip(site)?.Bounds.Width.ToString("F2") ?? "-")} combo {ownerCombo.ActualWidth:F2} padding {ownerCombo.Padding} margin {(site as FrameworkElement)?.Margin} hca {ownerCombo.HorizontalContentAlignment} rounding {ownerCombo.UseLayoutRounding} src {DependencyPropertyHelper.GetValueSource(ownerCombo, Control.PaddingProperty).BaseValueSource} found {(ownerCombo.TryFindResource(typeof(ComboBox)) is Style fs ? $"style with {fs.Setters.Count} setters, sealed {fs.IsSealed}" : "none")} style {(ownerCombo.Style is null ? "null" : "set")}");
+                    var boxText = site is null ? null : FirstText(site);
+                    var boxShape = site is null ? null : Descendants(site).OfType<System.Windows.Shapes.Rectangle>().FirstOrDefault();
+                    if (boxText is not null)
+                    {
+                        var n = NeededWidth(boxText); var v = VisibleWidth(boxText, window);
+                        rows.Add($"{culture},{line},ComboBox(selected),\"{TextOf(boxText).Replace("\"", "'")}\",{n:F2},{v:F2},{(n > v + 0.5 ? 1 : 0)}");
+                    }
+                    else if (boxShape is not null && boxShape.ActualWidth <= 0)
+                        rows.Add($"{culture},{line},ComboBox(selected visual),not-laid-out,,,");   // 下拉清單打不開（ComboBox 本身沒顯示）：沒有量到東西
+                    else if (boxShape is not null && FindText(el) is { } itemText2)
+                    {
+                        // WPF 把畫面元素當成選項時，框裡畫的是那個元素的 VisualBrush（大小照元素本身）
+                        var n = NeededWidth(itemText2);
+                        var v = Math.Clamp(VisibleWidth(boxShape, window) - offsetInItem, 0, Math.Max(n, 0));
+                        rows.Add($"{culture},{line},ComboBox(selected visual),\"{TextOf(itemText2).Replace("\"", "'")}\",{n:F2},{v:F2},{(n > v + 0.5 ? 1 : 0)}");
+                    }
+                    else rows.Add($"{culture},{line},ComboBox(selected),no-text,,,");
+                    continue;
+                }
                 if (el is ComboBoxItem item && ItemsControl.ItemsControlFromItemContainer(item) is ComboBox combo)
                 {
                     combo.SelectedItem = item;
                     window.UpdateLayout();
+                    // 可編輯的 ComboBox：選中的文字在 TextBox 裡。用字元位置量：最後一個字的右緣有沒有超出捲動視埠
+                    if (combo.IsEditable && combo.Template.FindName("PART_EditableTextBox", combo) is TextBox box && box.Text.Length > 0)
+                    {
+                        box.UpdateLayout();
+                        var first = box.GetRectFromCharacterIndex(0);
+                        var last = box.GetRectFromCharacterIndex(box.Text.Length - 1, true);
+                        var host = box.Template.FindName("PART_ContentHost", box) as ScrollViewer;
+                        if (host is null || first.IsEmpty || last.IsEmpty) { rows.Add($"{culture},{line},ComboBox(editable),no-text,,,"); continue; }
+                        // ⚠ 字元位置與視埠右緣直接相減會固定差 2 px（TextBox 內部的邊距）——
+                        //   有空間時也報成被裁。看捲動：內容比視埠寬多少，就有多少看不到；外層再裁的另外扣。
+                        var neededE = last.Right - first.Left;
+                        var hidden = Math.Max(0, host.ExtentWidth - host.ViewportWidth);
+                        var hiddenByParents = Math.Max(0, host.ActualWidth - VisibleWidth(host, window));
+                        var visibleE = Math.Max(0, neededE - hidden - hiddenByParents);
+                        rows.Add($"{culture},{line},ComboBox(editable),\"{box.Text.Replace("\"", "'")}\",{neededE:F2},{visibleE:F2},{(neededE > visibleE + 0.5 ? 1 : 0)}");
+                        continue;
+                    }
                     if (item.Content is string itemText)
                     {
                         var shown = FindMatching(combo, t => TextOf(t) == itemText || TextOf(t) == itemText.Replace("_", ""));
@@ -248,6 +324,10 @@ internal static partial class Program
         {
             xaml = Regex.Replace(xaml, $"TargetType=\"(\\w+:)?{from}\"", $"TargetType=\"{to}\"");
             xaml = Regex.Replace(xaml, $"\\{{x:Type\\s+(\\w+:)?{from}\\}}", $"{{x:Type {to}}}");
+            // 範本裡直接用到的元素也要換（ScreenToGif 的可編輯 ComboBox 範本裡有 <c:ExtendedTextBox>；
+            // 第一版只換 TargetType，整份 ComboBox.xaml 載入失敗，畫出來的是 WPF 預設的 ComboBox）
+            xaml = Regex.Replace(xaml, $"<(\\w+:)?{from}(?=[\\s/>])", $"<{to}");
+            xaml = Regex.Replace(xaml, $"</(\\w+:)?{from}>", $"</{to}>");
         }
         return xaml;
     }
@@ -261,6 +341,27 @@ internal static partial class Program
             if (cur is Expander ex) ex.IsExpanded = true;
             // 程式碼才會打開的面板（ScreenToGif 的設定頁、進度面板）：照 App 用到它時的樣子打開
             if (cur is UIElement ui && ui.Visibility != Visibility.Visible) ui.Visibility = Visibility.Visible;
+        }
+    }
+
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            yield return child;
+            foreach (var d in Descendants(child)) yield return d;
+        }
+    }
+
+    /// <summary>邏輯樹：沒選中的分頁還沒有視覺樹，但邏輯樹裡找得到。</summary>
+    private static IEnumerable<object> LogicalDescendants(object root)
+    {
+        if (root is not DependencyObject d) yield break;
+        foreach (var child in LogicalTreeHelper.GetChildren(d))
+        {
+            yield return child;
+            foreach (var x in LogicalDescendants(child)) yield return x;
         }
     }
 
@@ -406,7 +507,7 @@ internal static partial class Program
                     }
                     return (null, "");
                 }
-                var name = e.Name.LocalName;
+                var name = e.Name.LocalName + (e.Attribute("Property") is { } p ? $" Property={p.Value}" : "");
                 e.Remove();
                 return (doc.ToString(SaveOptions.DisableFormatting), $"removed <{name}> ({Shorten(message)})");
             }

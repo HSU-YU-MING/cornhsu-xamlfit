@@ -531,6 +531,8 @@ public sealed class CheckAnalyzer
             warnings.Add("some characters are drawn with WPF's fallback font for them (taken from WPF's own fallback table)");
         if (site.Width.WrapDefeated && site.Wrap != WrapMode.NoWrap)
             warnings.Add("TextWrapping has no effect here: the text is measured with unlimited width (horizontal StackPanel, Auto column or WrapPanel)");
+        if (site.Width.TakenByInlineBefore > 0)
+            warnings.Add($"{site.Width.TakenByInlineBefore.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)} px of the line is taken by the text before it in the same TextBlock");
         if (site.Width.AssumedScrollBar)
             warnings.Add("assumes the vertical scroll bar is visible");
         if (site.Width.DependsOnNeighbourText)

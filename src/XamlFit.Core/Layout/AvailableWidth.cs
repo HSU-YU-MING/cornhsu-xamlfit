@@ -55,6 +55,10 @@ public sealed record AvailableWidth(
     /// </summary>
     public bool DependsOnNeighbourText { get; init; }
 
+    /// <summary>同一行裡、這個 Run 前面的行內內容佔掉的寬度（DIP）。0 = 它在行首。
+    /// 報告要說出來 —— 不然「只剩 221 px」在一個 560 寬的框裡看起來像工具算錯。</summary>
+    public double TakenByInlineBefore { get; init; }
+
     public static AvailableWidth NotKnown(WidthStatus status, string reason) =>
         new(status, 0, "", 0, false, reason);
 

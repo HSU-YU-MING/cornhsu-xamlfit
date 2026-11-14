@@ -237,11 +237,12 @@ public class ScannerTests
     }
 
     [Fact]
-    public void A_Run_that_shares_its_line_is_not_judged_alone()
+    public void A_Run_that_shares_its_line_gets_what_the_runs_before_it_leave()
     {
+        // 不換行的一行從左邊畫起、右邊被裁：後面的 Run 只剩前面的內容用剩的寬度
         var scan = Scan(("Main.xaml", Window("<TextBlock Width=\"100\"><Run Text=\"Hello\"/><Run Text=\"World\"/></TextBlock>")));
-        Assert.All(scan.Sites, s => Assert.Equal(WidthStatus.Unmeasurable, s.Width.Status));
-        Assert.Contains("shares its line", scan.Sites[0].Width.Reason);
+        Assert.Equal(100, Site(scan, "Hello").Width.Px);
+        Assert.Equal(75, Site(scan, "World").Width.Px);
     }
 
     [Fact]
@@ -402,6 +403,73 @@ public class ScannerTests
             ("a/One.xaml", Window("<TextBlock Width=\"100\" Text=\"One\"/>")),
             ("c.xaml", Window("<TextBlock Width=\"100\" Text=\"Three\"/>")));
         Assert.Equal(["a/One.xaml", "b/Two.xaml", "c.xaml"], scan.Sites.Select(s => s.File));
+    }
+
+    [Theory]
+    [InlineData("<DataGrid.Resources><Style TargetType=\"DataGridColumnHeader\"><Setter Property=\"FontSize\" Value=\"16\"/><Setter Property=\"FontWeight\" Value=\"SemiBold\"/></Style></DataGrid.Resources>", 16, 600)]
+    [InlineData("", 14, 400)]
+    public void A_column_header_takes_its_font_from_the_header_style_or_the_grid_not_the_column(string resources, double size, int weight)
+    {
+        // ⚠ LayoutOracle --header-font 實測：欄身上的 FontSize／FontWeight 是給儲存格的
+        var scan = Scan(("Main.xaml", Window(
+            $"<DataGrid FontSize=\"14\">{resources}<DataGrid.Columns><DataGridTextColumn Header=\"Name\" Width=\"150\" FontSize=\"20\" FontWeight=\"Light\"/></DataGrid.Columns></DataGrid>")));
+        var site = Site(scan, "Name");
+        Assert.Equal(size, site.FontSize);
+        Assert.Equal(weight, site.FontWeight);
+    }
+
+    // ───────────────────────── 行內的 Run ─────────────────────────
+    // 等寬測試字型：每個字與空格都是 5 px。WPF 的規則由 LayoutOracle --inlines 實測：
+    // 元素之間的換行縮排 = 一個空格（用 TextBlock 的字型）；LineBreak 兩側的空白會被修掉。
+
+    private static ScanResult Inline(string inlines, string textBlock = "") =>
+        Scan(("Main.xaml", Window($"<Border Width=\"300\"><TextBlock {textBlock}>{inlines}</TextBlock></Border>")));
+
+    [Fact]
+    public void A_Run_on_its_own_line_is_an_ordinary_line_of_text()
+    {
+        // ⚠ 第一版只要 Run 有兄弟（連 LineBreak 也算）就放棄：QuillNest 的條列說明 32 處全部量不到
+        var scan = Inline("<Run Text=\"AAAA\"/>\n  <LineBreak/>\n  <Run Text=\"BB\"/>");
+        Assert.All(scan.Sites, site => Assert.Equal(300, site.Width.Px));
+    }
+
+    [Theory]
+    [InlineData("<Run Text=\"AAAA\"/>\n  <Run Text=\"BB\"/>", 275)]   // AAAA 20 + 空格 5
+    [InlineData("<Run Text=\"AAAA\"/><Run Text=\"BB\"/>", 280)]         // 緊貼著寫：沒有空格
+    public void On_a_line_that_does_not_wrap_a_Run_gets_what_the_content_before_it_leaves(string inlines, double expected)
+    {
+        var scan = Inline(inlines);
+        Assert.Equal(300, Site(scan, "AAAA").Width.Px);
+        Assert.Equal(expected, Site(scan, "BB").Width.Px);
+    }
+
+    [Theory]
+    [InlineData("<Hyperlink><Run Text=\"BB\"/></Hyperlink>", WidthStatus.Known)]           // Playnite 的「Having issues?」
+    [InlineData("<Span><Hyperlink><Run Text=\"BB\"/></Hyperlink></Span>", WidthStatus.Known)]
+    [InlineData("<Bold><Run Text=\"BB\"/></Bold>", WidthStatus.Unmeasurable)]              // 字重變了，字型讀取沒套用
+    [InlineData("<Hyperlink><Run Text=\"AAAA\"/><Run Text=\"BB\"/></Hyperlink>", WidthStatus.Unmeasurable)]
+    public void A_Run_alone_in_a_link_is_the_link(string inlines, WidthStatus expected)
+    {
+        var site = Site(Inline(inlines), "BB");
+        Assert.Equal(expected, site.Width.Status);
+        if (expected == WidthStatus.Known) Assert.Equal(300, site.Width.Px);
+    }
+
+    [Fact]
+    public void On_a_wrapping_line_without_a_height_limit_nothing_is_clipped_sideways()
+    {
+        var scan = Inline("<Run Text=\"AAAA\"/>\n  <Run Text=\"BB\"/>", "TextWrapping=\"Wrap\"");
+        Assert.All(scan.Sites, site => Assert.Equal(300, site.Width.Px));
+    }
+
+    [Theory]
+    [InlineData("<Run Text=\"AAAA\"/>\n  <Run Text=\"BB\"/>", "TextWrapping=\"Wrap\" Height=\"20\"")]   // 要整段一起排才知道幾行
+    [InlineData("<Run Text=\"{Binding Name}\"/>\n  <Run Text=\"BB\"/>", "")]                              // 前面的寬度不知道
+    [InlineData("<Span><Run Text=\"AAAA\"/></Span>\n  <Run Text=\"BB\"/>", "")]                        // 前面是 Span：寬度沒有加總
+    public void A_Run_whose_line_cannot_be_laid_out_is_unmeasurable(string inlines, string textBlock)
+    {
+        var site = Site(Inline(inlines, textBlock), "BB");
+        Assert.Equal(WidthStatus.Unmeasurable, site.Width.Status);
     }
 
     [Fact]

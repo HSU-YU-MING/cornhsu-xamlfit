@@ -138,6 +138,11 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 54 | **專案自己的 Window 子類別也有邊框；`WindowChrome` 可以寫在樣式裡** | `ExWindow`／`WindowBase` 沒扣邊框是高估 16 px；樣式裡的 WindowChrome 沒看到是誤報 | ScreenToGif |
 | 55 | **看不見的字寬度是 0** | U+FE0F、200B、200D、FEFF、2060 在 WPF 是 0 寬。⚠ U+FEFF 落在阿拉伯表現形式的範圍裡，要**先**判斷看不見的字 | LayoutOracle `--fallback` |
 | 56 | **對照程式的字型假設要跟工具一樣** | 在繁中 Windows 上畫法文、希臘文會用正黑體 UI；工具假設那些語言的 Windows 用 Segoe UI。差距是字型不是版面 —— 比對前用 `defaultFontByCulture` 對齊 | CorpusRender（ScreenToGif） |
+| 57 | **行內的 Run** | LineBreak 不算「同一行有別的內容」；元素間的換行縮排是一個空格、用 TextBlock 的字型；LineBreak 兩側的空白被修掉（`--inlines`）。第一版只要有兄弟就放棄，QuillNest 32 處量不到 | QuillNest |
+| 58 | **DataGrid 欄標題的字型不是欄的** | 欄的 FontSize／FontWeight 只給儲存格；標題吃標題樣式或 DataGrid 的（`--header-font`） | LayoutOracle |
+| 59 | **DataGridColumnHeader 的 Padding** | 全 0 時範本自己用 5,0,5,0（表裡的 10）；否則取代它；BorderThickness 不影響寬度。13 種樣式逐一實測，第一版「加上去」的模型錯了 | LayoutOracle |
+| 60 | **報告輸出要 UTF-8** | .NET 被導向時用系統字碼頁；繁中 Windows 是 Big5，實跑 QuillNest 每句中文都是亂碼 | 自家 App 實際使用 |
+| 61 | **CorpusRender 的下拉選單** | 可編輯的看 TextBox 的捲動範圍（字元位置與視埠直接相減固定差 2 px）；放畫面元素的選項，框裡是 VisualBrush，下拉清單沒打開過就沒排版、寬度 0 | CorpusRender（ScreenToGif） |
 
 ### 環境層級的坑
 
@@ -154,11 +159,11 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 490 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 513 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 42 條 CLI 路徑的退出碼
-dotnet run -c Release --project prototype/LayoutOracle   # 138 案 vs 真的 WPF 視窗（Windows）；有高估就回 1
+dotnet run -c Release --project prototype/LayoutOracle   # 151 案 vs 真的 WPF 視窗（Windows）；有高估就回 1
 ```
 
 **來源語言自我檢驗**（沒有腳本，手動跑）：對一個已經出貨的 App 跑

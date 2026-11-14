@@ -152,4 +152,48 @@ internal static class Pipeline
         s = CheckDiagnostics.ConsoleSafe(s);
         return s.Length <= n ? s : s[..(n - 1)] + "…";
     }
+
+    /// <summary>
+    /// 截斷並補空白到固定的**終端機欄寬**。中日韓全形字佔兩欄 —— 用字元數補，
+    /// 實際用在 Kindling 時表格的檔名欄整個歪掉。
+    /// </summary>
+    public static string Column(string s, int cells)
+    {
+        s = CheckDiagnostics.ConsoleSafe(s);
+        var total = 0;
+        foreach (var rune in s.EnumerateRunes()) total += CellWidth(rune.Value);
+
+        var sb = new System.Text.StringBuilder();
+        var used = 0;
+        if (total <= cells)
+        {
+            sb.Append(s);
+            used = total;
+        }
+        else
+        {
+            foreach (var rune in s.EnumerateRunes())
+            {
+                var w = CellWidth(rune.Value);
+                if (used + w > cells - 1) break;   // 留一欄給刪節號
+                sb.Append(rune.ToString());
+                used += w;
+            }
+            sb.Append('…');
+            used++;
+        }
+        return sb.Append(' ', Math.Max(0, cells - used)).ToString();
+    }
+
+    /// <summary>終端機欄寬：東亞全形與寬字元 2 欄，組合用字元與零寬字元 0 欄，其餘 1 欄。</summary>
+    internal static int CellWidth(int cp) =>
+        XamlFit.Core.Fonts.TextMeasure.IsDefaultIgnorable(cp)
+        || System.Globalization.CharUnicodeInfo.GetUnicodeCategory(cp) is System.Globalization.UnicodeCategory.NonSpacingMark
+            or System.Globalization.UnicodeCategory.EnclosingMark ? 0
+        : cp is (>= 0x1100 and <= 0x115F) or (>= 0x2E80 and <= 0x303E) or (>= 0x3041 and <= 0x33FF)
+            or (>= 0x3400 and <= 0x4DBF) or (>= 0x4E00 and <= 0x9FFF) or (>= 0xA000 and <= 0xA4CF)
+            or (>= 0xAC00 and <= 0xD7A3) or (>= 0xF900 and <= 0xFAFF) or (>= 0xFE30 and <= 0xFE4F)
+            or (>= 0xFF00 and <= 0xFF60) or (>= 0xFFE0 and <= 0xFFE6) or (>= 0x1F300 and <= 0x1F64F)
+            or (>= 0x1F900 and <= 0x1F9FF) or (>= 0x20000 and <= 0x3FFFD) ? 2
+        : 1;
 }

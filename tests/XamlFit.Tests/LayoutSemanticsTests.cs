@@ -539,6 +539,34 @@ public class HeaderAndContentTests
         Assert.Equal(WidthStatus.Unmeasurable,
             Column("<DataGridTextColumn x:Name=\"probe\" Header=\"Name\" Width=\"150\" HeaderStyle=\"{StaticResource H}\"/>").Status);
 
+    private static AvailableWidth StyledColumn(string setters) =>
+        In($"<DataGrid Width=\"500\"><DataGrid.Resources><Style TargetType=\"DataGridColumnHeader\">{setters}</Style></DataGrid.Resources>" +
+           "<DataGrid.Columns><DataGridTextColumn x:Name=\"probe\" Header=\"Name\" Width=\"150\"/></DataGrid.Columns></DataGrid>");
+
+    // LayoutOracle 實測（150 寬的欄）：Padding 全 0 時範本自己用 5,0,5,0；否則照左右和。BorderThickness 不影響寬度。
+    [Theory]
+    [InlineData("<Setter Property=\"Padding\" Value=\"8,7\"/><Setter Property=\"BorderThickness\" Value=\"0,0,0,1\"/>", 134)]   // QuillNest 的寫法
+    [InlineData("<Setter Property=\"Padding\" Value=\"4,0\"/>", 142)]
+    [InlineData("<Setter Property=\"Padding\" Value=\"1,0,30,0\"/>", 119)]
+    [InlineData("<Setter Property=\"Padding\" Value=\"0\"/>", 140)]
+    [InlineData("<Setter Property=\"Padding\" Value=\"0,7\"/>", 150)]
+    [InlineData("<Setter Property=\"BorderThickness\" Value=\"6,0\"/>", 140)]
+    [InlineData("<Setter Property=\"FontWeight\" Value=\"SemiBold\"/>", 140)]
+    public void A_project_header_style_that_keeps_the_template_has_known_chrome(string setters, double expected)
+    {
+        // ⚠ 第一版只要有隱含標題樣式就放棄：QuillNest 的 14 個欄標題全部量不到
+        var w = StyledColumn(setters);
+        Assert.Equal(WidthStatus.Known, w.Status);
+        Assert.Equal(expected, w.Px);
+    }
+
+    [Theory]
+    [InlineData("<Setter Property=\"Template\"><Setter.Value><ControlTemplate TargetType=\"DataGridColumnHeader\"><ContentPresenter/></ControlTemplate></Setter.Value></Setter>")]
+    [InlineData("<Setter Property=\"Margin\" Value=\"10,0\"/>")]
+    [InlineData("<Setter Property=\"Padding\" Value=\"{DynamicResource P}\"/>")]
+    public void A_project_header_style_that_changes_more_than_padding_is_not_guessed(string setters) =>
+        Assert.Equal(WidthStatus.Unmeasurable, StyledColumn(setters).Status);
+
     [Fact]
     public void GridViewColumn_header_chrome_differs_from_DataGrid() =>
         Assert.Equal(146, In("<ListView Width=\"500\"><ListView.View><GridView><GridViewColumn x:Name=\"probe\" Header=\"Name\" Width=\"150\"/></GridView></ListView.View></ListView>").Px);

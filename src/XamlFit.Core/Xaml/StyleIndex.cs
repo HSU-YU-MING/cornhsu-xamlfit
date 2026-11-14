@@ -431,6 +431,40 @@ public sealed class StyleIndex
         file.EndsWith("Themes/Generic.xaml", StringComparison.OrdinalIgnoreCase)
         || file.Equals("Generic.xaml", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// 一個**不在 XAML 裡**的元素（DataGrid 自己產生的欄標題）從 <paramref name="from"/> 的位置看得到的隱含樣式裡，
+    /// 某個 setter 的值（含 BasedOn 鏈）。沒有隱含樣式、或樣式沒設這個屬性 → NotSet。
+    /// </summary>
+    public Resolved ImplicitSetter(XElement from, string targetType, string property)
+    {
+        var file = FileOf(from);
+        var setterName = property[(property.LastIndexOf('.') + 1)..];
+        var styles = ImplicitStyles(from, targetType, file);
+        return styles.Count == 0 ? Resolved.NotSet : Agree(styles, s => FromRecord(s, setterName, file, 0));
+    }
+
+    /// <summary>
+    /// 那個隱含樣式（含 BasedOn 鏈）有沒有可能換掉範本。範本寫在 <c>&lt;Setter.Value&gt;</c> 裡，
+    /// 不在 <see cref="ImplicitSetter"/> 看得到的字串 setter 裡。基底讀不出來也算「可能」。
+    /// </summary>
+    public bool ImplicitStyleMaySetTemplate(XElement from, string targetType)
+    {
+        var file = FileOf(from);
+        var seen = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        bool Walk(StyleRecord r, int depth)
+        {
+            if (depth > 16 || !seen.Add(r.Origin ?? (object)r)) return false;
+            if (r.SetsTemplate || r.BasedOnUnreadable) return true;
+            if (r.BasedOnKey is not null)
+                return StylesByKey(r.Origin, r.BasedOnKey, r.Origin is null ? r.File : file) is not { } bases
+                       || bases.Any(b => Walk(b, depth + 1));
+            if (r.BasedOnType is not null)
+                return ImplicitStyles(r.Origin, r.BasedOnType, file, self: r).Any(b => Walk(b, depth + 1));
+            return false;
+        }
+        return ImplicitStyles(from, targetType, file).Any(r => Walk(r, 0));
+    }
+
     /// <summary>專案裡有沒有針對這個型別的隱含樣式（從這個元素的位置看得到的）。</summary>
     public bool HasImplicitStyle(XElement from, string targetType) =>
         FindLexicalImplicit(from, targetType) is not null || _implicit.ContainsKey(targetType);

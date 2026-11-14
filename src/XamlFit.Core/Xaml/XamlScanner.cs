@@ -238,6 +238,7 @@ public sealed partial class XamlScanner
                     : null,
             };
         _width = new WidthResolver(_chrome, _styles, measurer) { Sharing = _options.Sharing };
+        _measurer = measurer;
         _missingFonts.Clear();
 
         // ── 第二趟：文字位置 ──
@@ -779,6 +780,8 @@ public sealed partial class XamlScanner
 
     // ───────────────────────── 文字位置 ─────────────────────────
 
+    private ElementMeasurer? _measurer;
+
     private TextSite? TrySite(XElement el, string file)
     {
         var local = el.Name.LocalName;
@@ -836,10 +839,11 @@ public sealed partial class XamlScanner
         var width = _width.Resolve(el);
         if (width.Status != WidthStatus.Known) return width;
 
-        // 同一行有別的行內內容：這一行的寬度是全部加起來，單獨量一個 Run 沒有意義
-        if (el.Name.LocalName == "Run" && el.Parent is { } line
-            && (line.Elements().Count() > 1 || line.Nodes().OfType<XText>().Any(t => !string.IsNullOrWhiteSpace(t.Value))))
-            return AvailableWidth.NotKnown(WidthStatus.Unmeasurable, "shares its line with other inline content");
+        if (el.Name.LocalName == "Run" && el.Parent is { } parent)
+        {
+            width = RunOnItsLine(el, parent, width);
+            if (width.Status != WidthStatus.Known) return width;
+        }
 
         if (font.Unreadable is { } why)
             return AvailableWidth.NotKnown(WidthStatus.Unmeasurable, why);
@@ -856,6 +860,112 @@ public sealed partial class XamlScanner
         }
 
         return width;
+    }
+
+    /// <summary>
+    /// 一個 Run 在它那一行裡看得見多寬。
+    ///
+    /// ⚠ 第一版只要 Run 有任何兄弟（連 <c>&lt;LineBreak/&gt;</c> 也算）就整個放棄：QuillNest 的條列說明
+    ///   （一個 TextBlock 裡好幾個 Run，用 LineBreak 分行）32 處全部量不到。
+    ///
+    /// - 一個人佔一行（前後是 LineBreak 或段落頭尾）：就是一行普通的文字。
+    /// - 跟別的內容同一行、**不換行**：一行從左邊畫起、右邊被裁，所以它看得見的是整行寬**扣掉它前面的內容**
+    ///   （跟水平 StackPanel 同一個規則；前面的 Run 是譯文時，check 會用每個語言自己的譯文重算）。
+    ///   前面有寬度算不出來的東西（綁定、Span、InlineUIContainer）就量不到。
+    /// - 跟別的內容同一行、**會換行**、沒有高度上限：水平方向裁不到任何字，照整行寬度量。
+    ///   有高度上限時要整段一起排才知道幾行 —— 不猜。
+    /// - 包在 Hyperlink／Span／Underline 裡、而且是裡面唯一的內容：把那層包裝當成這個 Run 本身
+    ///   （這三種不改字寬；實查 Playnite 的「Having issues?」連結就是這樣寫的）。
+    ///   Bold／Italic 會改字重與樣式，字型讀取沒有套用它們 → 不解。其他情形（包裝裡還有別的內容）也不解。
+    /// </summary>
+    private AvailableWidth RunOnItsLine(XElement run, XElement parent, AvailableWidth width)
+    {
+        while (parent.Name.LocalName is "Hyperlink" or "Span" or "Underline" && OnlyContent(parent) == run
+               && parent.Parent is { } outer)
+        {
+            run = parent;
+            parent = outer;
+        }
+
+        // 這一行：父元素裡、前後兩個 LineBreak 之間的行內內容。
+        // 元素之間的空白在 XAML 裡會變成一個空格（LineBreak 兩側的空白會被修掉）。
+        var segment = new List<(XNode Node, bool SpaceBefore)>();
+        var found = false;
+        var pendingSpace = false;
+        foreach (var node in parent.Nodes())
+        {
+            if (node is XComment or XProcessingInstruction) continue;
+            if (node is XText t && string.IsNullOrWhiteSpace(t.Value)) { pendingSpace = true; continue; }
+            if (node is XElement e && e.Name.LocalName.Contains('.', StringComparison.Ordinal)) continue;   // 屬性元素
+            if (node is XElement br && br.Name.LocalName == "LineBreak")
+            {
+                if (found) break;
+                segment.Clear();
+                pendingSpace = false;
+                continue;
+            }
+            segment.Add((node, pendingSpace && segment.Count > 0));
+            pendingSpace = false;
+            if (node == run) found = true;
+        }
+
+        var hostIsTextBlock = parent.Name.LocalName.EndsWith("TextBlock", StringComparison.Ordinal);
+        if (segment.Count <= 1 && hostIsTextBlock) return width;
+        if (!hostIsTextBlock)
+            return AvailableWidth.NotKnown(WidthStatus.Unmeasurable, "shares its line with other inline content");
+
+        var wraps = ParseWrap(_styles.Resolve(parent, "TextWrapping", inheritable: false)) != WrapMode.NoWrap && !width.WrapDefeated;
+        if (wraps)
+            return HeightOf(parent) is null
+                ? width
+                : AvailableWidth.NotKnown(WidthStatus.Unmeasurable,
+                    "shares a wrapping paragraph with other inline content, and the paragraph's height is limited");
+
+        if (_measurer is null || _fonts is null)
+            return AvailableWidth.NotKnown(WidthStatus.Unmeasurable, "shares its line with other inline content");
+
+        var hostFont = FontSpec.Read(_styles, parent, _defaultFont, _options.DefaultFontSize, _language);
+        if (hostFont.Unreadable is { } why) return AvailableWidth.NotKnown(WidthStatus.Unmeasurable, why);
+        var hostLookup = _fonts.Resolve(hostFont.Family, hostFont.Weight, hostFont.Style, _defaultFont, hostFont.Language);
+        var space = TextMeasure.Measure(" ", hostLookup, hostFont.Size);
+        if (hostLookup.Chain.Count == 0 || !space.IsReliable)
+            return AvailableWidth.NotKnown(WidthStatus.Unmeasurable, "shares its line with other inline content");
+
+        var lookupsBefore = _measurer.ResourceLookups;
+        double used = 0;
+        foreach (var (node, spaceBefore) in segment)
+        {
+            if (spaceBefore) used += space.WidthPx;
+            if (node == run) break;
+            if (node is XElement e && e.Name.LocalName == "Run" && _measurer.DesiredWidth(e, 0) is { } w)
+                used += w;
+            else
+                return AvailableWidth.NotKnown(WidthStatus.Unmeasurable,
+                    "follows inline content on the same line whose width is unknown");
+        }
+
+        if (used == 0) return width;
+        return width with
+        {
+            Px = Math.Max(0, width.Px - used),
+            TakenByInlineBefore = used,
+            DependsOnNeighbourText = width.DependsOnNeighbourText || _measurer.ResourceLookups > lookupsBefore,
+        };
+    }
+
+    /// <summary>元素裡唯一的內容（不算空白、註解與屬性元素）；有零個或好幾個時回 null。</summary>
+    private static XNode? OnlyContent(XElement e)
+    {
+        XNode? only = null;
+        foreach (var node in e.Nodes())
+        {
+            if (node is XComment or XProcessingInstruction) continue;
+            if (node is XText t && string.IsNullOrWhiteSpace(t.Value)) continue;
+            if (node is XElement p && p.Name.LocalName.Contains('.', StringComparison.Ordinal)) continue;
+            if (only is not null) return null;
+            only = node;
+        }
+        return only;
     }
 
     /// <summary>宣告的高度上界（垂直裁切判定要用）：Height 與 MaxHeight 取小的。讀不出來當成沒有。</summary>

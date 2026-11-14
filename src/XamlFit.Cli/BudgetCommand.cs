@@ -64,8 +64,9 @@ internal static class BudgetCommand
             Console.WriteLine();
             Console.WriteLine("tightest slots (headroom before translation):");
             foreach (var b in tight)
-                Console.WriteLine($"  {b.HeadroomPx,7:F1} px   {Pipeline.Trunc(b.Text, 28),-28}  {b.BindingSite}" +
-                                  (b.FitsWhenExpanded == false ? "   ← will not fit when translated" : ""));
+                Console.WriteLine($"  {b.HeadroomPx,7:F1} px   {Pipeline.Column(b.Text, 28)}  {b.BindingSite}" +
+                                  (b.HeadroomPx < 0 ? "   ← does not fit even now, before translation"
+                                   : b.FitsWhenExpanded == false ? "   ← will not fit when translated" : ""));
         }
 
         if (opts.CsvPath is not null)

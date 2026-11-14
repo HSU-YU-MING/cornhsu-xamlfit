@@ -39,6 +39,12 @@ that over-estimated the available width.
 - Characters the requested font cannot draw are measured with the font WPF would use: another
   face of the same family first, then WPF's own composite fallback table
   (`data/font-fallback.json`, from dotnet/wpf, MIT), chosen by the element's `Language`.
+- `Run`s are measured line by line instead of given up on, and project header styles for
+  `DataGridColumnHeader` that keep the template are understood (Padding replaces the
+  template's own 5,0,5,0 unless all zero; BorderThickness does not count). The header's font
+  comes from the header style or the grid, not from the column.
+- Console output is UTF-8: translated text was garbled through pipes and in CI on a
+  Traditional Chinese Windows.
 - Hardening for untrusted input (see `SECURITY.md`): files nested more than 512 elements
   deep are parse errors instead of a hang, and `##vso[` / `##[` CI log commands in scanned
   text are defused.
@@ -55,12 +61,12 @@ that over-estimated the available width.
 
 - **Text width** against WPF `FormattedText`, 1,400 comparisons: mean error 0.039%, worst
   under-estimate 0.068%, worst over-estimate 1.43% (a single kerning pair).
-- **Layout** against real off-screen WPF windows, 138 cases: 113 exact, 25 conservative,
+- **Layout** against real off-screen WPF windows, 151 cases: 126 exact, 25 conservative,
   0 over-estimates (`prototype/LayoutOracle`).
 - **Real project windows** drawn by WPF with their own themes and translations
   (`prototype/CorpusRender`): Playnite, 2,025 comparisons — 71 clipped by both, 4 false
-  alarms, **0 missed**; ScreenToGif, 28 comparisons — 5 clipped by both, 0 false alarms,
-  0 missed. Eleven bugs found this way are fixed (see `docs/M6-全面重讀.md` §2.6), among
+  alarms, **0 missed**; ScreenToGif, 1,607 comparisons including drop-downs, same font on
+  both sides — 11 clipped by both, 0 false alarms, 0 missed. Eleven bugs found this way are fixed (see `docs/M6-全面重讀.md` §2.6), among
   them: rows now share width in document order; side tab strips and project `Window`
   subclasses are no longer over-estimated; characters a font lacks are drawn as WPF draws
   them (other faces of the same family first, then WPF's composite fallback table, chosen by
@@ -69,9 +75,9 @@ that over-estimated the available width.
   (`prototype/DpiProbe`): the table's 16 / 20 / 17.5 DIP are the maxima across scalings.
 - **Globalization-invariant mode** (common on Linux CI): all tests pass, and two full corpus
   runs give identical results.
-- **False positives** against shipped software: 929 source-language measurements over ten
-  projects, 0 overflows.
-- 490 unit tests.
+- **Shipped software**: 984 source-language measurements over ten projects. The only two
+  overflows are in the maintainer's app and are real (drawn by WPF).
+- 513 unit tests.
 
 ### Not verified
 
