@@ -206,6 +206,9 @@ public sealed class WidthResolver
                     var px = fixedWidth - deductions;
                     if (px <= 0)
                         return AvailableWidth.NotKnown(WidthStatus.Unmeasurable, "insets exceed the Grid column width");
+                    // ⚠ 內層有解不開的 Auto／星號欄時，不能拿外層的欄寬當答案 ——
+                    //   真正的寬度比它窄，照用會高估可用寬度而漏報溢出（全面重讀時發現漏了這條）。
+                    if (gridFlexible) return AvailableWidth.NotKnown(WidthStatus.NeedsGrid, gridReason);
                     if (inItems) return AvailableWidth.NotKnown(WidthStatus.NeedsItems, itemsReason);
 
                     return new AvailableWidth(
@@ -223,6 +226,7 @@ public sealed class WidthResolver
                         if (px <= 0)
                             return AvailableWidth.NotKnown(WidthStatus.Unmeasurable,
                                 "insets exceed the solved Grid column width");
+                        if (gridFlexible) return AvailableWidth.NotKnown(WidthStatus.NeedsGrid, gridReason);
                         if (inItems) return AvailableWidth.NotKnown(WidthStatus.NeedsItems, itemsReason);
 
                         return new AvailableWidth(
