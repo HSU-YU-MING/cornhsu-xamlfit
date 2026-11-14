@@ -335,9 +335,18 @@ public sealed class StyleIndex
         return scope;
     }
 
+    /// <summary>
+    /// 範本被複製出來單獨算內距時，複本的根元素掛這個：資源查找走到複本頂端後，從原本的控制項繼續往上。
+    /// ⚠ 沒有它的話，複本裡的元素只看得到全域的樣式 —— 視窗或 Grid 自己的資源裡定義的捲軸樣式被漏掉，
+    ///   LayoutOracle 實測一個 OverridesDefaultStyle、寬 24 的捲軸被當成系統寬度，多算 6.5 px。
+    /// </summary>
+    public sealed record LexicalContinuation(XElement From);
+
+    private static XElement? Up(XElement e) => e.Parent ?? e.Annotation<LexicalContinuation>()?.From;
+
     private static XElement? FindLexical(XElement from, string key)
     {
-        for (XElement? cur = from; cur is not null; cur = cur.Parent)
+        for (XElement? cur = from; cur is not null; cur = Up(cur))
             if (ScopeOf(cur).ByKey.TryGetValue(key, out var found)) return found;
         return null;
     }
@@ -345,7 +354,7 @@ public sealed class StyleIndex
     /// <param name="skip">找「同型別的外層隱含樣式」時用：跳過這一個（它自己）。</param>
     private static XElement? FindLexicalImplicit(XElement from, string type, XElement? skip = null)
     {
-        for (XElement? cur = from; cur is not null; cur = cur.Parent)
+        for (XElement? cur = from; cur is not null; cur = Up(cur))
             if (ScopeOf(cur).ImplicitStyles.TryGetValue(type, out var found) && !ReferenceEquals(found, skip))
                 return found;
         return null;

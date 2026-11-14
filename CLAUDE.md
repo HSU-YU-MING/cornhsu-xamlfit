@@ -149,6 +149,9 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 65 | **`UseLayoutRounding` 讓 Auto 欄少一個裝置像素** | ScreenToGif 編輯器的 Expander 標題，旁邊空 200 px，WPF 畫出來仍比文字短 0.5～1.2 px。跟譯文長度無關，工具不模擬；對照報告裡單獨列出，不調容差 | CorpusRender |
 | 66 | **收起面板的展開寬度在動畫裡** | Width="0" ＋ 同檔 Storyboard 的 DoubleAnimation To。取最小的非 0 字面值；To 不是字面就不知道。CorpusRender 也要照動畫打開它 —— ⚠ `(Grid.Width)` 的 PropertyPath.Path 是 `(0)`，屬性在 PathParameters | ScreenToGif 編輯器 |
 | 67 | **第三方 Grid 子類別不內建** | GridEx 的語意照 Playnite 原始碼寫，但只認設定檔宣告的 —— 別的專案同名類別可能完全不同 | Playnite |
+| 68 | **只換範本的 ScrollBar 寬度仍是系統寬** | WPF 預設樣式設了 Width 與 MinWidth；專案樣式只換 Template 時，範本根元素寫多寬都沒用（`--scrollbar`）。OverridesDefaultStyle="True" 才由範本決定 | LayoutOracle |
+| 69 | **複製出來的範本要接回原本的資源範圍** | 算範本內距時把範本複製到新文件，複本裡只看得到全域樣式 —— Grid／視窗自己資源裡的捲軸樣式被漏掉，多算 6.5 px。用 LexicalContinuation 從控制項的位置往上找；快取鍵要含資源範圍 | LayoutOracle |
+| 70 | **CorpusRender 拿掉 GridEx 的子元素會讓後面的全部錯格** | 自動排列依順序填格。換成空的佔位元素；換命名空間時要宣告前綴，不然預設命名空間被改掉、DockPanel.Dock 解析不到 | CorpusRender（Playnite） |
 
 ### 環境層級的坑
 
@@ -165,11 +168,11 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 532 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 538 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 42 條 CLI 路徑的退出碼
-dotnet run -c Release --project prototype/LayoutOracle   # 151 案 vs 真的 WPF 視窗（Windows）；有高估就回 1
+dotnet run -c Release --project prototype/LayoutOracle   # 156 案 vs 真的 WPF 視窗（Windows）；有高估就回 1
 ```
 
 **來源語言自我檢驗**（沒有腳本，手動跑）：對一個已經出貨的 App 跑

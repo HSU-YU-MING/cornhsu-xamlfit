@@ -473,6 +473,14 @@ public class ScannerTests
     }
 
     [Fact]
+    public void Files_that_turn_on_layout_rounding_are_reported()
+    {
+        // 工具不模擬像素捨入；開了的檔案要說出來（ScreenToGif 的 Expander 標題被削掉約一個像素）
+        var scan = Scan(("A.xaml", Window("<TextBlock Text=\"x\"/>", "Width=\"400\" UseLayoutRounding=\"True\"")), ("B.xaml", Window("<TextBlock Text=\"y\"/>")));
+        Assert.Equal(["A.xaml"], scan.LayoutRoundingFiles);
+    }
+
+    [Fact]
     public void A_pathologically_nested_document_is_a_parse_error_not_a_hang()
     {
         // ⚠ 100,000 層、1.7 MB 的檔案讓 budget 與 check 跑超過 170 秒沒結束（CI 上就是卡到逾時）

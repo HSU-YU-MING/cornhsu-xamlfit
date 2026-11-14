@@ -48,6 +48,13 @@ public sealed record ScanResult(
     int ParseErrors,
     IReadOnlyList<string> ParseErrorFiles)
 {
+    /// <summary>
+    /// 開了 UseLayoutRounding 的檔案。WPF 把每個尺寸捨入到裝置像素，範本裡一層層的內距各自捨入，
+    /// 依內容決定寬度的文字右緣可能被削掉約一個像素 —— CorpusRender 實測 ScreenToGif 編輯器的 Expander 標題，
+    /// 旁邊還有 200 px 空間也短了 0.5～1.2 px。工具不模擬像素捨入，只說出來。
+    /// </summary>
+    public IReadOnlyList<string> LayoutRoundingFiles { get; init; } = [];
+
     /// <summary>不是 WPF 的 XAML 檔。內距表、預設字型、版面語意都是 WPF 的，套上去只會得到錯的數字。</summary>
     public IReadOnlyList<ForeignFile> ForeignFiles { get; init; } = [];
 
@@ -248,6 +255,7 @@ public sealed partial class XamlScanner
         var sites = new List<TextSite>();
         var errors = new List<string>();
         var foreign = new List<ForeignFile>();
+        var rounding = new List<string>();
 
         for (var i = 0; i < files.Count; i++)
         {
@@ -272,6 +280,8 @@ public sealed partial class XamlScanner
                 var site = TrySite(el, rels[i]);
                 if (site is not null) sites.Add(site);
             }
+            if (doc.Root.DescendantsAndSelf().Any(e => string.Equals((string?)e.Attribute("UseLayoutRounding"), "True", StringComparison.OrdinalIgnoreCase)))
+                rounding.Add(rels[i]);
         }
 
         return new ScanResult(sites, files.Count, errors.Count, errors)
@@ -281,6 +291,7 @@ public sealed partial class XamlScanner
             MissingFonts = [.. _missingFonts],
             Strings = _strings,
             NeighbourTextUses = (measurer?.ResourceLookups ?? 0) + (measurer?.ResourceMisses ?? 0),
+            LayoutRoundingFiles = rounding,
         };
     }
 

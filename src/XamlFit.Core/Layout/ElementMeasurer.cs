@@ -104,9 +104,27 @@ public sealed class ElementMeasurer : IElementMeasurer
             // 沒設尺寸的矩形與橢圓不佔空間（捲軸交會處的那塊小方塊就是這樣寫的）
             if (local is "Rectangle" or "Ellipse") return Finish(0);
 
-            // 捲軸沒寫 Width：預設範本就是系統捲軸寬度；換了範本就不知道
+            // 捲軸沒寫 Width：系統捲軸寬度 —— **換了範本也一樣**。
+            // ⚠ LayoutOracle --scrollbar 實測：專案的樣式只換範本時（Playnite），範本確實套上了，
+            //   但 WPF 預設樣式把 Width 與 MinWidth 都設成系統捲軸寬（125% 時 16.8），範本根元素寫多寬都沒用。
+            //   只有 OverridesDefaultStyle="True"（丟掉預設樣式）時才由範本決定：根元素寫死寬度就用它，否則不知道。
             if (isScrollBar)
-                return _styles.TemplateOf(element).Kind == TemplateKind.Default ? Finish(_chrome.ScrollBarWidth) : null;
+            {
+                var overrides = _styles.ResolveEx(element, "OverridesDefaultStyle", inheritable: false);
+                if (overrides.IsUnreadable) return null;
+                if (!(overrides.IsValue && overrides.Value!.Trim().Equals("True", StringComparison.OrdinalIgnoreCase)))
+                    return Finish(_chrome.ScrollBarWidth);
+
+                var tpl = _styles.TemplateOf(element);
+                if (tpl.Kind != TemplateKind.Custom) return null;
+                double widest = 0;
+                foreach (var candidate in tpl.Alternatives ?? [tpl.Template])
+                {
+                    if (candidate is null || FixedRootWidth(candidate) is not { } root) return null;
+                    widest = Math.Max(widest, root);
+                }
+                return Finish(widest);
+            }
         }
 
         // 內部內距（Padding / BorderThickness / 控制項 chrome）。不知道就不算。
@@ -180,6 +198,16 @@ public sealed class ElementMeasurer : IElementMeasurer
         if (!r.IsValue) return 0;
         var (l, rr, ok) = WidthResolver.ParseThickness(r.Value);
         return ok ? l + rr : null;
+    }
+
+    /// <summary>ControlTemplate 根元素寫死的寬度（含左右邊距）。不是字面數字、或根元素有樣式時回 null。</summary>
+    private static double? FixedRootWidth(XElement template)
+    {
+        var root = template.Elements().FirstOrDefault(e => !e.Name.LocalName.Contains('.', StringComparison.Ordinal));
+        if (root is null || root.Attribute("Style") is not null) return null;
+        if (!WidthResolver.TryLength(root.Attribute("Width")?.Value, out var width)) return null;
+        var (l, r, ok) = WidthResolver.ParseThickness(root.Attribute("Margin")?.Value);
+        return ok ? width + l + r : null;
     }
 
     private double? MeasureText(XElement element, string text)

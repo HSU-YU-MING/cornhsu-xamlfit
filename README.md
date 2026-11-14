@@ -67,7 +67,7 @@ Measured out of the box, no configuration, on eleven projects:
 | Cornea (maintainer app) | 68 | 59 | 0 | 9 | **100%** |
 | QuillNest (maintainer app) | 685 | 533 | 9 | 116 | **98.3%** |
 | Kindling (maintainer app) | 150 | 57 | 18 | 75 | **76.0%** |
-| Playnite | 1,107 | 136 | 278 | 506 | **32.9%** |
+| Playnite | 1,107 | 142 | 272 | 506 | **34.3%** |
 | ScreenToGif | 1,277 | 148 | 222 | 790 | **40.0%** |
 | HandyControl | 210 | 11 | 61 | 123 | 15.3% |
 | MahApps.Metro | 1,613 | 56 | 746 | 718 | 7.0% |
@@ -106,9 +106,9 @@ strings in English, German, French, Chinese, Japanese and Korean): mean error **
 worst under-estimate **0.068%**, worst over-estimate 1.43% (one kerning pair). XamlFit does not
 apply kerning, which makes text measure slightly *wide* — it errs toward reporting.
 
-**Layout, against real WPF windows.** `prototype/LayoutOracle` feeds 151 XAML snippets to an
+**Layout, against real WPF windows.** `prototype/LayoutOracle` feeds 156 XAML snippets to an
 actual off-screen `Window` and to the resolver, and compares what is really visible:
-**126 exact, 25 conservative, 0 over-estimates.** The conservative ones are deliberate — an
+**127 exact, 29 conservative, 0 over-estimates.** The conservative ones are deliberate — an
 assumed vertical scroll bar, the window frame at its widest display scaling. This harness
 found most of what the last audit fixed; it needs Windows, so its conclusions are restated as
 portable unit tests.
@@ -116,7 +116,8 @@ portable unit tests.
 **Real projects, against real WPF windows.** `prototype/CorpusRender` loads a real project's
 windows into WPF — with the project's own `App.xaml` dictionaries and each language's strings —
 and records how wide every text needs to be and how much of it is actually visible. Playnite,
-9 windows, 2,025 comparisons: **71 clipped by both, 4 false alarms, 0 missed**, 1,950 fit by
+9 windows, 2,841 comparisons (with Playnite's GridEx declared, and an equivalent GridEx in the
+harness so WPF lays it out for real): **71 clipped by both, 4 false alarms, 0 missed**, 2,766 fit by
 both. Two of the false alarms are within 0.5 px; the other two are the same button, 0.7 and 7.7 px on the safe side.
 Where both agree, XamlFit's text width is −0.02 to +1.74 px off WPF's, and the width it
 believes is available is never more than 0.02 px too generous. ScreenToGif, 6 windows
@@ -166,6 +167,8 @@ them once in `xamlfit.config.json`.
   "assumeDefaultTheme": false
 }
 ```
+
+Declaring Playnite's `GridEx` as above takes its resolution from 34.3% to 41.8%.
 
 Every run ends with the controls whose chrome it could not determine, ordered by how many
 sites each one blocks — so you know which three lines of config are worth writing.

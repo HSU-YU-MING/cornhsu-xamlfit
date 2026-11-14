@@ -71,6 +71,11 @@ internal static class Pipeline
             if (scan.ParseErrorFiles.Count > 5) Console.Error.WriteLine($"       … and {scan.ParseErrorFiles.Count - 5} more");
         }
 
+        if (scan.LayoutRoundingFiles.Count > 0)
+            Console.WriteLine(
+                $"  layout rounding  {scan.LayoutRoundingFiles.Count} file(s) set UseLayoutRounding: WPF rounds every size to whole " +
+                "device pixels, and text sized to its content can lose about one pixel at its right edge. XamlFit measures without rounding.");
+
         if (scan.ForeignFiles.Count > 0)
         {
             var byDialect = string.Join(", ", scan.ForeignFiles

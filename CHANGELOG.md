@@ -50,6 +50,14 @@ that over-estimated the available width.
   literal `To` of the animations that open it (ScreenToGif's editor panel; 21.9% → 40.0%).
 - Items of an `ItemsControl`/`ComboBox` with an `ItemTemplate` are drawn through the template,
   so their own text is not measured as written.
+- A project ScrollBar style that only replaces the template keeps the system width (WPF's default
+  style still sets Width and MinWidth); with `OverridesDefaultStyle` the template's fixed root width
+  decides. Playnite 32.9% → 34.3% without configuration, 41.8% with `gridPanels`.
+- Templates copied out to compute chrome look up styles from the control's own position, so a
+  ScrollBar style in a window's or grid's resources is no longer missed (a 24 px bar was taken as
+  the system width: 6.5 px over).
+- Runs report the files that turn on `UseLayoutRounding`: WPF can shave about one pixel off text
+  sized to its content, which XamlFit does not model.
 - `check` and `budget` reject each other's options (`check --sites` used to be accepted and
   ignored).
 - Console output is UTF-8: translated text was garbled through pipes and in CI on a
@@ -70,10 +78,10 @@ that over-estimated the available width.
 
 - **Text width** against WPF `FormattedText`, 1,400 comparisons: mean error 0.039%, worst
   under-estimate 0.068%, worst over-estimate 1.43% (a single kerning pair).
-- **Layout** against real off-screen WPF windows, 151 cases: 126 exact, 25 conservative,
+- **Layout** against real off-screen WPF windows, 156 cases: 127 exact, 29 conservative,
   0 over-estimates (`prototype/LayoutOracle`).
 - **Real project windows** drawn by WPF with their own themes and translations
-  (`prototype/CorpusRender`): Playnite, 2,025 comparisons — 71 clipped by both, 4 false
+  (`prototype/CorpusRender`): Playnite, 2,841 comparisons — 71 clipped by both, 4 false
   alarms, **0 missed**; ScreenToGif, 2,657 comparisons including the editor's side panel and
   drop-downs, same font on both sides — 12 clipped by both, 0 false alarms, and 100 headers that
   WPF draws 0.5–1.2 px short because of `UseLayoutRounding` (not modelled; not a translation
@@ -88,7 +96,7 @@ that over-estimated the available width.
   runs give identical results.
 - **Shipped software**: 984 source-language measurements over ten projects. The only two
   overflows are in the maintainer's app and are real (drawn by WPF).
-- 532 unit tests.
+- 538 unit tests.
 
 ### Not verified
 

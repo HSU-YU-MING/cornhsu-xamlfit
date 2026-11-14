@@ -87,6 +87,7 @@ internal static partial class Program
         // ── 2. 視窗：在要量的那幾行的元素上掛名字，再載入 ──
         var windowPath = Path.Combine(spec.Root, spec.Window);
         var doc = XDocument.Load(windowPath, LoadOptions.SetLineInfo | LoadOptions.PreserveWhitespace);
+        PointGridExAtHarness(doc);
         var probes = new Dictionary<int, string>();
         foreach (var line in spec.Lines)
         {
@@ -276,6 +277,13 @@ internal static partial class Program
                 var clipped = needed > visible + 0.5;
                 if (Environment.GetEnvironmentVariable("XF_DEBUG") is { } dbg && culture == dbg)
                     Console.WriteLine($"  [{culture}] line {line}: <{el.GetType().Name}> outer {el.ActualWidth + el.Margin.Left + el.Margin.Right:F2} (actual {el.ActualWidth:F2}, margin {el.Margin}, min {el.MinWidth}) text {TextOf(text)} font {TextElement.GetFontFamily(text)} {TextElement.GetFontSize(text)}  needed {needed:F2} visible {visible:F2}; parent {(VisualTreeHelper.GetParent(el) as FrameworkElement)?.ActualWidth:F2}");
+                if (Environment.GetEnvironmentVariable("XF_CHAIN") is { } chainC && culture == chainC)
+                {
+                    var parts = new List<string>();
+                    for (DependencyObject? c = el; c is not null && parts.Count < 14; c = VisualTreeHelper.GetParent(c))
+                        if (c is FrameworkElement fe) parts.Add($"{fe.GetType().Name}{(fe.Name.Length > 0 ? "#" + fe.Name : "")}:{fe.ActualWidth:F1}{(fe.HorizontalAlignment != HorizontalAlignment.Stretch ? "/HA=" + fe.HorizontalAlignment + "(" + DependencyPropertyHelper.GetValueSource(fe, FrameworkElement.HorizontalAlignmentProperty).BaseValueSource + ")" : "")}{(fe is DockPanel dp ? "/LCF=" + dp.LastChildFill + ",n=" + dp.Children.Count : "")}");
+                    Console.WriteLine($"  chain line {line}: " + string.Join(" < ", parts));
+                }
                 rows.Add($"{culture},{line},{el.GetType().Name},\"{TextOf(text).Replace("\"", "'")}\",{needed:F2},{visible:F2},{(clipped ? 1 : 0)}");
             }
         }
@@ -409,11 +417,41 @@ internal static partial class Program
         }
     }
 
+    /// <summary>
+    /// Playnite 的 GridEx（不論有沒有前綴）改指到這支程式裡的等效實作（GridEx.cs）。
+    /// 附加屬性寫法 GridEx.ColumnCount="2" 寫在 GridEx 自己身上，改成一般屬性。
+    /// </summary>
+    private static void PointGridExAtHarness(XDocument doc)
+    {
+        XNamespace harness = "clr-namespace:CorpusRender;assembly=CorpusRender";
+        // ⚠ 要宣告前綴：不然存回文字時這個命名空間變成 GridEx 元素上的「預設」命名空間，
+        //   它身上沒有前綴的 DockPanel.Dock="Top" 就解析不到、被修補拿掉 —— About 視窗的 GridEx 因此靠左停、把分頁擠成 50 px。
+        if (doc.Root is not null && doc.Root.Attribute(XNamespace.Xmlns + "xfharness") is null)
+            doc.Root.SetAttributeValue(XNamespace.Xmlns + "xfharness", harness.NamespaceName);
+        foreach (var el in doc.Descendants().ToList())
+        {
+            var local = el.Name.LocalName;
+            if (local == "GridEx")
+            {
+                el.Name = harness + "GridEx";
+                foreach (var attr in el.Attributes().Where(at => at.Name.LocalName.StartsWith("GridEx.", StringComparison.Ordinal)).ToList())
+                {
+                    attr.Remove();
+                    el.SetAttributeValue(attr.Name.LocalName["GridEx.".Length..], attr.Value);
+                }
+            }
+            else if (local.StartsWith("GridEx.", StringComparison.Ordinal) && el.Parent?.Name == harness + "GridEx")
+                el.Name = harness + local;
+        }
+    }
+
     private static void Print(List<string> log)
     {
         if (log.Count == 0) return;
         Console.WriteLine($"  repairs ({log.Count}):");
         foreach (var l in log.Distinct().Take(40)) Console.WriteLine($"    - {l}");
+        // 放棄的原因通常在最後幾筆
+        if (log.Count > 40) foreach (var l in log.TakeLast(4)) Console.WriteLine($"    … {l}");
     }
 
     private static string Shorten(string s) => s.Length <= 40 ? s : s[..39] + "…";
@@ -552,6 +590,16 @@ internal static partial class Program
                     return (null, "");
                 }
                 var name = e.Name.LocalName + (e.Attribute("Property") is { } p ? $" Property={p.Value}" : "");
+                // ⚠ 自動排列的 GridEx 依子元素的順序填格：拿掉一個，後面每一個都往前移一格（Playnite 的 EmulatorsWindow：
+                //   PathSelectionBox 被拿掉，標籤跑到 * 欄，看起來像被切掉）。換成空的佔位元素，保住順序與跨欄
+                if (e.Parent?.Name.LocalName == "GridEx" && !e.Name.LocalName.Contains('.'))
+                {
+                    var placeholder = new XElement(XName.Get("Border", Wpf));
+                    foreach (var keep in e.Attributes().Where(at => at.Name.LocalName is "Grid.ColumnSpan" or "Visibility"))
+                        placeholder.SetAttributeValue(keep.Name, keep.Value);
+                    e.ReplaceWith(placeholder);
+                    return (doc.ToString(SaveOptions.DisableFormatting), $"<{name}> replaced by an empty placeholder inside GridEx ({Shorten(message)})");
+                }
                 e.Remove();
                 return (doc.ToString(SaveOptions.DisableFormatting), $"removed <{name}> ({Shorten(message)})");
             }

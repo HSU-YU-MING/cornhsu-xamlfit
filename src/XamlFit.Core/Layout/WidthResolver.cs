@@ -1282,6 +1282,11 @@ public sealed class WidthResolver
             }
         }
 
+        // 範本內容的資源從控制項的位置往上找（見 LexicalContinuation），所以結果也取決於控制項在哪個資源範圍裡：
+        // 同一個範本在兩個不同的 <Grid.Resources> 底下可能拿到不同的捲軸樣式，不能共用快取。
+        signature.Append("@").Append(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(control.Document ?? (object)control));
+        foreach (var scope in control.AncestorsAndSelf().Where(a => a.Elements().Any(e => e.Name.LocalName.EndsWith(".Resources", StringComparison.Ordinal))))
+            signature.Append('/').Append(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(scope));
         var key = (template, signature.Append(header ? "H" : "C").ToString());
         if (_templateChrome.TryGetValue(key, out var cached)) return cached;
 
@@ -1290,6 +1295,7 @@ public sealed class WidthResolver
         try
         {
             var frame = new XElement(XName.Get("Border", WpfNamespace), new XAttribute("Width", "10000"), clone);
+            frame.AddAnnotation(new StyleIndex.LexicalContinuation(control));   // 範本內容的資源從控制項的位置往上找
             var doc = new XDocument(frame);
             if (control.Document?.Annotation<SourceFile>() is { } file) doc.AddAnnotation(file);
             if (control.Document?.Annotation<ExternalTheme>() is { } theme) doc.AddAnnotation(theme);
