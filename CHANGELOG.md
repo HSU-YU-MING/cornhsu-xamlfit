@@ -102,16 +102,41 @@ that over-estimated the available width.
 - CSV formula neutralisation by default (`--csv-raw` opts out).
 - A deliberately broken demo project with CI count assertions, and a CLI smoke test over
   42 command paths and their exit codes.
+- **Kerning.** `fonts export` reads pair kerning from GPOS (`kern` feature, lookup types 2 and 9)
+  and it is applied between neighbouring characters drawn by the same face, as WPF does by
+  default. `Typography.Kerning="False"` (or bound) is reported as not measurable. Kerning-heavy
+  strings used to measure up to 5.7% wide.
+- **Hebrew and Thai** are measured by adding advances (they were reported as complex scripts).
+- **Arabic, Persian and Urdu.** `fonts export` runs the font's GSUB and GPOS rules (joining forms,
+  required ligatures, contextual alternates, kerning on the shaped glyphs) and stores the width of
+  every letter form, the change for every pair of adjacent letters per language system
+  (default, ARA, FAR, URD), and the change that depends on the two letters before `ے`/`ۓ`.
+  Arabic marks take no width; 0–9 in Arabic text are measured both as written and as
+  Arabic-Indic digits, the wider winning. Before writing a font's data the exporter checks it
+  against its own full shaping on 20,000 random words, leaves out letters that would come out
+  narrow, and leaves out the whole font when that would be most of the alphabet (Calibri 6.27).
+  Next to an RTL character, kerning against a space or punctuation is only applied when it widens
+  (WPF puts them in different runs).
 
 ### Verified
 
-- **Text width** against WPF `FormattedText`, 1,400 comparisons: mean error 0.039%, worst
-  under-estimate 0.068%, worst over-estimate 1.43% (a single kerning pair).
+- **Text width** against WPF `FormattedText`, 1,652 comparisons including kerning-heavy pairs:
+  mean error 0.006%, worst under-estimate 0.025%, worst over-estimate 0.26% (before kerning:
+  0.039%, 0.068% and 1.43%).
+- **Hebrew, Thai, Arabic, Persian** against `FormattedText` (`prototype/WpfOracle --scripts`):
+  820 real translated strings from the test corpus (Hebrew 300, Arabic 300, Persian 200, Thai 20),
+  1,000 random Arabic-script words and every letter
+  alone and between two others, in Segoe UI, Arial, Tahoma, Courier New, Microsoft Sans Serif and
+  Times New Roman (Leelawadee UI and Tahoma for Thai): worst under-estimate 0.05%, in either
+  flow direction. Calibri is reported as not measurable.
 - **Layout** against real off-screen WPF windows, 228 cases: 186 exact, 42 conservative,
   0 over-estimates; with `check`'s row semantics 190 / 38 / 0 (`prototype/LayoutOracle --check`).
 - **Real project windows** drawn by WPF with their own themes and translations
-  (`prototype/CorpusRender`): Playnite, 5,765 comparisons — 130 clipped by both, 3 false
-  alarms, **0 missed**; ScreenToGif, 3,043 comparisons including the editor's side panel and
+  (`prototype/CorpusRender`): Playnite, 6,274 comparisons in every language including Arabic,
+  Persian and Hebrew — 136 clipped by both, 2 false alarms, **0 missed**, text width within
+  ±0.03 px of WPF's where both agree; ScreenToGif with the side panel declared and Arabic and
+  Hebrew measured, 3,361 comparisons — 124 / 1 / **0**. Before Arabic was measured: Playnite
+  5,765 comparisons, 130 / 3 / 0; ScreenToGif, 3,043 comparisons including the editor's side panel and
   drop-downs, same font on both sides — 122 clipped by both, 28 false alarms (an assumed scroll
   bar), **0 missed**, and 76 headers that WPF draws 0.5–1.2 px short because of `UseLayoutRounding`
   (English loses up to 0.4 px at the same places; not a translation length issue, not reported). Eleven bugs found this way are fixed (see `docs/M6-全面重讀.md` §2.6), among
@@ -125,7 +150,7 @@ that over-estimated the available width.
   runs give identical results.
 - **Shipped software**: 984 source-language measurements over ten projects. The only two
   overflows are in the maintainer's app and are real (drawn by WPF).
-- 604 unit tests.
+- 631 unit tests.
 
 ### Not verified
 

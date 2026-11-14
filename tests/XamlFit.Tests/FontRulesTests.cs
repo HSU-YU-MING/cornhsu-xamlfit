@@ -214,13 +214,22 @@ public class StrictFontResolutionTests
     }
 
     [Theory]
-    [InlineData(0x0E01)]   // 泰文
     [InlineData(0x0E81)]   // 寮文
     [InlineData(0x1000)]   // 緬甸文
     [InlineData(0x0750)]   // 阿拉伯文補充
     [InlineData(0x1820)]   // 蒙古文
     public void Scripts_that_reshape_in_context_are_flagged(int codepoint) =>
         Assert.True(TextMeasure.IsComplexScript(codepoint));
+
+    [Theory]
+    [InlineData(0x05D0)]   // 希伯來文
+    [InlineData(0x05B8)]   // 希伯來文的母音符號
+    [InlineData(0xFB2A)]   // 希伯來文表現形式
+    [InlineData(0x0E01)]   // 泰文
+    [InlineData(0x0E48)]   // 泰文聲調符號
+    public void Hebrew_and_Thai_are_measured_by_adding_advances(int codepoint) =>
+        // WpfOracle --scripts：真實譯文把 advance 加起來跟 WPF 只差 0.02% 以內
+        Assert.False(TextMeasure.IsComplexScript(codepoint));
 }
 
 public class FontSpecTests

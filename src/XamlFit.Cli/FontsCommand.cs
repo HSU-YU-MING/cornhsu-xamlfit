@@ -127,7 +127,7 @@ internal static class FontsCommand
                           $"{deduped.Select(m => m.Family).Distinct(StringComparer.OrdinalIgnoreCase).Count()} families, " +
                           $"{bytes / 1024.0:F0} KB)");
         if (unreadable > 0) Console.WriteLine($"  skipped {unreadable} unreadable file(s)");
-        Console.WriteLine("  contains advance widths only — no glyph outlines, no font software");
+        Console.WriteLine("  contains advance widths, kerning adjustments and Arabic letter-form widths only — no glyph outlines, no font software");
         return 0;
     }
 

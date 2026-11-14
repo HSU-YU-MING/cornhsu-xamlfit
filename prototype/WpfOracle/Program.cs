@@ -11,6 +11,8 @@ using System.Windows;
 using System.Windows.Media;
 using XamlFit.Core.Fonts;
 
+if (args.Length >= 3 && args[0] == "--scripts") return Scripts.Run(args[1], args[2]);
+
 var metricsPath = args.Length > 0 ? args[0] : "xamlfit.fonts.json";
 if (!File.Exists(metricsPath))
 {
@@ -32,6 +34,8 @@ string[] samples =
     "儲存 Save", "Tab\tSeparated",
     "The quick brown fox jumps over the lazy dog",
     "Zwölf Boxkämpfer jagen Viktor quer über den großen Sylter Deich",
+    // 字距調整對很多的字串（WPF 會調；第一版沒調時偏寬 1.4%）
+    "AVATAR Tower, Yoyo. P.S. LT-Wave", "Ты Уже Готов? Тест", "ΑΥΤΟ ΤΟ ΒΙΒΛΙΟ", "To: Your Team; Re: “Vote”",
 ];
 
 double[] sizes = [9, 10, 12, 14, 16, 20, 28];

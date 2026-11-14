@@ -163,6 +163,13 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 79 | **綁定的 Visibility 當成看得見** | 鄰居的寬度一律是被扣掉的（Auto 欄、同一排、標籤列），取大的只會少給文字空間。Canvas 沒寫 Width 時寬度 0（不量子元素） | LayoutOracle |
 | 80 | **DataGrid 的星號欄寬是延後算的** | 排進 Dispatcher：只呼叫 UpdateLayout 量到的是 MinWidth（每一案都是 70）。LayoutOracle／CorpusRender 要先讓 Dispatcher 跑完（ContextIdle）再量 | LayoutOracle「star column」 |
 | 81 | **依儲存格內容長的欄不能拿 MaxWidth 當寬度** | 那是「資料夠長時」的最壞情況；拿來算星號欄，QuillNest 的來源語言冒出 1 筆只有資料夠長才會發生的溢出。維持不知道 | 語料重跑 |
+| 82 | **WPF 套的是 GPOS 的 'kern'，不是舊的 kern 表** | 預設開著（`Typography.Kerning`）。Segoe UI 100 px 的「To」窄 9.8 px。不套時字距多的字串偏寬到 5.7% | WpfOracle |
+| 83 | **右到左文字裡，中性字旁邊的字距 WPF 不套** | 空白、標點跟隔壁的字可能分在不同方向的段落：阿拉伯文句子裡「URL 」的「L 空白」(Arial −76) 沒套。這種位置只套會變寬的字距 | WpfOracle --scripts |
+| 84 | **阿拉伯文的字距在形狀換過的字形上** | Segoe UI 的阿拉伯文字距掛在 GPOS（arab）、對象是字首／字中形，以碼位查的字距表看不到 → 偏窄 2.8%。匯出時要把 GSUB 跑完再跑 GPOS | WpfOracle --scripts |
+| 85 | **形狀的寬度要用「整串總寬 − 延長線」算，不能照字形歸屬分** | Segoe UI 的 ۓ 在字尾時會換掉**前一個**字的字形，寬度落到別的字頭上 → 少 6 px | WpfOracle --scripts（逐字母） |
+| 86 | **元素語言是阿拉伯文時，0–9 會換成阿拉伯—印度數字** | 連純數字的字串也換；前面最近的字母是拉丁字母的不換（「8x8」只換第一個）。Tahoma 的比較寬（1171 vs 1118）、Segoe UI 的比較窄 → 兩種都量取寬的 | WpfOracle --scripts |
+| 87 | **阿拉伯文的附加符號寬度是 0** | Tahoma 的 U+0654 在 hmtx 有寬度，WPF 量出來是 0 | WpfOracle --scripts |
+| 88 | **成對的表蓋不住跨三個字以上的上下文規則** | Segoe UI 的 ے 依前面兩個字換長度（另存三字改變量）；Segoe UI 的點避讓字距、Calibri 6.27 的大量 calt 跨更遠。匯出時用 2 萬個隨機字自我檢查，拼窄的字母移出驗證清單（Segoe UI 13 個少用字母），剩不到一半整支不寫（Calibri） | 匯出自我檢查 |
 
 ### 環境層級的坑
 
@@ -179,7 +186,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 604 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 631 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 42 條 CLI 路徑的退出碼
@@ -203,7 +210,7 @@ M6 裡它兩次不是零，兩次都是工具錯。
   內距表裡的 16／20／17.5 就是從這裡確認的（Windows only）
 
 - `M0Survey` —— 可量測比例調查（已修過五個 bug，結論在 `docs/`）
-- `WpfOracle` —— 拿 WPF 的 `FormattedText` 當真值驗量測（Windows only）
+- `WpfOracle` —— 拿 WPF 的 `FormattedText` 當真值驗量測（Windows only）。`-- --scripts <度量檔> <strings.json>` 對照希伯來文、阿拉伯文、波斯文、泰文（strings.json：`{"ar": [...], ...}`；`XF_SCRIPT_FONTS` 換字型、`XF_SCRIPT_DUMP="ar/Segoe UI"` 加 `XF_SCRIPT_ALL=1` 逐句印、`XF_SCRIPT_LTR=1` 用左到右排）。匯出時的阿拉伯文自我檢查：`XAMLFIT_ARABIC_SELFCHECK=1 xamlfit fonts export …` 印每個語言系統拼窄的字數與移掉的字母
 - `ChromeGen` —— 量控制項內距表（Windows only）
 - `DemoMetrics` —— 產生示範用的合成字型度量（跨平台）
 - `GridOracle` —— 早期的 Grid 欄寬對照。⚠ 它量的是根元素而不是 Show 過的視窗，

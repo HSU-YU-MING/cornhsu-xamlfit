@@ -22,8 +22,8 @@ internal static class Usage
               --family <name>      Only export these families. Repeatable.
               --merge              Merge into an existing output file instead of replacing it.
 
-              The metrics file contains advance widths only — no glyph outlines and no font
-              software. Generate it on a machine that has the fonts, commit it, and CI needs
+              The metrics file contains numbers only (advance widths, kerning, Arabic letter-
+              form widths) — no glyph outlines and no font software. Generate it on a machine that has the fonts, commit it, and CI needs
               no fonts installed.
 
             BUDGET

@@ -50,6 +50,7 @@ public readonly record struct FontSpec(
         var styleText = Get("FontStyle", "");
         var stretch = Get("FontStretch", "");
         var formatting = Get("TextOptions.TextFormattingMode", "");
+        var kerning = Get("Typography.Kerning", "");
 
         var size = defaultSize;
         if (sizeText.Length > 0)
@@ -66,6 +67,10 @@ public readonly record struct FontSpec(
         //   跟線性加總（Ideal 模式，WPF 的預設）差到 −37% ~ +45%，從字型度量算不出來。
         if (WidthLike(formatting, "Display"))
             unreadable ??= "TextFormattingMode=\"Display\" snaps glyph widths to whole pixels, which font metrics cannot predict";
+
+        // 字距是照 WPF 的預設（開著）量的；關掉時字會比我們量的寬 —— 不猜
+        if (kerning.Length > 0 && !WidthLike(kerning, "True"))
+            unreadable ??= "Typography.Kerning is turned off, which this tool does not model";
 
         if (weightText.Length > 0 && !FontResolver.TryParseWeight(weightText, out _))
             unreadable ??= $"FontWeight=\"{weightText}\" is not a weight this tool can read";

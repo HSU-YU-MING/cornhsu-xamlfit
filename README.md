@@ -101,10 +101,22 @@ XAML — the window still has a width at runtime. Those sites are reported as
 
 Three independent checks, each against something that is not this tool.
 
-**Text width, against WPF's `FormattedText`.** 1,400 comparisons (9 faces × 7 sizes × 28
-strings in English, German, French, Chinese, Japanese and Korean): mean error **0.039%**,
-worst under-estimate **0.068%**, worst over-estimate 1.43% (one kerning pair). XamlFit does not
-apply kerning, which makes text measure slightly *wide* — it errs toward reporting.
+**Text width, against WPF's `FormattedText`.** 1,652 comparisons (faces × sizes × strings in
+English, German, French, Chinese, Japanese and Korean, including kerning-heavy pairs such as
+`To` and `AV`): mean error **0.006%**, worst under-estimate **0.025%**, worst over-estimate 0.26%.
+Kerning comes from the font's GPOS table and is applied the way WPF does by default.
+
+**Right-to-left and Thai text, against `FormattedText`.** Hebrew and Thai add up like Latin
+(≤ 0.02%). Arabic, Persian and Urdu letters change shape with their neighbours, so
+`fonts export` runs each font's own substitution and positioning rules over every letter form,
+every pair of letters and the three-letter contexts of `ے`, and stores only the resulting widths.
+Against 500 real translated strings, 1,000 random words and every letter alone and between two
+others, in Segoe UI, Arial, Tahoma, Courier New, Microsoft Sans Serif and Times New Roman: worst
+under-estimate **0.05%**. Before writing a font's Arabic data the exporter checks those widths
+against its own full shaping on 20,000 random words. Letters that would come out narrow are left
+out (13 rare letters in Segoe UI) and are reported as not measurable next to other letters; a
+font where that would be most of the alphabet gets no Arabic data at all (Calibri 6.27, whose
+contextual rules span whole words).
 
 **Layout, against real WPF windows.** `prototype/LayoutOracle` feeds 228 XAML snippets to an
 actual off-screen `Window` and to the resolver, and compares what is really visible:
@@ -117,16 +129,18 @@ portable unit tests.
 **Real projects, against real WPF windows.** `prototype/CorpusRender` loads a real project's
 windows into WPF — with the project's own `App.xaml` dictionaries and each language's strings —
 and records how wide every text needs to be and how much of it is actually visible. Playnite,
-11 windows, 5,765 comparisons (with Playnite's GridEx declared, and an equivalent GridEx in the
-harness so WPF lays it out for real): **130 clipped by both, 3 false alarms, 0 missed**, 5,632 fit by
-both. The false alarms are within 0.7 px, and in two of them WPF cuts only the blank after the last glyph.
-Where both agree, XamlFit's text width is −0.02 to +1.74 px off WPF's, and the width it
+11 windows, 6,274 comparisons in every language including Arabic, Persian and Hebrew (with
+Playnite's GridEx declared, and an equivalent GridEx in the harness so WPF lays it out for real):
+**136 clipped by both, 2 false alarms, 0 missed**, 6,136 fit by both. The false alarms are within
+1.5 px. Where both agree, XamlFit's text width is −0.02 to +0.03 px off WPF's, and the width it
 believes is available is never more than 0.02 px too generous. ScreenToGif, 6 windows
 including the editor's side panel and every kind of drop-down, 3,043 comparisons with the same
 font on both sides (this machine's): **122 clipped by both, 28 false alarms, 0 missed**, 2,893 fit by
 both. The false alarms are all in one side panel whose `ScrollViewer` shows its bar only when
 needed; XamlFit assumes the bar is there (and says so), WPF's test window was tall enough that it
-was not; declaring that panel in `hiddenScrollBars` leaves 1 false alarm (0.8 px) and still 0 missed. Another 76 are Expander headers that WPF draws 0.5–1.2 px short of their text with 200 px
+was not; declaring that panel in `hiddenScrollBars` leaves 1 false alarm (0.8 px) and still 0 missed
+(3,361 comparisons once Arabic and Hebrew are measured too: 124 clipped by both, 1 false alarm,
+0 missed). Another 76 are Expander headers that WPF draws 0.5–1.2 px short of their text with 200 px
 to spare, because `UseLayoutRounding` rounds every layer to device pixels. English loses up to
 0.4 px at the same places; the loss does not grow with the text. That is the pixel grid, not a
 translation that does not fit, so XamlFit does not report it and the comparison counts it apart. These comparisons found the bugs listed in `docs/M6-全面重讀.md`.
@@ -226,7 +240,8 @@ xamlfit fonts export --family "Segoe UI" --family "Microsoft JhengHei UI"
 git add xamlfit.fonts.json
 ```
 
-`xamlfit.fonts.json` contains **advance widths only** — no glyph outlines, no font software.
+`xamlfit.fonts.json` contains **numbers only** — advance widths, kerning adjustments, and the widths
+of Arabic letter forms worked out from the font's own rules. No glyph outlines, no font software.
 You generate it from fonts you already have a licence for, into your own repository. CI needs
 no fonts installed.
 
@@ -330,7 +345,8 @@ out a horizontal `StackPanel` or `DockPanel`, and it is what `check` reports.
 
 What is *not* judged is counted and printed: strings with run-time placeholders (`{0}`), text
 the metrics do not cover (with the code points, so you know which font to export), and
-scripts that reshape in context (Arabic, Hebrew, Indic, Thai). **A culture in which nothing
+scripts that reshape in a way the metrics do not cover (Indic, Myanmar, Khmer, Tibetan, Arabic
+letters a font's data leaves out). **A culture in which nothing
 could be measured makes the run exit 3** — "not checked" must not look like "passed".
 
 `--source-only` checks just the source language and needs no translations. `--pseudo`
@@ -358,7 +374,10 @@ fail a build, because a guess should not block someone's pull request.
 | Styles applied by triggers, visual states or code-behind | not followed |
 | Text set through properties not scanned (`ToolTip`, `Title`, watermark/hint attached properties, `Hyperlink`/`Span` content) | not seen at all |
 | Resource dictionaries merged in code at run time | every dictionary file is assumed merged; conflicting definitions make the value unknown |
-| No kerning or shaping | ≤ 1.43% over-estimate of text width; never under |
+| Shaping outside Arabic script (Indic, Myanmar, Khmer, Tibetan, Mongolian) | reported as not measurable |
+| Arabic-script fonts whose contextual rules reach further than three letters | the letters involved, or the whole font, are reported as not measurable (see above) |
+| Arabic digits | WPF swaps 0–9 for Arabic-Indic digits in Arabic text; both are measured and the wider one is used |
+| Ligatures other than Arabic (`fi`, `ffl`…) | not applied; covered by the text-width comparison above (worst under-estimate 0.025%) |
 | Vertical clipping | only when the text element itself declares `Height`/`MaxHeight` |
 | Window frame, scroll bar width | taken at the display scaling where they are largest in DIPs |
 | Default UI font per language | only Traditional Chinese was measured on a real system; the others are from Windows' font configuration. Override with `defaultFontByCulture` |

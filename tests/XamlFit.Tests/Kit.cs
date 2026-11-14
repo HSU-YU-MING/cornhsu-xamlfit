@@ -28,7 +28,7 @@ internal static class Kit
     public static FontMetrics Mono(
         string family = MonoFamily, int weight = 400, FontStyleKind style = FontStyleKind.Normal,
         string stretch = "Normal", bool variable = false, string? legacy = null, string[]? aliases = null,
-        bool cjk = true) =>
+        bool cjk = true, KerningTable? kerning = null) =>
         new()
         {
             Family = family,
@@ -43,6 +43,7 @@ internal static class Kit
             Descender = -200,
             LineGap = 0,
             DefaultAdvance = 500,
+            Kerning = kerning,
             Ranges = cjk
                 ? [new AdvanceRange(0x20, 0x7E, 500), new AdvanceRange(0x4E00, 0x9FFF, 1000)]
                 : [new AdvanceRange(0x20, 0x7E, 500)],

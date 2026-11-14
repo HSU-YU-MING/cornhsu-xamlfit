@@ -50,11 +50,14 @@ data is included.
 `xamlfit fonts export`, from fonts already installed and licensed on their own machine, into
 their own repository.
 
-The file contains **advance widths only** — integer numbers per codepoint — and no glyph
-outlines, hinting instructions, or any other part of the font software.
+The file contains **integer numbers only**: an advance width per codepoint, pair kerning
+adjustments, and for Arabic-script letters the width of each letter form and of adjacent letters,
+worked out at export time from the font's own substitution and positioning rules. It contains no
+glyph outlines, hinting instructions, substitution or positioning tables, or any other part of
+the font software.
 
-> **Before 1.0:** confirm the position of the relevant font EULAs on extracting advance widths
-> and committing them to a repository. The maintainer's reading is that metrics are facts
+> **Before 1.0:** confirm the position of the relevant font EULAs on extracting these metrics
+> (advance widths, kerning, letter-form widths) and committing them to a repository. The maintainer's reading is that metrics are facts
 > rather than the creative expression a font licence protects, but that reading has not been
 > verified by counsel. Until it is, XamlFit ships metrics for **no** proprietary font.
 >

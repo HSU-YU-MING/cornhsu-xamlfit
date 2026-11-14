@@ -80,7 +80,21 @@ public static class FontMetricsExtractor
             LineGap = lineGap,
             DefaultAdvance = advances.Length > 0 ? advances[0] : unitsPerEm / 2,
             Ranges = BuildRanges(cmap, advances),
+            Kerning = GposKerning.Read(r, GlyphToCodepoints(cmap)),
+            Arabic = ArabicExport.Read(r, cmap, advances),
         };
+    }
+
+    private static Dictionary<int, List<int>> GlyphToCodepoints(SortedDictionary<int, int> cmap)
+    {
+        var map = new Dictionary<int, List<int>>();
+        foreach (var (cp, glyph) in cmap)
+        {
+            if (glyph == 0) continue;
+            if (!map.TryGetValue(glyph, out var list)) map[glyph] = list = [];
+            list.Add(cp);
+        }
+        return map;
     }
 
     /// <summary>hmtx：前 numberOfHMetrics 筆有自己的 advance，之後的字符沿用最後一筆

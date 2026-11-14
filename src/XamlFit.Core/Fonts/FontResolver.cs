@@ -25,6 +25,9 @@ public sealed record FontLookup(
     /// </summary>
     public Func<int, (FontMetrics Face, double Scale)?>? Fallback { get; init; }
 
+    /// <summary>元素的語言（決定阿拉伯文用哪個 OpenType 語言系統的字形）。</summary>
+    public string? Language { get; init; }
+
     /// <summary>某個字 WPF 會依序嘗試的後備字型（給「該匯出哪支字型」的提示用）。</summary>
     public Func<int, IReadOnlyList<string>>? FallbackCandidates { get; init; }
 
@@ -151,7 +154,7 @@ public sealed class FontResolver
         //   依字的範圍與元素的語言挑一串候選字型。只認明寫的後備清單會讓真實專案的中文字串大量變成
         //   「量不到」（實測 QuillNest 掉到個位數）；而第一版「度量檔裡的其他字型依字母順序」
         //   跟 WPF 無關，日文假名量寬了 40%（CorpusRender 實測）。
-        if (!AutoFallback) return new FontLookup(chain, FontMissReason.None, null, declared);
+        if (!AutoFallback) return new FontLookup(chain, FontMissReason.None, null, declared) { Language = language };
 
         var cache = new Dictionary<int, (FontMetrics, double)?>();
         (FontMetrics Face, double Scale)? Fallback(int cp)
@@ -175,6 +178,7 @@ public sealed class FontResolver
         return new FontLookup(chain, FontMissReason.None, null, declared)
         {
             Fallback = Fallback,
+            Language = language,
             FallbackCandidates = cp => FontFallback.For(cp, language).Targets,
         };
     }
