@@ -624,6 +624,57 @@ internal static class Program
         Add("DataGrid header, style replaces Template", W($"<DataGrid Width='500' HorizontalAlignment='Left' AutoGenerateColumns='False'><DataGrid.Resources><Style TargetType='DataGridColumnHeader'><Setter Property='Template'><Setter.Value><ControlTemplate TargetType='DataGridColumnHeader'><Border Padding='30,0'><ContentPresenter/></Border></ControlTemplate></Setter.Value></Setter></Style></DataGrid.Resources><DataGrid.Columns><DataGridTextColumn Width='150'><DataGridTextColumn.Header>{text}</DataGridTextColumn.Header></DataGridTextColumn></DataGrid.Columns></DataGrid>"), Want.Blocked);
         Add("GridViewColumn header 150", W($"<ListView Width='500' HorizontalAlignment='Left'><ListView.View><GridView><GridViewColumn Width='150'><GridViewColumn.Header>{text}</GridViewColumn.Header></GridViewColumn></GridView></ListView.View></ListView>"));
 
+        // ── 7b. 標籤列放在左右兩側（Playnite 的 DatabaseFieldsManagerWindow）──
+        // 範本靠 TabStripPlacement 觸發器重排：標籤列變成 Auto 欄，寬度 = 最寬的標題 + 標題 chrome
+        const string sideTabControl =
+            "<Style TargetType='TabControl'><Setter Property='Template'><Setter.Value><ControlTemplate TargetType='TabControl'>" +
+            "<Grid><Grid.ColumnDefinitions><ColumnDefinition x:Name='ColumnDefinition0'/><ColumnDefinition x:Name='ColumnDefinition1' Width='0'/></Grid.ColumnDefinitions>" +
+            "<Grid.RowDefinitions><RowDefinition Height='Auto' x:Name='RowDefinition0'/><RowDefinition Height='*' x:Name='RowDefinition1'/></Grid.RowDefinitions>" +
+            "<Border x:Name='HeaderBorder' BorderThickness='0,0,0,1' BorderBrush='Gray'><TabPanel x:Name='HeaderPanel' IsItemsHost='True' Panel.ZIndex='1' Width='Auto' Height='Auto'>" +
+            "<TabPanel.LayoutTransform><TransformGroup><ScaleTransform ScaleX='1' ScaleY='1'/><SkewTransform AngleX='0' AngleY='0'/><RotateTransform Angle='0'/><TranslateTransform X='0' Y='0'/></TransformGroup></TabPanel.LayoutTransform>" +
+            "</TabPanel></Border>" +
+            "<Border x:Name='ContentPanel' Grid.Column='0' Grid.Row='1'><ContentPresenter x:Name='PART_SelectedContentHost' ContentSource='SelectedContent'/></Border></Grid>" +
+            "<ControlTemplate.Triggers>" +
+            "<Trigger Property='TabStripPlacement' Value='Bottom'><Setter Property='Grid.Row' TargetName='ContentPanel' Value='0'/><Setter Property='Height' TargetName='RowDefinition0' Value='*'/><Setter Property='Height' TargetName='RowDefinition1' Value='Auto'/><Setter Property='Grid.Row' TargetName='HeaderBorder' Value='1'/><Setter Property='BorderThickness' TargetName='HeaderBorder' Value='0,1,0,0'/></Trigger>" +
+            "<Trigger Property='TabStripPlacement' Value='Left'><Setter Property='Grid.Row' TargetName='HeaderPanel' Value='0'/><Setter Property='Grid.Row' TargetName='ContentPanel' Value='0'/><Setter Property='Grid.Column' TargetName='ContentPanel' Value='1'/><Setter Property='Width' TargetName='ColumnDefinition0' Value='Auto'/><Setter Property='Width' TargetName='ColumnDefinition1' Value='*'/><Setter Property='Height' TargetName='RowDefinition0' Value='*'/><Setter Property='Height' TargetName='RowDefinition1' Value='0'/><Setter Property='Grid.Column' TargetName='HeaderBorder' Value='0'/><Setter Property='BorderThickness' TargetName='HeaderBorder' Value='0,0,1,0'/><Setter Property='Margin' TargetName='HeaderBorder' Value='0,0,0,0'/><Setter Property='Margin' TargetName='ContentPanel' Value='0,0,0,0'/></Trigger>" +
+            "<Trigger Property='TabStripPlacement' Value='Right'><Setter Property='Grid.Row' TargetName='HeaderPanel' Value='0'/><Setter Property='Grid.Row' TargetName='ContentPanel' Value='0'/><Setter Property='Grid.Column' TargetName='ContentPanel' Value='0'/><Setter Property='Width' TargetName='ColumnDefinition0' Value='*'/><Setter Property='Width' TargetName='ColumnDefinition1' Value='Auto'/><Setter Property='Height' TargetName='RowDefinition0' Value='*'/><Setter Property='Height' TargetName='RowDefinition1' Value='0'/><Setter Property='Grid.Column' TargetName='HeaderBorder' Value='1'/><Setter Property='BorderThickness' TargetName='HeaderBorder' Value='1,0,0,0'/></Trigger>" +
+            "</ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter></Style>";
+        const string sideTabItem =
+            "<Style TargetType='TabItem'><Setter Property='Template'><Setter.Value><ControlTemplate TargetType='TabItem'>" +
+            "<Grid x:Name='TabGrid'><Border x:Name='SelectedBorder' Visibility='Collapsed' Margin='1,0,1,0' BorderThickness='0,0,0,2' BorderBrush='Gray'/>" +
+            "<TextBlock x:Name='TextContent' Padding='5'><ContentPresenter x:Name='ContentSite' RecognizesAccessKey='True' ContentSource='Header' HorizontalAlignment='Center' Margin='5' VerticalAlignment='Center'/></TextBlock></Grid>" +
+            "<ControlTemplate.Triggers><Trigger Property='TabStripPlacement' Value='Left'><Setter Property='BorderThickness' Value='0,0,2,0' TargetName='SelectedBorder'/></Trigger>" +
+            "<Trigger Property='IsSelected' Value='True'><Setter Property='Visibility' Value='Visible' TargetName='SelectedBorder'/></Trigger></ControlTemplate.Triggers>" +
+            "</ControlTemplate></Setter.Value></Setter></Style>";
+        const string plainTabItem =
+            "<Style TargetType='TabItem'><Setter Property='Template'><Setter.Value><ControlTemplate TargetType='TabItem'>" +
+            "<Border Padding='12,4' BorderThickness='1'><ContentPresenter ContentSource='Header'/></Border>" +
+            "</ControlTemplate></Setter.Value></Setter></Style>";
+        string Side(string placement, string items, string tabItemStyle = sideTabItem, string extra = "") =>
+            W($"<Grid Width='500' HorizontalAlignment='Left'><Grid.Resources>{sideTabControl}{tabItemStyle}</Grid.Resources>" +
+              $"<TabControl TabStripPlacement='{placement}'{extra}>{items}</TabControl></Grid>");
+        const string probeTab = "<TabItem Header='Platforms'><Border x:Name='probe'/></TabItem>";
+        Add("side tabs Left, Playnite templates", Side("Left", probeTab + "<TabItem Header='Categories'/><TabItem Header='Age ratings and regions'/>"));
+        Add("side tabs Right, Playnite templates", Side("Right", probeTab + "<TabItem Header='Categories'/><TabItem Header='Age ratings and regions'/>"));
+        Add("side tabs Left, probe not in first tab", Side("Left", "<TabItem Header='Categories'/><TabItem Header='Platforms' IsSelected='True'><Border x:Name='probe'/></TabItem>"));
+        Add("side tabs Left, TabItem Margin 4 + MinWidth 150", Side("Left", "<TabItem Header='Platforms' Margin='4,0'><Border x:Name='probe'/></TabItem><TabItem Header='Short' MinWidth='150'/>"));
+        Add("side tabs Left, bold FontSize 16 headers", Side("Left", probeTab + "<TabItem Header='Age ratings and regions' FontWeight='Bold' FontSize='16'/>"));
+        Add("side tabs Left, plain TabItem template", Side("Left", probeTab + "<TabItem Header='Age ratings and regions'/>", plainTabItem));
+        Add("side tabs Left, collapsed long tab", Side("Left", probeTab + "<TabItem Header='Age ratings and regions and much more' Visibility='Collapsed'/>"));
+        Add("side tabs Top, Playnite templates", Side("Top", probeTab + "<TabItem Header='Categories'/>"));
+        Add("side tabs Bottom, Playnite templates", Side("Bottom", probeTab + "<TabItem Header='Categories'/>"));
+        Add("side tabs Left, element header", Side("Left", probeTab + "<TabItem><TabItem.Header><StackPanel><TextBlock Text='Wide header here'/></StackPanel></TabItem.Header></TabItem>"), Want.Blocked);
+        Add("side tabs Left, bound header", Side("Left", probeTab + "<TabItem Header='{Binding Name}'/>"), Want.Blocked);
+        // 預設範本：選取的標籤用負邊距放大，沒有建模 —— 維持不知道
+        // 範本自己決定標籤列在哪：寫死在上方（不理會 TabStripPlacement）、或用 TemplateBinding 讓 DockPanel 跟著放
+        const string dockTop = "<TabControl.Template><ControlTemplate TargetType='TabControl'><DockPanel><TabPanel DockPanel.Dock='Top' IsItemsHost='True'/><ContentPresenter ContentSource='SelectedContent'/></DockPanel></ControlTemplate></TabControl.Template>";
+        const string dockBound = "<TabControl.Template><ControlTemplate TargetType='TabControl'><DockPanel><TabPanel DockPanel.Dock='{TemplateBinding TabStripPlacement}' IsItemsHost='True'/><ContentPresenter ContentSource='SelectedContent'/></DockPanel></ControlTemplate></TabControl.Template>";
+        Add("side tabs Left, template docks the strip on top", W($"<Grid Width='500' HorizontalAlignment='Left'><Grid.Resources>{sideTabItem}</Grid.Resources><TabControl TabStripPlacement='Left'>{dockTop}{probeTab}<TabItem Header='Age ratings and regions'/></TabControl></Grid>"));
+        Add("side tabs Left, DockPanel.Dock TemplateBinding", W($"<Grid Width='500' HorizontalAlignment='Left'><Grid.Resources>{sideTabItem}</Grid.Resources><TabControl TabStripPlacement='Left'>{dockBound}{probeTab}<TabItem Header='Age ratings and regions'/></TabControl></Grid>"));
+        Add("side tabs Right, DockPanel.Dock TemplateBinding", W($"<Grid Width='500' HorizontalAlignment='Left'><Grid.Resources>{sideTabItem}</Grid.Resources><TabControl TabStripPlacement='Right'>{dockBound}{probeTab}<TabItem Header='Age ratings and regions'/></TabControl></Grid>"));
+        Add("side tabs Left, default WPF template", W($"<TabControl Width='500' HorizontalAlignment='Left' TabStripPlacement='Left'>{probeTab}<TabItem Header='Age ratings and regions'/></TabControl>"), Want.Blocked);
+        Add("side tabs Right, default WPF template", W($"<TabControl Width='500' HorizontalAlignment='Left' TabStripPlacement='Right'>{probeTab}<TabItem Header='Age ratings and regions'/></TabControl>"), Want.Blocked);
+
         // ── 8. 快顯 ──
         Add("text in Button.ToolTip", W($"<Button Width='80' HorizontalAlignment='Left' Content='x'><Button.ToolTip><TextBlock x:Name='probe' Text='{Long}'/></Button.ToolTip></Button>"), Want.Open);
 

@@ -134,7 +134,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 50 | **Linux CI 常開 globalization-invariant 模式** | `CultureInfo.GetCultureInfo("zh-TW")` 會丟例外。執行路徑上不能靠文化資料庫做判斷；測試要切文化時先 try/catch。每次改到語言相關的程式都要用 `DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1` 再跑一次測試 | invariant 模式重跑 |
 | 51 | **舊式底線語言碼（`sr_SP`、`pt_BR`）** | .NET 不認得 `sr-SP`，被當成中性語言，整個語言默默沒檢查。用 `ResxReader.LooksLikeCultureTag` | Playnite |
 | 52 | **水平排列依文件順序分寬度** | 前面的先拿、後面的被擠出去。把一整排一起算是 111 筆誤報、43 筆漏報。check 用 `RowSharing.Preceding` | CorpusRender（Playnite） |
-| 53 | **側邊頁籤的判斷要在「自訂範本」分支之前** | 不然專案自己重寫了 TabControl 範本時，頁籤列寬度沒扣，58 個位置高估 | Playnite |
+| 53 | **側邊頁籤要先套範本的觸發器** | 專案自己的 TabControl 範本靠 `TabStripPlacement` 觸發器把標籤列移到 Auto 欄；靜態讀範本只看得到上方的排法，58 個位置高估。現在先套觸發器（只套這個屬性、只接受「設範本裡具名元素的屬性」），標籤列 = 最寬的「標題 + TabItem 範本的標題 chrome」。WPF 預設範本（選取的標籤用負邊距放大）沒建模，維持不知道 | Playnite、LayoutOracle「side tabs」 |
 | 54 | **專案自己的 Window 子類別也有邊框；`WindowChrome` 可以寫在樣式裡** | `ExWindow`／`WindowBase` 沒扣邊框是高估 16 px；樣式裡的 WindowChrome 沒看到是誤報 | ScreenToGif |
 | 55 | **看不見的字寬度是 0** | U+FE0F、200B、200D、FEFF、2060 在 WPF 是 0 寬。⚠ U+FEFF 落在阿拉伯表現形式的範圍裡，要**先**判斷看不見的字 | LayoutOracle `--fallback` |
 | 56 | **對照程式的字型假設要跟工具一樣** | 在繁中 Windows 上畫法文、希臘文會用正黑體 UI；工具假設那些語言的 Windows 用 Segoe UI。差距是字型不是版面 —— 比對前用 `defaultFontByCulture` 對齊 | CorpusRender（ScreenToGif） |
@@ -152,6 +152,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 68 | **只換範本的 ScrollBar 寬度仍是系統寬** | WPF 預設樣式設了 Width 與 MinWidth；專案樣式只換 Template 時，範本根元素寫多寬都沒用（`--scrollbar`）。OverridesDefaultStyle="True" 才由範本決定 | LayoutOracle |
 | 69 | **複製出來的範本要接回原本的資源範圍** | 算範本內距時把範本複製到新文件，複本裡只看得到全域樣式 —— Grid／視窗自己資源裡的捲軸樣式被漏掉，多算 6.5 px。用 LexicalContinuation 從控制項的位置往上找；快取鍵要含資源範圍 | LayoutOracle |
 | 70 | **CorpusRender 拿掉 GridEx 的子元素會讓後面的全部錯格** | 自動排列依順序填格。換成空的佔位元素；換命名空間時要宣告前綴，不然預設命名空間被改掉、DockPanel.Dock 解析不到 | CorpusRender（Playnite） |
+| 71 | **算範本內距時，內容路徑上的樣式也會設字型** | Playnite 的 TabItem 範本把標題放在 `TextBlock Style="{DynamicResource BaseTextBlockStyle}"` 裡。文字是用控制項的字型量的，所以樣式設的值要跟控制項的一樣（同一個資源也算），不一樣就不知道 | Playnite |
 
 ### 環境層級的坑
 
@@ -168,11 +169,11 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 538 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 555 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 42 條 CLI 路徑的退出碼
-dotnet run -c Release --project prototype/LayoutOracle   # 156 案 vs 真的 WPF 視窗（Windows）；有高估就回 1
+dotnet run -c Release --project prototype/LayoutOracle   # 172 案 vs 真的 WPF 視窗（Windows）；有高估就回 1
 ```
 
 **來源語言自我檢驗**（沒有腳本，手動跑）：對一個已經出貨的 App 跑

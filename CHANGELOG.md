@@ -56,6 +56,11 @@ that over-estimated the available width.
 - Templates copied out to compute chrome look up styles from the control's own position, so a
   ScrollBar style in a window's or grid's resources is no longer missed (a 24 px bar was taken as
   the system width: 6.5 px over).
+- Tab strips placed beside the content (`TabStripPlacement="Left"`/`"Right"`) in a project's own
+  `TabControl` template: the template's `TabStripPlacement` triggers are applied, and the strip is
+  measured as its widest tab (header text in each language + the `TabItem` template's header chrome).
+  Templates that rearrange in ways that cannot be read statically, and WPF's default template, stay
+  unknown. Playnite 34.3% → 48.3% without configuration, 55.8% with `gridPanels`.
 - Runs report the files that turn on `UseLayoutRounding`: WPF can shave about one pixel off text
   sized to its content, which XamlFit does not model.
 - `check` and `budget` reject each other's options (`check --sites` used to be accepted and
@@ -78,10 +83,10 @@ that over-estimated the available width.
 
 - **Text width** against WPF `FormattedText`, 1,400 comparisons: mean error 0.039%, worst
   under-estimate 0.068%, worst over-estimate 1.43% (a single kerning pair).
-- **Layout** against real off-screen WPF windows, 156 cases: 127 exact, 29 conservative,
+- **Layout** against real off-screen WPF windows, 172 cases: 143 exact, 29 conservative,
   0 over-estimates (`prototype/LayoutOracle`).
 - **Real project windows** drawn by WPF with their own themes and translations
-  (`prototype/CorpusRender`): Playnite, 2,841 comparisons — 71 clipped by both, 4 false
+  (`prototype/CorpusRender`): Playnite, 4,915 comparisons — 99 clipped by both, 6 false
   alarms, **0 missed**; ScreenToGif, 2,657 comparisons including the editor's side panel and
   drop-downs, same font on both sides — 12 clipped by both, 0 false alarms, and 100 headers that
   WPF draws 0.5–1.2 px short because of `UseLayoutRounding` (not modelled; not a translation
@@ -96,7 +101,7 @@ that over-estimated the available width.
   runs give identical results.
 - **Shipped software**: 984 source-language measurements over ten projects. The only two
   overflows are in the maintainer's app and are real (drawn by WPF).
-- 538 unit tests.
+- 555 unit tests.
 
 ### Not verified
 

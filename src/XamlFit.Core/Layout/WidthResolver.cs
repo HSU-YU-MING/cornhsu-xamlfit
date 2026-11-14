@@ -1008,14 +1008,22 @@ public sealed class WidthResolver
         }
 
         // ⚠ 標籤列／標題放在左右兩側時會吃掉內容區的寬度，而那一欄多寬取決於標題文字。
-        //   這個檢查要在「從範本算」之前：範本通常靠觸發器依位置重排，靜態讀範本只會看到預設（上方）的排法。
-        //   （CorpusRender 實測 Playnite 的 DatabaseFieldsManagerWindow：換了範本的 TabControl、
-        //    TabStripPlacement="Left"，工具算 463、實際 294。）
+        //   範本靠觸發器依位置重排，靜態讀範本只會看到預設（上方）的排法
+        //   （CorpusRender 實測 Playnite 的 DatabaseFieldsManagerWindow：工具算 463、實際 294）。
+        //   專案自己的範本：TemplateChrome 先套上 TabStripPlacement 的觸發器，標籤列變成 Auto 欄，
+        //   由 ElementMeasurer 量（每個 TabItem 的標題 + 標題 chrome，取最寬）。LayoutOracle「side tabs」實測。
+        //   預設範本：選取的標籤用負邊距放大，那套沒有實測過 —— 維持不知道。
         if (EndsWithAny(local, "TabControl"))
         {
             var placement = _styles.ResolveEx(el, "TabStripPlacement", inheritable: false);
-            if (placement.IsUnreadable || (placement.IsValue && IsOneOf(placement.Value, "Left", "Right")))
-                return new(0, false, false, "the tab strip of <TabControl> is placed beside the content");
+            if (placement.IsUnreadable)
+                return new(0, false, false, "TabStripPlacement of <TabControl> is not statically readable");
+            if (placement.IsValue && IsOneOf(placement.Value, "Left", "Right"))
+            {
+                var tpl = _styles.TemplateOf(el);
+                if (tpl.Kind != TemplateKind.Custom || (tpl.Alternatives?.Any(a => a is null) ?? false))
+                    return new(0, false, false, "the tab strip of <TabControl> is placed beside the content, in a template XamlFit cannot rearrange");
+            }
         }
 
         if (EndsWithAny(local, "Expander"))
@@ -1224,6 +1232,17 @@ public sealed class WidthResolver
         var presenter = clone;
         foreach (var index in presenters[0]) presenter = presenter.Elements().ElementAt(index);
 
+        // 標籤列在左右兩側：範本靠 TabStripPlacement 的觸發器重排（標籤列那一欄變 Auto…）。
+        // 這個屬性是靜態讀得到的，所以把那些觸發器先套到複本上。
+        // TabControl 的結果取決於它的標籤（每個語言的標題寬度都不同）→ 不快取。
+        var placement = SidePlacement(control);
+        var itemsDependent = false;
+        if (placement is not null)
+        {
+            if (ApplyPlacementTriggers(template, clone, placement) is { } triggerWhy) return (null, triggerWhy);
+            itemsDependent = controlName.EndsWith("TabControl", StringComparison.Ordinal);
+        }
+
         // 範本自己在內容上設了字型 → 我們量文字用的字型就不對了
         for (XElement? e = presenter; e is not null; e = e.Parent)
             foreach (var a in e.Attributes())
@@ -1287,8 +1306,8 @@ public sealed class WidthResolver
         signature.Append("@").Append(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(control.Document ?? (object)control));
         foreach (var scope in control.AncestorsAndSelf().Where(a => a.Elements().Any(e => e.Name.LocalName.EndsWith(".Resources", StringComparison.Ordinal))))
             signature.Append('/').Append(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(scope));
-        var key = (template, signature.Append(header ? "H" : "C").ToString());
-        if (_templateChrome.TryGetValue(key, out var cached)) return cached;
+        var key = (template, signature.Append(header ? "H" : "C").Append(placement).ToString());
+        if (!itemsDependent && _templateChrome.TryGetValue(key, out var cached)) return cached;
 
         (double?, string) result;
         _templateDepth++;
@@ -1300,9 +1319,15 @@ public sealed class WidthResolver
             if (control.Document?.Annotation<SourceFile>() is { } file) doc.AddAnnotation(file);
             if (control.Document?.Annotation<ExternalTheme>() is { } theme) doc.AddAnnotation(theme);
 
-            var first = Resolve(presenter, 2);
-            frame.SetAttributeValue("Width", "20000");
-            var second = Resolve(presenter, 2);
+            AvailableWidth first, second;
+            if (StyledFontOnPath(control, presenter, frame) is { } fontWhy)
+                first = second = AvailableWidth.NotKnown(WidthStatus.Unmeasurable, fontWhy);
+            else
+            {
+                first = Resolve(presenter, 2);
+                frame.SetAttributeValue("Width", "20000");
+                second = Resolve(presenter, 2);
+            }
 
             if (first.Status != WidthStatus.Known || second.Status != WidthStatus.Known)
             {
@@ -1316,9 +1341,113 @@ public sealed class WidthResolver
         }
         finally { _templateDepth--; }
 
-        _templateChrome[key] = result;
+        if (!itemsDependent) _templateChrome[key] = result;
         return result;
     }
+
+    private static readonly string[] FontProperties = ["FontFamily", "FontSize", "FontWeight", "FontStyle", "FontStretch"];
+
+    /// <summary>
+    /// 範本在內容的路徑上用**樣式**設了字型（Playnite 的 TabItem：TextBlock Style="{DynamicResource BaseTextBlockStyle}"）。
+    /// 文字是用控制項自己的字型量的，所以樣式設的值要跟控制項的一樣（同一個資源也算），不然就不知道。
+    /// </summary>
+    private string? StyledFontOnPath(XElement control, XElement presenter, XElement frame)
+    {
+        for (var e = presenter; e is not null && e != frame; e = e.Parent)
+        {
+            if (e.Attribute("Style") is null) continue;
+            foreach (var property in FontProperties)
+            {
+                var inTemplate = _styles.ResolveEx(e, property, inheritable: false);
+                if (inTemplate.IsUnreadable) return $"the {property} a style sets on the content in that template is not statically readable";
+                if (!inTemplate.IsValue) continue;
+                var own = _styles.ResolveEx(control, property, inheritable: true);
+                if (!own.IsValue || !string.Equals(own.Value!.Trim(), inTemplate.Value!.Trim(), StringComparison.Ordinal))
+                    return $"that template sets {property} on the content through a style";
+            }
+        }
+        return null;
+    }
+
+    /// <summary>TabControl（或它的 TabItem）的標籤列在左右兩側時回 Left／Right；其他情形（含讀不出來）回 null。</summary>
+    private string? SidePlacement(XElement control)
+    {
+        var name = control.Name.LocalName;
+        var owner = name.EndsWith("TabControl", StringComparison.Ordinal) ? control
+            : name.EndsWith("TabItem", StringComparison.Ordinal) && control.Parent is { } p
+              && p.Name.LocalName.EndsWith("TabControl", StringComparison.Ordinal) ? p
+            : null;
+        if (owner is null) return null;
+        var r = _styles.ResolveEx(owner, "TabStripPlacement", inheritable: false);
+        return r.IsValue && IsOneOf(r.Value, "Left", "Right") ? r.Value!.Trim() : null;
+    }
+
+    /// <summary>
+    /// 把範本裡 <c>&lt;Trigger Property="TabStripPlacement" Value="…"&gt;</c> 的 Setter 套到複本上。
+    /// 只接受「設定範本裡某個具名元素的某個屬性」；其他寫法（多條件、設在控制項本身、換樣式）回原因。
+    /// </summary>
+    private static string? ApplyPlacementTriggers(XElement template, XElement clone, string placement)
+    {
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var triggers = template.Elements()
+            .Where(e => e.Name.LocalName.EndsWith(".Triggers", StringComparison.Ordinal))
+            .SelectMany(e => e.Elements());
+
+        foreach (var trigger in triggers)
+        {
+            var mentions = trigger.DescendantsAndSelf().Any(d =>
+                d.Attributes().Any(a => a.Name.LocalName is "Property" or "Binding"
+                                        && a.Value.Contains("TabStripPlacement", StringComparison.Ordinal)
+                                        && d.Name.LocalName is not "Setter"));
+            if (!mentions) continue;
+            if (trigger.Name.LocalName != "Trigger")
+                return "that template rearranges itself with a multi-condition or data trigger on TabStripPlacement";
+            if (!string.Equals(trigger.Attribute("Value")?.Value.Trim(), placement, StringComparison.OrdinalIgnoreCase)) continue;
+
+            foreach (var setter in trigger.Elements())
+            {
+                if (setter.Name.LocalName != "Setter")
+                    return "a TabStripPlacement trigger in that template does more than set properties";
+                var property = setter.Attribute("Property")?.Value.Trim();
+                var target = setter.Attribute("TargetName")?.Value.Trim();
+                var value = setter.Attribute("Value")?.Value;
+                if (property is null || value is null)
+                    return "a TabStripPlacement trigger in that template sets a value that is not written as an attribute";
+                if (target is null)
+                    return $"a TabStripPlacement trigger in that template sets {property} on the control itself";
+                var element = clone.DescendantsAndSelf().FirstOrDefault(e =>
+                    (string?)e.Attribute(x + "Name") == target || (string?)e.Attribute("Name") == target);
+                if (element is null)
+                    return $"a TabStripPlacement trigger in that template targets {target}, which is not in it";
+                if (property is "Style" or "Template"
+                    || element.Elements().Any(c => c.Name.LocalName == element.Name.LocalName + "." + property))
+                    return $"a TabStripPlacement trigger in that template replaces {property} of {target}";
+                element.SetAttributeValue(property, value);
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 給 <see cref="ElementMeasurer"/> 量 TabItem 用：標題區的內距（標題文字以外的寬度）。不知道回 null。
+    /// 範本裡有寫死寬度的元素時不量：標籤可能比「標題 + 內距」寬，算小了就是把內容區算大。
+    /// </summary>
+    internal double? ItemHeaderInset(XElement item)
+    {
+        var template = _styles.TemplateOf(item);
+        if (template.Kind == TemplateKind.Custom)
+            foreach (var alternative in template.Alternatives ?? [template.Template])
+                if (alternative is not null && FixesAWidth(alternative)) return null;
+
+        var inset = HeaderInset(item, ThemeOf(item));
+        return inset.Blocked is null ? inset.Inset : null;
+    }
+
+    private static bool FixesAWidth(XElement template) =>
+        template.Descendants().Any(e =>
+            (e.Attribute("Width") is { } w && e.Name.LocalName != "RowDefinition" && !IsOneOf(w.Value, "Auto", "NaN"))
+            || e.Attribute("MinWidth") is not null
+            || (e.Name.LocalName == "Setter" && (string?)e.Attribute("Property") is "Width" or "MinWidth"));
 
     private static bool IsProjectType(XElement el)
     {

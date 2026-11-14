@@ -170,9 +170,11 @@ public class TemplateChromeTests
     }
 
     [Fact]
-    public void A_side_tab_strip_is_not_guessed_even_with_a_custom_template()
+    public void A_template_that_ignores_the_placement_is_read_as_written()
     {
-        // 範本靠觸發器依 TabStripPlacement 重排；靜態讀範本只看得到預設（上方）的排法
+        // 這個範本把標籤列寫死在上方，不理 TabStripPlacement：內容區是整個寬度
+        //（LayoutOracle「side tabs Left, template docks the strip on top」實測 500／500）。
+        // 依位置重排的範本見 SideTabStripTests。
         var w = Page("""
             <TabControl Width="400" TabStripPlacement="Left">
               <TabControl.Template>
@@ -183,8 +185,8 @@ public class TemplateChromeTests
               <TabItem Header="A"><TextBlock x:Name="probe"/></TabItem>
             </TabControl>
             """);
-        Assert.Equal(WidthStatus.Unmeasurable, w.Status);
-        Assert.Contains("beside the content", w.Reason);
+        Assert.Equal(WidthStatus.Known, w.Status);
+        Assert.Equal(400, w.Px, 3);
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Xml.Linq;
 using XamlFit.Core.Fonts;
 using XamlFit.Core.Xaml;
@@ -66,10 +67,8 @@ public sealed class ElementMeasurer : IElementMeasurer
         if (visibility.IsUnreadable) return null;
         if (visibility.IsValue && visibility.Value!.Equals("Collapsed", StringComparison.OrdinalIgnoreCase)) return 0;
 
-        // LayoutTransform 會改變期望尺寸
-        if (element.Attribute("LayoutTransform") is not null
-            || element.Elements().Any(e => e.Name.LocalName.EndsWith(".LayoutTransform", StringComparison.Ordinal)))
-            return null;
+        // LayoutTransform 會改變期望尺寸（全是單位變換的不算：Playnite 的標籤列就掛了一組 1 倍、0 度的）
+        if (!IdentityLayoutTransform(element)) return null;
 
         if (Sum(element, "Margin") is not { } margin) return null;
 
@@ -125,6 +124,20 @@ public sealed class ElementMeasurer : IElementMeasurer
                 }
                 return Finish(widest);
             }
+        }
+
+        // 標籤列（TabControl 範本裡 IsItemsHost 的 TabPanel，標籤列在左右兩側時）：最寬的那個標籤
+        if (ChromeTable.IsWpf(element, "TabPanel")
+            && string.Equals(element.Attribute("IsItemsHost")?.Value.Trim(), "True", StringComparison.OrdinalIgnoreCase))
+            return SideTabStrip(element, depth) is { } strip ? Finish(strip) : null;
+
+        // 一個標籤：標題文字 + 標題區的內距（從它的範本算）
+        if (ChromeTable.IsWpf(element, "TabItem"))
+        {
+            if (TabHeaderText(element) is not { } header) return null;
+            if (_resolver?.ItemHeaderInset(element) is not { } headerInset) return null;
+            if (MeasureText(element, header) is not { } headerWidth) return null;
+            return Finish(headerWidth + headerInset);
         }
 
         // 內部內距（Padding / BorderThickness / 控制項 chrome）。不知道就不算。
@@ -247,27 +260,7 @@ public sealed class ElementMeasurer : IElementMeasurer
 
         if (prop is null) return (false, null);
 
-        if (element.Attribute(prop)?.Value is { } v)
-        {
-            v = v.Trim();
-            if (v.StartsWith("{}", StringComparison.Ordinal)) return (true, v[2..]);
-            if (v.StartsWith('{'))
-            {
-                // 在地化字串：這個語言的文字查得到就量得出來
-                var key = XamlScanner.ResourceKeyOf(v) ?? StyleIndex.ResourceKeyOf(v);
-                if (key is not null && ResourceText is not null)
-                {
-                    if (ResourceText(key) is { } localized)
-                    {
-                        ResourceLookups++;
-                        return (true, localized);
-                    }
-                    ResourceMisses++;
-                }
-                return (true, null);   // 綁定，或查不到的鍵：值未知
-            }
-            return (true, v);
-        }
+        if (element.Attribute(prop)?.Value is { } v) return (true, AttributeText(v));
 
         if (local is "TextBlock" or "Run")
         {
@@ -279,6 +272,105 @@ public sealed class ElementMeasurer : IElementMeasurer
         return element.Elements().Any() || !string.IsNullOrWhiteSpace(element.Value)
             ? (true, null)
             : (true, "");
+    }
+
+    /// <summary>屬性寫的文字：字面值、或查得到這個語言譯文的資源。綁定與查不到的鍵回 null。</summary>
+    private string? AttributeText(string v)
+    {
+        v = v.Trim();
+        if (v.StartsWith("{}", StringComparison.Ordinal)) return v[2..];
+        if (!v.StartsWith('{')) return v;
+
+        // 在地化字串：這個語言的文字查得到就量得出來
+        var key = XamlScanner.ResourceKeyOf(v) ?? StyleIndex.ResourceKeyOf(v);
+        if (key is not null && ResourceText is not null)
+        {
+            if (ResourceText(key) is { } localized)
+            {
+                ResourceLookups++;
+                return localized;
+            }
+            ResourceMisses++;
+        }
+        return null;   // 綁定，或查不到的鍵：值未知
+    }
+
+    /// <summary>TabItem 標題的文字。用範本或子元素畫的標題、讀不出來的值回 null。</summary>
+    private string? TabHeaderText(XElement item)
+    {
+        var template = _styles.ResolveEx(item, "HeaderTemplate", inheritable: false);
+        if (template.IsUnreadable || template.IsValue) return null;
+        if (item.Elements().Any(e => e.Name.LocalName.EndsWith(".Header", StringComparison.Ordinal))) return null;
+
+        if (item.Attribute("Header")?.Value is { } local) return AttributeText(local);
+        var r = _styles.ResolveEx(item, "Header", inheritable: false);
+        if (r.IsUnreadable) return null;
+        return r.IsValue ? AttributeText(r.Value!) : "";
+    }
+
+    /// <summary>
+    /// 標籤列在左右兩側時，TabControl 範本裡的 TabPanel 有多寬：一個標籤一列，取最寬的。
+    /// 只在算範本內距的複本裡才會遇到（根元素帶著回到控制項的 <see cref="StyleIndex.LexicalContinuation"/>）。
+    /// 項目來自 ItemsSource、或有項目樣式／範本：不知道。
+    /// </summary>
+    private double? SideTabStrip(XElement panel, int depth)
+    {
+        if (panel.AncestorsAndSelf().Last().Annotation<StyleIndex.LexicalContinuation>()?.From is not { } control
+            || !control.Name.LocalName.EndsWith("TabControl", StringComparison.Ordinal))
+            return null;
+
+        // 上下的標籤列會換行，寬度不是這樣算
+        var placement = _styles.ResolveEx(control, "TabStripPlacement", inheritable: false);
+        if (!placement.IsValue || !WidthResolver.IsOneOf(placement.Value, "Left", "Right")) return null;
+
+        foreach (var property in (ReadOnlySpan<string>)["ItemsSource", "ItemContainerStyle", "ItemContainerStyleSelector", "ItemTemplate", "ItemTemplateSelector"])
+        {
+            var r = _styles.ResolveEx(control, property, inheritable: false);
+            if (r.IsUnreadable || r.IsValue) return null;
+        }
+
+        double widest = 0;
+        foreach (var child in control.Elements())
+        {
+            var name = child.Name.LocalName;
+            if (name.Contains('.', StringComparison.Ordinal))
+            {
+                if (name.EndsWith(".Items", StringComparison.Ordinal)) return null;
+                continue;
+            }
+            if (!ChromeTable.IsWpf(child, "TabItem")) return null;
+            if (DesiredWidth(child, depth + 1) is not { } w) return null;
+            widest = Math.Max(widest, w);
+        }
+        return widest;
+    }
+
+    /// <summary>沒有 LayoutTransform、或全是單位變換（1 倍、0 度；平移在版面變換裡不算數）。</summary>
+    private static bool IdentityLayoutTransform(XElement element)
+    {
+        var property = element.Elements().Where(e => e.Name.LocalName.EndsWith(".LayoutTransform", StringComparison.Ordinal)).ToList();
+        if (element.Attribute("LayoutTransform") is not null) return false;
+        if (property.Count == 0) return true;
+        if (property.Count != 1) return false;
+        var transforms = property[0].Elements().ToList();
+        return transforms.Count == 1 && IdentityTransform(transforms[0]);
+    }
+
+    private static bool IdentityTransform(XElement t)
+    {
+        bool Is(string attribute, double expected) =>
+            t.Attribute(attribute) is not { } a
+            || (double.TryParse(a.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && v == expected);
+
+        return t.Name.LocalName switch
+        {
+            "TransformGroup" => t.Elements().All(IdentityTransform),
+            "ScaleTransform" => !t.HasElements && Is("ScaleX", 1) && Is("ScaleY", 1),
+            "SkewTransform" => !t.HasElements && Is("AngleX", 0) && Is("AngleY", 0),
+            "RotateTransform" => !t.HasElements && Is("Angle", 0),
+            "TranslateTransform" => true,
+            _ => false,
+        };
     }
 
     /// <summary>Padding + BorderThickness + 控制項 chrome。讀不出來或 chrome 未知時回 null。
