@@ -16,6 +16,8 @@ internal static class BudgetCommand
         if (opts.Root is null) { Console.Error.WriteLine("budget needs a root directory"); return 2; }
         if (!Directory.Exists(opts.Root)) { Console.Error.WriteLine($"not a directory: {opts.Root}"); return 2; }
 
+        if (CommonOptions.ApplyConfig(opts) is var cfgCode and not 0) return cfgCode;
+
         var fonts = CommonOptions.LoadFonts(opts, out var fontError);
         if (fontError is not null) { Console.Error.WriteLine(fontError); return 2; }
 
@@ -24,6 +26,7 @@ internal static class BudgetCommand
         {
             DefaultFontFamily = opts.DefaultFont,
             DefaultFontSize = opts.DefaultSize,
+            ExcludeGlobs = opts.Exclude,
         }, fonts);
 
         var scan = scanner.Scan(opts.Root);
@@ -126,6 +129,8 @@ internal sealed class CommonOptions
     public double MarginPercent { get; set; } = 5;
     public List<string> ResxDirs { get; } = [];
     public List<string> Cultures { get; } = [];
+    public List<string> Exclude { get; } = [];
+    public List<string> UsedAtRuntime { get; } = [];
 
     /// <summary>CSV 不做公式中和。餵進翻譯平台 API、需要逐位元組相同的原文時用。</summary>
     public bool CsvRaw { get; set; }
@@ -133,6 +138,15 @@ internal sealed class CommonOptions
     public string FailOn { get; set; } = "fail";
     public string? BaselinePath { get; set; }
     public string? WriteBaselinePath { get; set; }
+    public string? ConfigPath { get; set; }
+    public string? SarifPath { get; set; }
+    public bool MsBuild { get; set; }
+
+    /// <summary>旗標有沒有被明寫。⚠ 設定檔只能補旗標**沒給**的值，不能蓋掉旗標 ——
+    /// 命令列是當下的意圖，設定檔是預設值。</summary>
+    private readonly HashSet<string> _explicitFlags = new(StringComparer.Ordinal);
+
+    public bool WasGiven(string flag) => _explicitFlags.Contains(flag);
 
     public static CommonOptions Parse(string[] args, out string? error)
     {
@@ -142,6 +156,8 @@ internal sealed class CommonOptions
         for (var i = 0; i < args.Length; i++)
         {
             var a = args[i];
+            if (a.StartsWith("--", StringComparison.Ordinal)) o._explicitFlags.Add(a);
+
             string? Next(string flag)
             {
                 if (i + 1 >= args.Length || args[i + 1].StartsWith('-'))
@@ -161,6 +177,9 @@ internal sealed class CommonOptions
                 case "--write-baseline": o.WriteBaselinePath = Next(a); break;
                 case "--pseudo": o.Pseudo = true; break;
                 case "--csv-raw": o.CsvRaw = true; break;
+                case "--config": o.ConfigPath = Next(a); break;
+                case "--sarif": o.SarifPath = Next(a); break;
+                case "--msbuild": o.MsBuild = true; break;
 
                 case "--fail-on":
                     var fo = Next(a);
@@ -203,6 +222,55 @@ internal sealed class CommonOptions
             && double.TryParse(v, NumberStyles.Float, CultureInfo.InvariantCulture, out value)
             && double.IsFinite(value)
             && value >= min && value <= max;
+    }
+
+    /// <summary>
+    /// 套用 <c>xamlfit.config.json</c>。
+    ///
+    /// ⚠ 只補旗標**沒給**的值。命令列是當下的意圖，設定檔是預設值 ——
+    ///   反過來會讓使用者在命令列寫了東西卻沒生效，而且不會有任何提示。
+    /// ⚠ 設定檔寫錯要 exit 2 並指出欄位名，不能靜默忽略。
+    /// </summary>
+    public static int ApplyConfig(CommonOptions o)
+    {
+        var path = o.ConfigPath;
+        if (path is null)
+        {
+            var beside = Path.Combine(o.Root ?? ".", FitConfig.DefaultFileName);
+            if (!File.Exists(beside)) return 0;      // 沒有設定檔是正常的
+            path = beside;
+        }
+        else if (!File.Exists(path))
+        {
+            Console.Error.WriteLine($"config file not found: {path}");
+            return 2;
+        }
+
+        var (config, problems) = FitConfig.Load(path);
+        if (problems.Count > 0)
+        {
+            Console.Error.WriteLine($"{path} has {problems.Count} problem(s):");
+            foreach (var p in problems) Console.Error.WriteLine($"  {p}");
+            return 2;
+        }
+        if (config is null) return 2;
+
+        Console.Error.WriteLine($"config: {path}");
+
+        if (!o.WasGiven("--default-font") && config.DefaultFontFamily is { } fam) o.DefaultFont = fam;
+        if (!o.WasGiven("--default-size") && config.DefaultFontSize is { } size) o.DefaultSize = size;
+        if (!o.WasGiven("--margin") && config.MarginPercent is { } margin) o.MarginPercent = margin;
+        if (!o.WasGiven("--min-coverage") && config.MinCoverage is { } cov) o.MinCoverage = cov;
+        if (!o.WasGiven("--metrics") && config.Metrics is { } metrics) o.MetricsPath = metrics;
+
+        if (config.Exclude is { Count: > 0 } excl) o.Exclude.AddRange(excl);
+        if (config.UsedAtRuntime is { Count: > 0 } runtime) o.UsedAtRuntime.AddRange(runtime);
+
+        // 清單型的：旗標給了就不從設定檔補（不要混成一個難以預測的聯集）
+        if (o.ResxDirs.Count == 0 && config.Resx is { Count: > 0 } resx) o.ResxDirs.AddRange(resx);
+        if (o.Cultures.Count == 0 && config.Cultures is { Count: > 0 } cultures) o.Cultures.AddRange(cultures);
+
+        return 0;
     }
 
     public static FontResolver LoadFonts(CommonOptions o, out string? error)

@@ -209,7 +209,41 @@ a guess should not block someone's pull request.
 
 ## Configuration
 
-Everything is a command-line flag today; a config file is a 0.x roadmap item.
+`xamlfit.config.json` next to the scanned root, or `--config <path>`:
+
+```jsonc
+{
+  "schemaVersion": 1,
+  "defaultFontFamily": "Segoe UI",
+  "defaultFontSize": 12,
+  "marginPercent": 5,
+  "minCoverage": 60,
+  "metrics": "xamlfit.fonts.json",
+  "exclude": ["/Generated/"],
+  "resx": ["Resources"],
+  "cultures": ["de", "fr"]
+}
+```
+
+Comments and trailing commas are allowed. **Command-line flags always win over the file** —
+the command line is what you meant right now, the file is a default.
+
+A misspelled property is an **error**, not a silent skip: the run exits 2 and names the
+property. A typo that gets quietly ignored is the worst thing a config file can do.
+
+## CI output
+
+```bash
+xamlfit check ./src --resx ./Resources --sarif fit.sarif --msbuild
+```
+
+`--sarif` writes SARIF 2.1.0 for GitHub code scanning, one rule per finding kind so the
+Security tab can triage them separately. `reflow` is left out — it is not a defect.
+
+`--msbuild` prints MSBuild diagnostics on stdout, so a `dotnet build` that runs the tool via
+`Exec` surfaces them in the Visual Studio Error List: `XF0001` for gated findings, `XF0002` for
+warnings, and `XF0003` when the result is not trustworthy — because a build that passes while
+the tool only saw part of the UI is worse than one that fails.
 
 Suppress a single slot with a reason — the reason is required, and suppressed slots are counted:
 

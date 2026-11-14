@@ -34,6 +34,8 @@ internal static class Usage
               --metrics <path>     Metrics file (default: xamlfit.fonts.json next to <root>)
               --min-coverage <n>   Resolution floor, 0-100. Below it: exit 3.
                                    Default 0 for budget (an export, not a gate), 60 for check.
+              --config <path>      Config file (default: xamlfit.config.json next to <root>).
+                                   Command-line flags always win over the file.
               --default-font <s>   Font family assumed when XAML does not say (default: Segoe UI)
               --default-size <n>   Font size assumed when XAML does not say (default: 12)
 
@@ -46,6 +48,10 @@ internal static class Usage
               --fail-on <level>    'fail' (default) or 'warn'
               --baseline <path>    Only report findings not in this baseline
               --write-baseline <p> Write current findings as a baseline and exit 0
+              --sarif <path>       Write SARIF 2.1.0 (GitHub code scanning)
+              --msbuild            Also print MSBuild diagnostics on stdout, so Visual Studio
+                                   lists them in the Error List (XF0001 gated, XF0002 warning,
+                                   XF0003 result not trustworthy)
 
             EXIT CODES
               0  pass

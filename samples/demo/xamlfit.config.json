@@ -1,0 +1,8 @@
+{
+  // 註解與尾逗號都允許
+  "schemaVersion": 1,
+  "defaultFontFamily": "XamlFit Demo Sans",
+  "defaultFontSize": 12,
+  "marginPercent": 5,
+  "resx": ["samples/demo/Resources"],
+}

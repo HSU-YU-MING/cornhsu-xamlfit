@@ -34,8 +34,7 @@
 
 其他：
 
-- `xamlfit.config.json` 實際載入（目前只有 CLI 旗標）
-- SARIF 輸出與 `--msbuild` 診斷格式（跟家族其他兩支對齊）
+- ~~`xamlfit.config.json` 實際載入~~ 與 ~~SARIF 輸出與 `--msbuild` 診斷格式~~ —— **都已完成**
 - `action.yml` 的實測
 - ~~TextBox / PasswordBox / ComboBox 的 chrome~~ —— **已完成**（6.0 / 6.0 / 27.8 DIP）
 

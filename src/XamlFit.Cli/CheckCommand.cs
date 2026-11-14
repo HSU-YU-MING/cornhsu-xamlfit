@@ -15,11 +15,17 @@ internal static class CheckCommand
         if (!Directory.Exists(opts.Root)) { Console.Error.WriteLine($"not a directory: {opts.Root}"); return 2; }
 
         // check 是閘門，所以覆蓋率下限預設是 60（budget 是匯出，預設 0）
-        if (!args.Contains("--min-coverage")) opts.MinCoverage = 60;
+        if (!opts.WasGiven("--min-coverage")) opts.MinCoverage = 60;
+
+        // ⚠ 設定檔要在「必填參數檢查」**之前**套用。
+        //   反過來的話，設定檔裡寫了 resx 也永遠不會生效 —— 檢查會先把人擋掉。
+        if (CommonOptions.ApplyConfig(opts) is var cfgCode and not 0) return cfgCode;
 
         if (!opts.Pseudo && opts.ResxDirs.Count == 0)
         {
-            Console.Error.WriteLine("check needs --resx <dir> (real translations) or --pseudo (simulate expansion)");
+            Console.Error.WriteLine(
+                "check needs translations: pass --resx <dir>, set \"resx\" in xamlfit.config.json, " +
+                "or use --pseudo to simulate expansion");
             return 2;
         }
 
@@ -31,6 +37,7 @@ internal static class CheckCommand
         {
             DefaultFontFamily = opts.DefaultFont,
             DefaultFontSize = opts.DefaultSize,
+            ExcludeGlobs = opts.Exclude,
         }, fonts);
 
         var scan = scanner.Scan(opts.Root);
@@ -118,16 +125,42 @@ internal static class CheckCommand
             if (reported.Count > 40) Console.WriteLine($"  … and {reported.Count - 40} more");
         }
 
+        // ⚠ 退出碼要先算出來：MSBuild 的 XF0003（結果不可信）需要它，
+        //   而那一行必須跟其他診斷一起出現在同一次輸出裡。
+        var gate = opts.FailOn == "warn" ? FitSeverity.Warn : FitSeverity.Fail;
+        var exitCode = DecideExit(s, reported, opts, gate);
+
         if (opts.JsonPath is not null)
         {
             File.WriteAllText(opts.JsonPath, CheckReport.ToJson(result, reported, CommonOptions.ToolVersion()));
             Console.WriteLine($"\nwrote {opts.JsonPath}");
         }
 
-        // ===== 退出碼 =====
+        if (opts.SarifPath is not null)
+        {
+            File.WriteAllText(opts.SarifPath, CheckDiagnostics.ToSarif(reported, CommonOptions.ToolVersion()));
+            Console.WriteLine($"wrote {opts.SarifPath}");
+        }
+
+        // MSBuild 的診斷走 stdout，Exec 才逐行抓得到
+        if (opts.MsBuild)
+            Console.Write(CheckDiagnostics.ToMsBuild(reported, opts.Root, gate, exitCode));
+
+        return exitCode;
+    }
+
+    /// <summary>
+    /// 退出碼契約。⚠ 判定順序就是語意：**「結果不可信」排在「有沒有 finding」前面** ——
+    /// 只看到三成就說「沒問題」是謊報健康。
+    /// </summary>
+    private static int DecideExit(
+        CheckSummary s, IReadOnlyList<FitFinding> reported, CommonOptions opts, FitSeverity gate)
+    {
         if (s.Budget.LocalizableSites == 0)
         { Console.Error.WriteLine("\nno localizable text sites found — result is not trustworthy"); return 3; }
 
+        // ⚠ 閘門看的是 Resolution 不是 Coverage。Coverage 的分母含「查不到上界」的位置，
+        //   那是靜態分析的天花板 —— 拿它當閘門會對每個專案開火，而永遠開火的閘門會被關掉。
         if (s.Budget.Resolution < opts.MinCoverage)
         {
             Console.Error.WriteLine(
@@ -142,7 +175,6 @@ internal static class CheckCommand
             return 3;
         }
 
-        var gate = opts.FailOn == "warn" ? FitSeverity.Warn : FitSeverity.Fail;
         var blocking = reported.Count(f => f.Severity >= gate);
         if (blocking > 0)
         {
