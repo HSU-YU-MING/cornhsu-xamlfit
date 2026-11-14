@@ -1,5 +1,9 @@
 # Grid 求解驗收（v2 第一項）
 
+> ⚠ **第 6、7 節（ComboBox、ItemsControl）的可解析率數字已經作廢。** ItemsControl 那一節建立在
+> 「清單的寬度是硬上界」這個錯的語意上（ListBox／ListView 預設會水平捲動）。
+> Grid 求解本身的對照仍然成立，並且在 M6 補上了星號欄的 Min/Max 重新分配。見 `M6-全面重讀.md`。
+
 > 日期：2026-11-14
 > 真值來源：WPF 真實版面（`XamlReader` 建樹 + `Measure`/`Arrange`）
 > 驗證工具：`prototype/GridOracle`（拋棄式，Windows only）

@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace XamlFit.Core.Fonts;
 
 /// <summary>為什麼一個文字位置量不到。報告要能說出原因，不能只說「量不到」。</summary>
@@ -15,25 +17,58 @@ public sealed record FontLookup(
     FontMissReason Miss,
     string? MissingFamily,
     /// <summary>Chain 的前幾支是 XAML 明寫的；其餘是自動補的後備。</summary>
-    int DeclaredCount = int.MaxValue);
+    int DeclaredCount = int.MaxValue)
+{
+    /// <summary>給使用者看的缺漏說明；有度量時是 null。</summary>
+    public string? MissDescription => Miss switch
+    {
+        FontMissReason.NoSuchFamily => $"no metrics for font family '{MissingFamily}'",
+        FontMissReason.NoSuchFace => $"no metrics for this weight/style of '{MissingFamily}'",
+        _ => null,
+    };
+}
 
 /// <summary>
 /// 把 XAML 的 <c>FontFamily</c>／<c>FontWeight</c>／<c>FontStyle</c> 對應到度量。
 ///
 /// 支援 WPF 的後備清單寫法：<c>FontFamily="Segoe UI, Microsoft JhengHei"</c> ——
 /// 逐個碼位往後找第一支畫得出來的（實際的逐碼位後備在 <see cref="TextMeasure"/>）。
+///
+/// ⚠ **寧可說「沒有這支字型的度量」，也不要拿別支字型去量。** 全面重讀時發現第一版有三個
+///   會默默量錯的地方：
+///
+///   1. 清單的**第一個**家族不在度量檔裡時，直接拿第二個去量。
+///      <c>"Segoe UI Variable, Segoe UI"</c> 在 Windows 11 上用的是前者，寬度不一樣。
+///   2. 字重取「最接近的」而且**沒有距離上限**：度量檔只有 Regular 時，粗體文字用 Regular 的寬度去量。
+///      粗體比較寬（Segoe UI 約 +7%），連 WPF 的模擬粗體也比較寬（LayoutOracle 實測）—— 低估文字寬度就是漏報。
+///   3. 壓縮字面（Arial Narrow 在字型家族模型裡屬於 Arial）可能被挑去量正常寬度的文字。
 /// </summary>
 public sealed class FontResolver
 {
     private readonly List<FontMetrics> _all;
     private readonly Dictionary<string, List<FontMetrics>> _byFamily;
+    private readonly Dictionary<string, List<FontMetrics>> _byLegacy;
+    private readonly HashSet<string> _absent;
 
-    public FontResolver(IEnumerable<FontMetrics> metrics)
+    /// <param name="absentFamilies">使用者宣告「目標機器上沒有」的家族：出現在後備清單裡時直接跳過。</param>
+    public FontResolver(IEnumerable<FontMetrics> metrics, IEnumerable<string>? absentFamilies = null)
     {
         _all = [.. metrics];
         _byFamily = _all
             .GroupBy(m => Normalize(m.Family), StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+
+        // 其他語言的家族名（「微軟正黑體」）指向同一組字面
+        foreach (var m in _all)
+            foreach (var alias in m.Aliases)
+                if (_byFamily.TryGetValue(Normalize(m.Family), out var faces))
+                    _byFamily.TryAdd(Normalize(alias), faces);
+        _byLegacy = _all
+            .Where(m => !string.IsNullOrWhiteSpace(m.LegacyFamily)
+                        && !string.Equals(Normalize(m.LegacyFamily!), Normalize(m.Family), StringComparison.Ordinal))
+            .GroupBy(m => Normalize(m.LegacyFamily!), StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+        _absent = new HashSet<string>((absentFamilies ?? []).Select(Normalize), StringComparer.Ordinal);
     }
 
     public int FamilyCount => _byFamily.Count;
@@ -54,21 +89,37 @@ public sealed class FontResolver
         if (names.Count == 0) names = [defaultFamily];
 
         var chain = new List<FontMetrics>();
-        string? firstMissing = null;
-        var sawFamily = false;
 
         foreach (var n in names)
         {
-            if (!_byFamily.TryGetValue(Normalize(n), out var faces))
+            var key = Normalize(n);
+            if (_absent.Contains(key)) continue;
+
+            FontMetrics? face = null;
+            var known = false;
+
+            if (_byFamily.TryGetValue(key, out var faces))
             {
-                firstMissing ??= n;
-                continue;
+                known = true;
+                face = PickFace(faces, weight, style, strict: true);
+            }
+            else if (_byLegacy.TryGetValue(key, out var legacy))
+            {
+                // 舊式家族名（"Segoe UI Semibold"）：那個名字本身就指定了字面，只接受不另外加粗的寫法
+                known = true;
+                if (weight == 400) face = PickStyle(legacy, style)?.FirstOrDefault();
             }
 
-            sawFamily = true;
-            var best = PickFace(faces, weight, style);
-            if (best is not null) chain.Add(best);
+            if (face is not null) { chain.Add(face); continue; }
+
+            // ⚠ 主要字型（清單裡第一支可用的）不知道就不能量 —— 後面那支只是它畫不出來時的後備。
+            //   主要字型已經找到之後，後面的缺漏只影響後備，交給自動後備並標記。
+            if (chain.Count == 0)
+                return new FontLookup([], known ? FontMissReason.NoSuchFace : FontMissReason.NoSuchFamily, n, 0);
         }
+
+        if (chain.Count == 0)
+            return new FontLookup([], FontMissReason.NoSuchFamily, names[0], 0);
 
         var declared = chain.Count;
 
@@ -78,46 +129,65 @@ public sealed class FontResolver
         //   實測 QuillNest 的可量測字串因此掉到個位數。
         //   所以這裡自動把度量檔裡其他家族接在後面，並標記「用到自動後備」：
         //   Windows 實際選哪一支我們不知道，報告要講出來。
-        if (AutoFallback && chain.Count > 0)
+        if (AutoFallback)
         {
             var already = new HashSet<string>(chain.Select(c => Normalize(c.Family)), StringComparer.Ordinal);
             foreach (var family in _byFamily)
             {
-                if (already.Contains(family.Key)) continue;
-                var face = PickFace(family.Value, weight, style);
-                if (face is not null) chain.Add(face);
+                var face = PickFace(family.Value, weight, style, strict: false);
+                // 別名與本名指向同一組字面，用字面的家族名去重
+                if (face is not null && already.Add(Normalize(face.Family))) chain.Add(face);
             }
         }
 
-        if (chain.Count > 0) return new FontLookup(chain, FontMissReason.None, null, declared);
-
-        return new FontLookup(
-            [],
-            sawFamily ? FontMissReason.NoSuchFace : FontMissReason.NoSuchFamily,
-            firstMissing ?? names[0],
-            0);
+        return new FontLookup(chain, FontMissReason.None, null, declared);
     }
 
     /// <summary>自動補上度量檔裡的其他字型當後備（模仿 Windows 的字型連結）。
     /// 關掉它會讓缺字的位置一律變成不可量測 —— 更保守，但覆蓋率會大幅下降。</summary>
     public bool AutoFallback { get; init; } = true;
 
+    /// <summary>字重相差超過這個值就不算同一個字面（Regular 400 與 Bold 700 之間不能互相代替）。</summary>
+    private const int MaxWeightDistance = 100;
+
     /// <summary>
-    /// 字重比對。先要樣式對得上，再挑字重最接近的。
-    ///
-    /// ⚠ 不用 CSS 的完整字重比對演算法（那個規則在 400/500 附近有刻意的不對稱）——
-    ///   對 UI 文字量測來說，取最接近的就夠，而且行為好預測。差異記在盲區表。
+    /// 挑字面：寬度要是 Normal、樣式對得上、字重最接近。
     /// </summary>
-    private static FontMetrics? PickFace(List<FontMetrics> faces, int weight, FontStyleKind style)
+    /// <param name="strict">主要字型用嚴格規則（字重太遠就不要）；自動後備用寬鬆規則
+    /// （後備字型多半是 CJK，全形字的寬度不隨字重變）。</param>
+    private static FontMetrics? PickFace(List<FontMetrics> faces, int weight, FontStyleKind style, bool strict)
     {
-        var sameStyle = faces.Where(f => f.Style == style).ToList();
+        var candidates = PickStyle(faces, style);
+        if (candidates is null) return null;
 
-        // 要斜體但沒有真斜體時，退回正體並讓報告標註 ——
-        // WPF 會做合成斜體（寬度幾乎不變），所以用正體的寬度是合理近似。
-        if (sameStyle.Count == 0) sameStyle = faces;
-        if (sameStyle.Count == 0) return null;
+        if (strict)
+        {
+            // 可變字型的檔案裡只有預設軸位置的寬度；其他字重的寬度在 HVAR／gvar 裡，我們沒讀
+            candidates = candidates.Where(f => !f.Variable || f.Weight == weight).ToList();
+            if (candidates.Count == 0) return null;
+        }
 
-        return sameStyle.MinBy(f => Math.Abs(f.Weight - weight));
+        // 距離相同時：要粗的往粗的挑，要細的往細的挑（WPF／CSS 的字重比對方向）
+        var best = candidates
+            .OrderBy(f => Math.Abs(f.Weight - weight))
+            .ThenBy(f => weight >= 500 ? -f.Weight : f.Weight)
+            .First();
+
+        return strict && Math.Abs(best.Weight - weight) > MaxWeightDistance ? null : best;
+    }
+
+    /// <summary>寬度 Normal、樣式對得上的字面。要斜體但沒有真斜體時退回正體 ——
+    /// WPF 會做合成斜體，前進寬度不變。要正體卻只有斜體則沒有可用的。</summary>
+    private static List<FontMetrics>? PickStyle(List<FontMetrics> faces, FontStyleKind style)
+    {
+        var normalWidth = faces.Where(f => f.Stretch.Equals("Normal", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (normalWidth.Count == 0) return null;
+
+        var wantUpright = style == FontStyleKind.Normal;
+        var same = normalWidth.Where(f => (f.Style == FontStyleKind.Normal) == wantUpright).ToList();
+        if (same.Count > 0) return same;
+
+        return wantUpright ? null : normalWidth;
     }
 
     public static List<string> SplitFamilies(string? fontFamily)
@@ -141,12 +211,22 @@ public sealed class FontResolver
     }
 
     /// <summary>WPF 的 FontWeight 名稱 → 數值。認不得就回 400。</summary>
-    public static int ParseWeight(string? v)
+    public static int ParseWeight(string? v) => TryParseWeight(v, out var w) ? w : 400;
+
+    /// <summary>沒寫（null／空白）算成功，是 400。寫了但認不得才是 false。</summary>
+    public static bool TryParseWeight(string? v, out int weight)
     {
-        if (string.IsNullOrWhiteSpace(v)) return 400;
+        weight = 400;
+        if (string.IsNullOrWhiteSpace(v)) return true;
+
         var t = v.Trim();
-        if (int.TryParse(t, out var n) && n is >= 1 and <= 1000) return n;
-        return t.ToLowerInvariant() switch
+        if (int.TryParse(t, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n is >= 1 and <= 999)
+        {
+            weight = n;
+            return true;
+        }
+
+        int? named = t.ToLowerInvariant() switch
         {
             "thin" => 100,
             "extralight" or "ultralight" => 200,
@@ -158,8 +238,12 @@ public sealed class FontResolver
             "extrabold" or "ultrabold" => 800,
             "black" or "heavy" => 900,
             "extrablack" or "ultrablack" => 950,
-            _ => 400,
+            _ => null,
         };
+
+        if (named is not { } w) return false;
+        weight = w;
+        return true;
     }
 
     public static FontStyleKind ParseStyle(string? v) =>

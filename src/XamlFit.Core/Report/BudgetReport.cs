@@ -31,6 +31,8 @@ public static class BudgetReport
     {
         var sb = new StringBuilder();
         sb.AppendLine("# xamlfit budget — limit_px is authoritative; limit_chars is an estimate (glyph widths differ)");
+        sb.AppendLine("# status: measured = limit_px applies | wraps = the text wraps freely (no horizontal limit) | " +
+                      "no-declared-limit = no width bound found in the XAML (NOT a guarantee) | not-analysed = a bound exists but could not be resolved");
         if (neutralizeFormulas)
             sb.AppendLine("# text fields starting with = + - @ are prefixed with ' to stop spreadsheets " +
                           "treating them as formulas; use --csv-raw for byte-exact values");
@@ -42,14 +44,14 @@ public static class BudgetReport
             sb.Append(b.LimitPx?.ToString("F1", CultureInfo.InvariantCulture) ?? "").Append(',');
             sb.Append(b.LimitChars?.ToString(CultureInfo.InvariantCulture) ?? "").Append(',');
             sb.Append(StatusSlug(b.Status)).Append(',');
-            sb.Append(Csv(b.Font ?? "")).Append(',');
+            sb.Append(Csv(b.Font ?? "", neutralizeFormulas)).Append(',');
             sb.Append(b.FontSize > 0 ? b.FontSize.ToString("G", CultureInfo.InvariantCulture) : "").Append(',');
-            sb.Append(Csv(b.BindingSite ?? "")).Append(',');
+            sb.Append(Csv(b.BindingSite ?? "", neutralizeFormulas)).Append(',');
             sb.Append(Csv(b.Text, neutralizeFormulas)).Append(',');
             sb.Append(b.SourceWidthPx?.ToString("F1", CultureInfo.InvariantCulture) ?? "").Append(',');
             sb.Append(b.HeadroomPx?.ToString("F1", CultureInfo.InvariantCulture) ?? "").Append(',');
             sb.Append(b.FitsWhenExpanded is null ? "" : b.FitsWhenExpanded.Value ? "yes" : "no").Append(',');
-            sb.Append(b.ExpansionFactor.ToString("F2", CultureInfo.InvariantCulture)).Append(',');
+            sb.Append(b.ExpansionFactor > 0 ? b.ExpansionFactor.ToString("F2", CultureInfo.InvariantCulture) : "").Append(',');
             sb.Append(b.SiteCount.ToString(CultureInfo.InvariantCulture)).Append(',');
             sb.Append(b.MeasuredSiteCount.ToString(CultureInfo.InvariantCulture)).Append(',');
             sb.Append(b.Backend.ToString().ToLowerInvariant()).Append(',');
@@ -60,9 +62,52 @@ public static class BudgetReport
         return sb.ToString();
     }
 
+    /// <summary>
+    /// 每個文字位置一列：狀態、上界從哪來、為什麼卡住。
+    /// 摘要只說「有 46 個位置卡在 Padding 讀不出來」；要知道是**哪 46 個**、該改哪一行，看這份。
+    /// </summary>
+    public static string SitesCsv(Xaml.ScanResult scan, bool neutralizeFormulas = true)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("file,line,element,source,status,available_px,bound,font,size,weight,wrap,key,text,reason");
+
+        foreach (var s in scan.Sites.OrderBy(s => s.File, StringComparer.Ordinal).ThenBy(s => s.Line))
+        {
+            var status = s.Source == Xaml.TextSource.DataBound ? "data-bound"
+                : !BudgetAnalyzer.IsLocalizable(s) ? "symbol-only"
+                : s.SuppressedReason is not null ? "suppressed"
+                : s.Width.Status switch
+                {
+                    Layout.WidthStatus.Known => "measured",
+                    Layout.WidthStatus.NoDeclaredLimit => "no-declared-limit",
+                    Layout.WidthStatus.InTemplate => "in-template",
+                    _ => "blocked",
+                };
+
+            sb.Append(Csv(s.File, neutralizeFormulas)).Append(',');
+            sb.Append(s.Line.ToString(CultureInfo.InvariantCulture)).Append(',');
+            sb.Append(Csv(s.Element, neutralizeFormulas)).Append(',');
+            sb.Append(s.Source.ToString().ToLowerInvariant()).Append(',');
+            sb.Append(status).Append(',');
+            sb.Append(s.Width.IsMeasurable ? s.Width.Px.ToString("F1", CultureInfo.InvariantCulture) : "").Append(',');
+            sb.Append(Csv(s.Width.BoundSource, neutralizeFormulas)).Append(',');
+            sb.Append(Csv(s.FontFamily ?? "", neutralizeFormulas)).Append(',');
+            sb.Append(s.FontSize.ToString("G", CultureInfo.InvariantCulture)).Append(',');
+            sb.Append(s.FontWeight.ToString(CultureInfo.InvariantCulture)).Append(',');
+            sb.Append(s.Width.WrapDefeated ? "nowrap(defeated)" : s.Wrap.ToString().ToLowerInvariant()).Append(',');
+            sb.Append(Csv(s.ResourceKey ?? "", neutralizeFormulas)).Append(',');
+            sb.Append(Csv(s.SourceText ?? s.Text, neutralizeFormulas)).Append(',');
+            sb.Append(Csv(s.SuppressedReason ?? s.Width.Reason, neutralizeFormulas));
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
+    }
+
     public static string ToJson(BudgetResult result, string toolVersion)
     {
         var s = result.Summary;
+        var b = s;
         var payload = new
         {
             schemaVersion = SchemaVersion,
@@ -74,11 +119,21 @@ public static class BudgetReport
                 parseErrors = s.ParseErrors,
                 textSites = s.TextSites,
                 localizableSites = s.LocalizableSites,
+                symbolOnlySites = s.SymbolOnlySites,
                 measuredSites = s.MeasuredSites,
+                blockedSites = s.BlockedSites,
+                noDeclaredLimitSites = s.NoDeclaredLimitSites,
+                inTemplateSites = b.InTemplateSites,
+                blockedReasons = b.BlockedReasons.Select(r => new { reason = r.Reason, sites = r.Count }),
+                undeclaredChrome = b.UndeclaredChrome.Select(c => new { element = c.Element, sites = c.Sites }),
+                foreignFiles = b.ForeignFiles.GroupBy(f => f.Dialect).Select(g => new { dialect = g.Key, files = g.Count() }),
+                externalThemes = b.ExternalThemes.Select(t => new { theme = t.Theme, declaredIn = t.DeclaredIn, scope = t.Scope.Length == 0 ? "(everything scanned)" : t.Scope }),
+                resolution = Math.Round(s.Resolution, 1),
                 coverage = Math.Round(s.Coverage, 1),
                 strings = s.Strings,
                 measuredStrings = s.MeasuredStrings,
                 noDeclaredLimitStrings = s.NoDeclaredLimitStrings,
+                wrappingStrings = s.WrappingStrings,
                 notAnalysedStrings = s.NotAnalysedStrings,
                 suppressed = s.Suppressed,
                 missingFonts = s.MissingFonts,
@@ -97,7 +152,7 @@ public static class BudgetReport
                 sourceWidthPx = b.SourceWidthPx,
                 headroomPx = b.HeadroomPx,
                 fitsWhenExpanded = b.FitsWhenExpanded,
-                expansionFactor = b.ExpansionFactor,
+                expansionFactor = b.ExpansionFactor > 0 ? b.ExpansionFactor : (double?)null,
                 sites = b.SiteCount,
                 measuredSites = b.MeasuredSiteCount,
                 backend = b.Backend.ToString().ToLowerInvariant(),
@@ -117,6 +172,7 @@ public static class BudgetReport
     {
         BudgetStatus.Measured => "measured",
         BudgetStatus.NoDeclaredLimit => "no-declared-limit",
+        BudgetStatus.Wraps => "wraps",
         _ => "not-analysed",
     };
 

@@ -4,5 +4,5 @@
   "defaultFontFamily": "XamlFit Demo Sans",
   "defaultFontSize": 12,
   "marginPercent": 5,
-  "resx": ["samples/demo/Resources"],
+  "resx": ["Resources"],
 }

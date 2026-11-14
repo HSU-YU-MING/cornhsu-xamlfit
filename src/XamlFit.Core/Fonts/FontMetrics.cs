@@ -21,6 +21,17 @@ public sealed class FontMetrics
     public FontStyleKind Style { get; init; } = FontStyleKind.Normal;
     public string Stretch { get; init; } = "Normal";
 
+    /// <summary>舊式家族名（name ID 1），跟 <see cref="Family"/> 不同時才有值。
+    /// WPF 兩種寫法都認：<c>FontFamily="Segoe UI" FontWeight="SemiBold"</c> 與 <c>FontFamily="Segoe UI Semibold"</c>。</summary>
+    public string? LegacyFamily { get; init; }
+
+    /// <summary>家族名的其他語言版本（「微軟正黑體」）。WPF 用哪個名字都找得到這支字型。</summary>
+    public IReadOnlyList<string> Aliases { get; init; } = [];
+
+    /// <summary>可變字型（有 fvar 表）。檔案裡只有預設軸位置的前進寬度 ——
+    /// 其他字重的寬度在 HVAR／gvar 裡，沒讀，所以只能量這一個字重。</summary>
+    public bool Variable { get; init; }
+
     /// <summary>字型設計單位。一般是 1000（CFF）或 2048（TrueType）。</summary>
     public required int UnitsPerEm { get; init; }
 
@@ -67,6 +78,10 @@ public readonly record struct Measurement(
     double WidthPx, int MissingGlyphs, bool ComplexScript, bool UsedAutoFallback = false)
 {
     public bool IsReliable => MissingGlyphs == 0 && !ComplexScript;
+
+    /// <summary>第一個量不到的碼位（沒有的話是 -1）。報告要能說出「缺的是哪個字」，
+    /// 使用者才知道該去匯出哪支字型。</summary>
+    public int FirstMissing { get; init; } = -1;
 }
 
 public static class TextMeasure
@@ -93,6 +108,7 @@ public static class TextMeasure
         var missing = 0;
         var complex = false;
         var usedAuto = false;
+        var firstMissing = -1;
         var primary = fallbackChain[0];
 
         foreach (var rune in text.AsSpan().EnumerateRunes())
@@ -114,23 +130,27 @@ public static class TextMeasure
                 break;
             }
 
-            if (!found) missing++;
+            if (!found)
+            {
+                missing++;
+                if (firstMissing < 0) firstMissing = cp;
+            }
         }
 
         var px = totalUnits * fontSizePx / primary.UnitsPerEm;
-        return new Measurement(px, missing, complex, usedAuto);
+        return new Measurement(px, missing, complex, usedAuto) { FirstMissing = firstMissing };
     }
 
     /// <summary>字形會依上下文變形的文字系統 —— 把 advance 加起來完全不對。
     /// 這類一律標成不可量測，不猜（規畫書 §4.3）。</summary>
     public static bool IsComplexScript(int cp) =>
-        cp is (>= 0x0590 and <= 0x05FF)   // 希伯來文
-           or (>= 0x0600 and <= 0x06FF)   // 阿拉伯文
-           or (>= 0x0700 and <= 0x074F)   // 敘利亞文
+        cp is (>= 0x0590 and <= 0x08FF)   // 希伯來文、阿拉伯文（含補充與擴充）、敘利亞文、它拿文、N'Ko
            or (>= 0x0900 and <= 0x0DFF)   // 天城文～僧伽羅文（印度系）
-           or (>= 0x0E00 and <= 0x0E7F)   // 泰文
+           or (>= 0x0E00 and <= 0x0EFF)   // 泰文、寮文
            or (>= 0x0F00 and <= 0x0FFF)   // 藏文
+           or (>= 0x1000 and <= 0x109F)   // 緬甸文
            or (>= 0x1780 and <= 0x17FF)   // 高棉文
-           or (>= 0xFB50 and <= 0xFDFF)   // 阿拉伯表現形式 A
+           or (>= 0x1800 and <= 0x18AF)   // 蒙古文
+           or (>= 0xFB1D and <= 0xFDFF)   // 希伯來／阿拉伯表現形式 A
            or (>= 0xFE70 and <= 0xFEFF);  // 阿拉伯表現形式 B
 }

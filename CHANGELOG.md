@@ -5,40 +5,60 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-Everything below is the initial implementation; nothing has been released yet.
+Nothing has been released yet. The entries below describe the implementation as it stands
+after a from-scratch audit (`docs/M6-全面重讀.md`), which replaced several earlier behaviours
+that over-estimated the available width.
 
 ### Added
 
 - **`xamlfit fonts export`** — extracts advance widths from font files into
-  `xamlfit.fonts.json` by reading five OpenType tables (`head`, `hhea`, `hmtx`, `cmap`,
-  `OS/2`). Pure managed code, no native dependencies, runs anywhere .NET runs.
-  The file contains numbers only: no glyph outlines, no font software.
+  `xamlfit.fonts.json`. Pure managed code, no native dependencies. The file contains numbers
+  only: no glyph outlines, no font software. Family names are taken in English, with other
+  languages kept as aliases; legacy family names (`Segoe UI Semibold`) and variable fonts are
+  recorded.
 - **`xamlfit budget`** — exports a per-string pixel budget for translators, as CSV or JSON.
-  A string's budget is the narrowest slot it appears in, and the report names that slot.
-- **`xamlfit check`** — measures real `.resx` translations against those budgets and fails
-  CI. `--pseudo` simulates expansion when translations do not exist yet.
+  The budget is the site where the string runs out of room first, and the report names it.
+  `--sites` writes one row per text site with the reason it is blocked.
+- **`xamlfit check`** — measures real translations against each site and fails CI.
+  Translations come from `.resx` and from XAML string dictionaries
+  (`<sys:String x:Key>` with `{DynamicResource}`), which are discovered automatically.
+  The source language is checked too. `--source-only` needs no translations; `--pseudo`
+  simulates expansion and never fails a build.
+- Each culture is laid out with its own strings and its own default UI font: a row of
+  translated buttons shares its width, and WPF's default font follows the Windows display
+  language.
+- **Chrome from the project's own templates.** When a control's `ControlTemplate` is replaced
+  inside the project, its horizontal chrome is computed from that template instead of being
+  assumed or given up on.
+- `Auto` / `*` Grid column solving, with `MinWidth`/`MaxWidth` redistribution; horizontal
+  `StackPanel`, `DockPanel`, `UniformGrid`, `WrapPanel`, `BulletDecorator`; window frames;
+  header chrome for `GroupBox`, `Expander` and column headers.
+- Things the tool cannot see are declared in `xamlfit.config.json`: `chrome`, `treatAs`,
+  `absentFonts`, `sourceCulture`, `defaultFontByCulture`, `assumeDefaultTheme`.
+  Every run lists the controls whose chrome it could not determine.
+- Detection of non-WPF XAML (WinUI/UWP, Avalonia, MAUI) and of external themes merged from
+  other assemblies; both are reported instead of being measured with the wrong assumptions.
 - Baseline (`--baseline` / `--write-baseline`) and `<!-- xamlfit-ignore: reason -->`.
-  The reason is **required**: an ignore without one does not apply and is reported.
-- CSV formula neutralisation by default (`--csv-raw` opts out for API pipelines).
-- **`Auto` / `*` Grid column solving**, verified against WPF's own layout (14/14 exact).
-  Nested grids, star weights, `MinWidth`/`MaxWidth`, `ColumnSpan` and Auto columns fed by
-  fixed-width children or horizontal stack panels all resolve. Anything it cannot compute
-  exactly is abandoned rather than guessed.
-- `TextBox`, `PasswordBox` and `ComboBox` chrome, measured through the templated content host
-  (6.0, 6.0 and 27.8 DIP). The `ComboBox` figure is confirmed twice over: by stretching its
-  content presenter, and geometrically from the dropdown button's position.
-- A breakdown of **why** sites are blocked, so coverage is actionable rather than just a number.
-- A CLI smoke test covering all 31 command paths and their exit codes, wired into CI.
-- Items inside a `ListBox`, `ListView` or `ItemsControl` resolve, assuming a visible vertical
-  scroll bar (the safe direction, and stated on every affected site). `DataGrid` and `TreeView`
-  stay blocked on purpose: their item widths come from a separate sizing system and from
-  runtime nesting depth respectively.
-- A deliberately broken demo project with CI count assertions.
+  The reason is required.
+- SARIF 2.1.0 output and MSBuild diagnostics (`XF0001`–`XF0003`).
+- CSV formula neutralisation by default (`--csv-raw` opts out).
+- A deliberately broken demo project with CI count assertions, and a CLI smoke test over
+  42 command paths and their exit codes.
 
 ### Verified
 
-- Measurement validated against WPF `FormattedText` over 1,400 comparisons:
-  mean error **0.039%**, worst under-estimate **0.068%**, worst over-estimate 1.43%
-  (a single kerning pair). Per-glyph advance widths match to within 0.001 px.
-- Coverage measured over 1,921 XAML files from three maintainer projects and eight
-  public ones. See `docs/M0-可量測比例調查.md`.
+- **Text width** against WPF `FormattedText`, 1,400 comparisons: mean error 0.039%, worst
+  under-estimate 0.068%, worst over-estimate 1.43% (a single kerning pair).
+- **Layout** against real off-screen WPF windows, 138 cases: 113 exact, 25 conservative,
+  0 over-estimates (`prototype/LayoutOracle`).
+- **False positives** against shipped software: 958 source-language measurements over ten
+  projects, 0 overflows.
+- 453 unit tests.
+
+### Not verified
+
+- Execution on Linux, the release workflow and the composite GitHub Action: the repository is
+  not published, so none of them has ever run.
+- The default UI fonts for Japanese, Korean and Simplified Chinese Windows: taken from
+  Windows' font configuration, not measured on those systems.
+- The overflows reported on the public corpus: computed, not confirmed by running the apps.

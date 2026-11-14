@@ -163,8 +163,9 @@ public class WidthResolverTests
               <TextBlock x:Name="probe" Text="hi"/>
             </Window>
             """);
-        Assert.Equal(WidthStatus.Unmeasurable, w.Status);
-        Assert.Contains("SizeToContent", w.Reason);
+        // 視窗會長到裝得下內容：分析範圍內沒有上界（不是「量不到」—— 沒有東西擋住我們看）
+        Assert.Equal(WidthStatus.NoDeclaredLimit, w.Status);
+        Assert.Contains("sizes to its content", w.Reason);
     }
 
     [Fact]
@@ -176,7 +177,8 @@ public class WidthResolverTests
             </Window>
             """);
         Assert.Equal(WidthStatus.Known, w.Status);
-        Assert.Equal(800, w.Px);
+        // Window.Width 是外框寬，內容區要扣掉視窗邊框
+        Assert.Equal(800 - Chrome.WindowFrame, w.Px);
     }
 
     [Fact]
@@ -229,12 +231,24 @@ public class WidthResolverTests
     }
 
     [Fact]
-    public void Control_names_match_by_suffix()
+    public void Third_party_controls_do_not_borrow_wpf_chrome()
     {
-        // MahApps 的 MetroTabControl 要對得上 TabControl；精確比對會整組漏掉第三方控制項庫
-        var (known, chrome) = Chrome.Lookup("MetroButton");
-        Assert.True(known);
-        Assert.Equal(4, chrome);
+        // ⚠ 第一版用後綴比對，把 WPF Button 的 4 px 套到 mah:MetroButton 身上。
+        //   第三方控制項的範本跟 WPF 的沒有關係 —— 少扣內距就是高估可用寬度。
+        var wpf = Chrome.Lookup(XName.Get("Button", "http://schemas.microsoft.com/winfx/2006/xaml/presentation"));
+        Assert.Equal(ChromeKind.Control, wpf.Kind);
+        Assert.Equal(4, wpf.Chrome);
+
+        var thirdParty = Chrome.Lookup(XName.Get("Button", "http://metro.mahapps.com/winfx/xaml/controls"));
+        Assert.Equal(ChromeKind.Unknown, thirdParty.Kind);
+
+        // 表裡沒有的 WPF 元素也是「不知道」，不是內距 0 的透明容器
+        Assert.Equal(ChromeKind.Unknown,
+            Chrome.Lookup(XName.Get("RichTextBox", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")).Kind);
+
+        // 使用者宣告之後就知道了
+        var declared = Chrome.WithOverrides(new Dictionary<string, double> { ["Button"] = 24 });
+        Assert.Equal(24, declared.Lookup(XName.Get("Button", "http://metro.mahapps.com/winfx/xaml/controls")).Chrome);
     }
 
     [Fact]
@@ -324,11 +338,23 @@ public class WidthResolverTests
     [InlineData("8", 16)]
     [InlineData("4,2", 8)]
     [InlineData("1,2,3,4", 4)]
-    [InlineData("{StaticResource P}", 0)]
     [InlineData(null, 0)]
     public void Thickness_parsing(string? value, double expectedLeftPlusRight)
     {
-        var (l, r) = WidthResolver.ParseThicknessLeftRight(value);
+        var (l, r, ok) = WidthResolver.ParseThickness(value);
+        Assert.True(ok);
         Assert.Equal(expectedLeftPlusRight, l + r);
+    }
+
+    [Theory]
+    [InlineData("{StaticResource P}")]
+    [InlineData("1,2,3")]
+    [InlineData("abc")]
+    [InlineData("NaN")]
+    public void Unreadable_thickness_is_not_zero(string value)
+    {
+        // ⚠ 讀不懂的 Thickness 不能當成 0：少扣內距就是高估可用寬度
+        var (_, _, ok) = WidthResolver.ParseThickness(value);
+        Assert.False(ok);
     }
 }

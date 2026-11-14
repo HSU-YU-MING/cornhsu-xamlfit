@@ -33,7 +33,7 @@ public static class ResxReader
     public static CultureStrings? ReadFile(string file)
     {
         XDocument doc;
-        try { doc = XDocument.Load(file); }
+        try { doc = Xaml.SafeXml.Load(file); }
         catch { return null; }
         if (doc.Root is null) return null;
 

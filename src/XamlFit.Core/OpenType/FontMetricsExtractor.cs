@@ -57,7 +57,7 @@ public static class FontMetricsExtractor
         if (cmap.Count == 0) return null;
 
         var (weight, stretch, italic) = ReadOs2(r, head);
-        var (family, subfamily) = ReadNames(r);
+        var (family, subfamily, legacyFamily, aliases) = ReadNames(r);
         if (string.IsNullOrWhiteSpace(family)) family = Path.GetFileNameWithoutExtension("unknown");
 
         // 子家族名有時才是斜體的唯一來源（OS/2 的 fsSelection 不一定可靠）
@@ -70,6 +70,10 @@ public static class FontMetricsExtractor
             Weight = weight,
             Style = italic ? FontStyleKind.Italic : FontStyleKind.Normal,
             Stretch = stretch,
+            LegacyFamily = string.Equals(legacyFamily, family, StringComparison.OrdinalIgnoreCase) ? null : legacyFamily,
+            Aliases = aliases,
+            // ⚠ 可變字型：hmtx 只有預設軸位置的寬度。標記出來，解析時只准用這一個字重。
+            Variable = r.Has("fvar"),
             UnitsPerEm = unitsPerEm,
             Ascender = ascender,
             Descender = descender,
@@ -246,20 +250,31 @@ public static class FontMetricsExtractor
     /// <summary>name 表：優先取 typographic family（16／17），沒有才退回 1／2。
     /// ⚠ WPF 的 FontFamily 比對的是 typographic family，用 nameID 1 會讓
     ///   「Segoe UI Semibold」被當成獨立家族而對不上 Segoe UI + Weight=600。</summary>
-    private static (string Family, string Subfamily) ReadNames(SfntReader r)
+    /// <summary>
+    /// 家族名與子家族名。
+    ///
+    /// ⚠ **要挑英文（語言 0x0409）的名字。** 字型的 name 表裡同一個名字有好幾種語言的版本，
+    ///   而 msjh.ttc 的第一筆是繁體中文的「微軟正黑體」。第一版拿第一筆，於是匯出來的家族叫
+    ///   「微軟正黑體」，XAML 裡寫的 <c>FontFamily="Microsoft JhengHei"</c> 對不上 ——
+    ///   整支字型變成「沒有度量」。WPF 兩種名字都認，所以其他語言的名字記成別名。
+    /// </summary>
+    private static (string Family, string Subfamily, string? LegacyFamily, List<string> Aliases) ReadNames(SfntReader r)
     {
-        if (!r.Has("name")) return ("", "");
+        if (!r.Has("name")) return ("", "", null, []);
         var name = r.TableOffset("name");
         var count = r.U16(name + 2);
         var storage = name + r.U16(name + 4);
 
-        string? family = null, typoFamily = null, subfamily = null, typoSubfamily = null;
+        // nameId → (英文優先的那一筆, 所有語言的版本)
+        var best = new Dictionary<int, (string Value, int Rank)>();
+        var all = new Dictionary<int, List<string>>();
 
         for (var i = 0; i < count; i++)
         {
             var rec = name + 6 + i * 12;
             var platform = r.U16(rec);
             var encoding = r.U16(rec + 2);
+            var language = r.U16(rec + 4);
             var nameId = r.U16(rec + 6);
             var len = r.U16(rec + 8);
             var off = r.U16(rec + 10);
@@ -274,16 +289,34 @@ public static class FontMetricsExtractor
             if (string.IsNullOrWhiteSpace(s)) continue;
             s = s.Trim();
 
-            switch (nameId)
+            // 排名：Windows 英文（美國）> Windows 其他英文 > Unicode 平台 > Mac 英文 > 其他
+            var rank = (platform, language) switch
             {
-                case 1: family ??= s; break;
-                case 2: subfamily ??= s; break;
-                case 16: typoFamily ??= s; break;
-                case 17: typoSubfamily ??= s; break;
-            }
+                (3, 0x0409) => 0,
+                (3, _) when (language & 0x3FF) == 0x09 => 1,
+                (0, _) => 2,
+                (1, 0) => 3,
+                _ => 4,
+            };
+
+            if (!best.TryGetValue(nameId, out var current) || rank < current.Rank) best[nameId] = (s, rank);
+
+            if (!all.TryGetValue(nameId, out var list)) all[nameId] = list = [];
+            if (!list.Contains(s, StringComparer.OrdinalIgnoreCase)) list.Add(s);
         }
 
-        return (typoFamily ?? family ?? "", typoSubfamily ?? subfamily ?? "");
+        string? Pick(int id) => best.TryGetValue(id, out var b) ? b.Value : null;
+
+        var typoFamily = Pick(16);
+        var family = typoFamily ?? Pick(1) ?? "";
+        var familyId = typoFamily is not null ? 16 : 1;
+
+        // 別名 = 家族名的其他語言版本（「微軟正黑體」）
+        var aliases = all.TryGetValue(familyId, out var names)
+            ? names.Where(n => !n.Equals(family, StringComparison.OrdinalIgnoreCase)).ToList()
+            : [];
+
+        return (family, Pick(17) ?? Pick(2) ?? "", typoFamily is null ? null : Pick(1), aliases);
     }
 
     /// <summary>把 碼位→字符→advance 壓成連續區間。</summary>

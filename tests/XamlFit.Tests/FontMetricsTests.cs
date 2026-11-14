@@ -194,12 +194,36 @@ public class FontResolverTests
     }
 
     [Fact]
-    public void Fallback_list_skips_families_that_are_absent()
+    public void A_missing_primary_family_is_a_miss_not_a_silent_substitution()
     {
+        // ⚠ 第一版直接拿清單裡的下一支去量。"Segoe UI Variable, Segoe UI" 在 Windows 11 上
+        //   用的是前者，寬度不一樣 —— 拿後者量出來的數字看起來很真，但是錯的。
         var r = Resolver();
         var lookup = r.Resolve("Nonexistent UI, Test Sans", 400, FontStyleKind.Normal, "x");
+        Assert.Empty(lookup.Chain);
+        Assert.Equal(FontMissReason.NoSuchFamily, lookup.Miss);
+        Assert.Equal("Nonexistent UI", lookup.MissingFamily);
+    }
+
+    [Fact]
+    public void A_family_declared_absent_is_skipped()
+    {
+        // 使用者說了「目標機器上沒有這支」，才可以跳過它
+        var r = new FontResolver(
+            [FontMetricsExtractor.FromBytes(SyntheticFont.Build("Test Sans", 400)).Single()],
+            absentFamilies: ["Nonexistent UI"]);
+        var lookup = r.Resolve("Nonexistent UI, Test Sans", 400, FontStyleKind.Normal, "x");
         Assert.Equal("Test Sans", lookup.Chain[0].Family);
-        Assert.Equal(1, lookup.DeclaredCount);   // 只有一支是「明寫且存在」的
+        Assert.Equal(1, lookup.DeclaredCount);
+    }
+
+    [Fact]
+    public void A_missing_family_after_the_primary_only_affects_fallback()
+    {
+        var r = Resolver();
+        var lookup = r.Resolve("Test Sans, Nonexistent UI", 400, FontStyleKind.Normal, "x");
+        Assert.Equal("Test Sans", lookup.Chain[0].Family);
+        Assert.Equal(1, lookup.DeclaredCount);
     }
 
     [Fact]

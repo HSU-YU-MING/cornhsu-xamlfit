@@ -1,6 +1,6 @@
 # XamlFit
 
-**Static text-fit audit for XAML. Computes the pixel budget of every text slot without launching the app — export limits for translators before translation, fail CI on real overflow after.**
+**Static text-fit audit for WPF XAML. Computes the pixel budget of every text slot without launching the app — export limits for translators before translation, fail CI on real overflow after.**
 
 [![NuGet](https://img.shields.io/nuget/v/Cornhsu.XamlFit)](https://www.nuget.org/packages/Cornhsu.XamlFit)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -16,106 +16,164 @@ xamlfit check  ./src --resx ./Resources   # after translation: fail CI on real o
 ```
 
 > Requires the **.NET 10 runtime**. The analysis is pure arithmetic over XML and font tables —
-> no WPF and no native dependencies: `dotnet publish -r linux-x64` produces a clean build with
-> zero Windows-only assemblies.
+> no WPF and no native dependencies.
 >
-> ⚠ It has **not yet been executed on Linux** — the CI workflow that would prove it has never
-> run, because the repository is not published. Treat cross-platform support as well-founded
-> but unproven until then. See `docs/M5b-跨平台與CI驗證.md`.
+> ⚠ It has **not yet been executed on Linux**: the CI workflow that would prove it has never
+> run, because the repository is not published. See `docs/M5b-跨平台與CI驗證.md`.
+>
+> **WPF only.** WinUI/UWP, Avalonia and MAUI files are recognised and reported as *not
+> analysed* — their chrome, default font and layout rules are different, and numbers computed
+> with WPF's would simply be wrong.
 
 ---
 
 ## What it does that nothing else does
 
 Every pseudo-localization tool works the same way: **run the app, switch to German, look at
-every screen**. Microsoft's own localization blog described the static version of this a decade
-ago — *"it would be possible to build a check that reports any string that won't fit"* — and
-nobody built it.
+every screen**. Microsoft's own localization blog described the static version a decade ago —
+*"it would be possible to build a check that reports any string that won't fit"* — and nobody
+built it.
 
-XamlFit builds it. It reads your XAML, works out how many pixels each piece of text actually
-has, measures the real translated string against that number, and fails the build when it
-doesn't fit.
+XamlFit reads your XAML, works out how many pixels each piece of text actually has, measures
+the real translated string against that number, and fails the build when it does not fit.
 
 One class of bug is **only** visible this way: a `TextBlock` with `TextWrapping="NoWrap"` and
 `TextTrimming="None"` does not raise `IsTextTrimmedChanged` when its text is clipped. Runtime
 detection cannot see it. Static measurement can.
 
-## Honest coverage
+## The one rule
 
-**XamlFit can compute a number for roughly a quarter to a third of the text in a typical
-project, and for 76–85% of the places where clipping is actually possible.**
+> **Say "cannot measure" rather than compute a number that is too generous.**
 
-Measured over 1,921 XAML files — three maintainer projects plus ScreenToGif, Playnite,
-MaterialDesignInXamlToolkit, wpfui, ILSpy, HandyControl, MahApps.Metro and WinUI-Gallery:
+An available width that is over-estimated turns "does not fit" into "fits". That is the worst
+thing this tool can do, so everything it cannot read is *unknown*, never *assumed default*:
+a bound `Width`, a style defined in another assembly, a third-party control's template, a font
+that comes from the hosting window. Each of those blocks the site and says why.
 
-| | all corpora | app screens only |
-|---|---|---|
-| localizable text sites | 9,149 | 7,074 |
-| have a hard width bound (clipping is possible) | 35.9% | 33.0% |
-| **of those, XamlFit computes a number for** | **75.9%** | **85.0%** |
-| no declared width bound anywhere | 54.3% | 61.9% |
+## What it can see, honestly
 
-Those figures are from the pre-implementation survey. What the finished engine actually
-resolves, per project — of the sites that *should* yield a number:
+**Resolution** = of the text sites that have a width bound and therefore *should* yield a
+number, the share that actually did. It is printed on every run and gated by `--min-coverage`.
 
-| project | resolution |
-|---|---|
-| Playnite | 100.0% |
-| WinUI-Gallery | 99.2% |
-| HandyControl | 97.3% |
-| QuillNest (maintainer) | 96.4% |
-| MahApps.Metro | 93.8% |
-| ScreenToGif | 77.5% |
+Measured out of the box, no configuration, on eleven projects:
 
-Every run prints a breakdown of **why** the remaining sites are blocked, so coverage is an
-actionable list rather than just a number. What is left is either deliberate or genuinely
-unknowable: `SharedSizeGroup` columns whose width is decided across several grids (26 sites in
-MahApps), `TreeView` items whose indentation depends on runtime nesting depth (12), `DataGrid`
-cells sized by their column rather than the grid (2), `Auto` columns a spanning child
-contributes to (11), and `Auto` columns holding a data-bound or custom child (14 in ScreenToGif).
+| project | localizable sites | measured | blocked | no width bound | resolution |
+|---|---:|---:|---:|---:|---:|
+| Cornea (maintainer app) | 68 | 59 | 0 | 9 | **100%** |
+| QuillNest (maintainer app) | 685 | 487 | 55 | 116 | **89.9%** |
+| Kindling (maintainer app) | 150 | 57 | 18 | 75 | **76.0%** |
+| Playnite | 1,107 | 194 | 220 | 506 | **46.9%** |
+| ScreenToGif | 1,277 | 99 | 375 | 790 | **20.9%** |
+| HandyControl | 210 | 11 | 61 | 123 | 15.3% |
+| MahApps.Metro | 1,613 | 53 | 749 | 718 | 6.6% |
+| MaterialDesignInXamlToolkit | 2,339 | 0 | 867 | 1,432 | 0% |
+| wpfui | 440 | 0 | 15 | 405 | 0% |
+| WinUI-Gallery | — | — | — | — | not WPF |
 
-⚠ Items inside a `ListBox`/`ListView`/`ItemsControl` are measured **assuming a visible vertical
-scroll bar** (16.8 DIP), because whether one appears depends on the item count at runtime.
-That is the safe direction — it can report a slot as tight that is not, but it will not call an
-overflow safe. Set `ScrollViewer.VerticalScrollBarVisibility="Disabled"` and the deduction goes
-away. The assumption is stated on every affected site.
+Read that table as two groups.
 
-`Auto`/`*` Grid columns are solved and verified against WPF's own layout, 14 cases exact.
+**Applications** range from 21% to 100%. What blocks the rest is concrete and printed:
+a custom panel the tool has never heard of (Playnite's `GridEx`), side panels collapsed to
+`Width="0"` and opened by animation (ScreenToGif, 318 sites), a row whose neighbour is
+data-bound, `SharedSizeGroup` columns.
 
-Every run prints its own `resolution` figure, and `check` exits **3** when it falls below
-`--min-coverage`. The tool never says "looks fine" while only seeing a third of your UI.
+**Control libraries** are near zero, and that is the correct answer: in those repositories the
+controls *are* the theme. Their demos take fonts from a markup extension and wrap content in
+controls whose templates rebind everything. An application that *uses* one of them is in the
+same position unless it tells the tool what the theme does — see
+[What you have to tell it](#what-you-have-to-tell-it).
 
-**"No declared width bound" is not a safety guarantee.** It means the analysis found no bound
-in the XAML — the window still has a width at runtime. Those sites are reported as
-`no-declared-limit`, never as blank, and they are not counted as coverage.
+Earlier drafts of this README claimed 77–100% for the same projects. Those figures were
+produced by an engine that applied default-theme padding to restyled controls, ignored the
+window frame, and counted WinUI files as WPF. **A high number built on wrong assumptions is
+worse than a low honest one.** The full account is in `docs/M6-全面重讀.md`.
 
-## How measurement works
+**"No width bound" is not a safety guarantee.** It means the analysis found no bound in the
+XAML — the window still has a width at runtime. Those sites are reported as
+`no-declared-limit`, never as blank, and they are not counted as measured.
 
-No SkiaSharp, no WPF, no native binaries. XamlFit reads five tables out of a font file
-(`head`, `hhea`, `hmtx`, `cmap`, `OS/2`) and sums advance widths.
+## How it knows
 
+Three independent checks, each against something that is not this tool.
+
+**Text width, against WPF's `FormattedText`.** 1,400 comparisons (9 faces × 7 sizes × 28
+strings in English, German, French, Chinese, Japanese and Korean): mean error **0.039%**,
+worst under-estimate **0.068%**, worst over-estimate 1.43% (one kerning pair). XamlFit does not
+apply kerning, which makes text measure slightly *wide* — it errs toward reporting.
+
+**Layout, against real WPF windows.** `prototype/LayoutOracle` feeds 138 XAML snippets to an
+actual off-screen `Window` and to the resolver, and compares what is really visible:
+**113 exact, 25 conservative, 0 over-estimates.** The conservative ones are deliberate — an
+assumed vertical scroll bar, the window frame at its widest display scaling. This harness
+found most of what the last audit fixed; it needs Windows, so its conclusions are restated as
+portable unit tests.
+
+**False positives, against shipped software.** Hard-coded text in a released app presumably
+fits. So the tool checks the *source* language too: **958 source-language measurements across
+the corpus, 0 overflows.** While it was being built this number was not zero twice, and both
+times the tool was wrong.
+
+## What you have to tell it
+
+Some things are not in the XAML. The tool reports them as blocked and names them; you declare
+them once in `xamlfit.config.json`.
+
+```jsonc
+{
+  // Horizontal padding (left + right, DIPs) of controls the tool does not know:
+  // third-party controls, or standard ones restyled by an external theme.
+  "chrome": { "Card": 16, "MetroWindow": 2, "GroupBox.Header": 9 },
+
+  // A subclass that lays out exactly like its base. You are vouching for that.
+  "treatAs": { "MyGrid": "Grid" },
+
+  // A family in a FontFamily fallback list that target machines do not have.
+  "absentFonts": ["Segoe UI Variable"],
+
+  // The language the app is written in (see "The default font" below).
+  "sourceCulture": "zh-Hant",
+
+  // An external theme was detected, but it does not change control padding.
+  "assumeDefaultTheme": false
+}
 ```
-width = Σ advance(codepoint) × fontSize ÷ unitsPerEm
-```
 
-Validated against WPF's own `FormattedText` over 1,400 comparisons (9 face configurations ×
-7 sizes × 28 strings in English, German, French, Chinese, Japanese and Korean):
+Every run ends with the controls whose chrome it could not determine, ordered by how many
+sites each one blocks — so you know which three lines of config are worth writing.
 
-| | |
-|---|---|
-| mean absolute error | **0.039%** |
-| worst **under**-estimate (could miss an overflow) | **0.068%** |
-| worst over-estimate (could report a false positive) | 1.43% |
+### External themes
 
-The 1.43% is a single kerning pair in a Japanese font. Per-glyph advance widths match
-`FormattedText` to within **0.001 px** — the entire error is kerning, which XamlFit does not
-apply. Ignoring kerning systematically **over**-estimates width, so the tool errs toward
-reporting a problem rather than missing one. The default 5% safety margin covers it three
-times over.
+If `App.xaml` merges a dictionary from another assembly (`MaterialDesignThemes.Wpf`, `Wpf.Ui`,
+`HandyControl`, …), standard controls are restyled by XAML the tool cannot read: a Material
+Design `Button` has 32 px of padding, not 4. The built-in table no longer applies, so sites
+inside those controls become blocked until you declare their chrome.
 
-### The metrics file
+### Templates in your own project
 
-Fonts are not shipped and not needed on CI:
+When *your* project replaces a `ControlTemplate`, nothing needs declaring: the tool reads the
+template, substitutes `{TemplateBinding Padding}` with what the control actually has, and
+works out the chrome. If the same style exists in several theme files (light and dark), it
+computes each and accepts the answer only when they agree.
+
+### The default font
+
+WPF's default font is not Segoe UI. It is the *system message font*, and it follows the
+Windows display language: Segoe UI on English or German Windows, **Microsoft JhengHei UI** on
+Traditional Chinese, Microsoft YaHei UI on Simplified Chinese, Yu Gothic UI on Japanese,
+Malgun Gothic on Korean. Latin letters in JhengHei UI are about 7% wider than in Segoe UI.
+
+So text with no explicit `FontFamily` has a different width on different users' machines.
+`check` measures each culture with that culture's font, and reports — exit 3 — a culture whose
+font is missing from the metrics file rather than measuring it with the wrong one.
+
+A `UserControl` inherits its font from whichever window hosts it, which is in another file.
+The tool uses the consensus of the windows in the same application; if they disagree, the
+inherited value is unknown until you pin `defaultFontFamily` / `defaultFontSize`.
+
+## Fonts
+
+No SkiaSharp, no WPF, no native binaries. XamlFit reads a handful of tables out of a font file
+and sums advance widths: `width = Σ advance(codepoint) × fontSize ÷ unitsPerEm`.
 
 ```bash
 xamlfit fonts export --family "Segoe UI" --family "Microsoft JhengHei UI"
@@ -123,41 +181,47 @@ git add xamlfit.fonts.json
 ```
 
 `xamlfit.fonts.json` contains **advance widths only** — no glyph outlines, no font software.
-You generate it from fonts you already have a licence for, into your own repository. CI reads
-numbers.
+You generate it from fonts you already have a licence for, into your own repository. CI needs
+no fonts installed.
 
-If a font has no metrics, the sites using it become `unmeasurable` and count against coverage.
-They are never silently assumed to fit.
+It will not substitute a font it has for one it lacks:
+
+- the *first* family in a fallback list must be in the file (a later one is only a fallback);
+- bold text is not measured with the regular face;
+- a variable font only answers for its default weight;
+- `TextFormattingMode="Display"` snaps glyphs to whole pixels and cannot be predicted from
+  metrics at all (measured against WPF: −37% to +45%).
+
+Each of these makes the site unmeasurable and names the font to export.
 
 ## `budget` — before translation
 
-The unit is the **string**, not the UI slot, and:
+The unit is the **string**, not the UI slot:
 
-> **a string's budget is the narrowest place it appears.**
-
-`Resources.Save` may have 180 px on the settings page and 64 px in a toolbar. The budget is 64,
-and the report names the slot that caused it, so you know what to widen.
+> **a string's budget is the place where it runs out of room first.**
 
 ```csv
-key,limit_px,limit_chars,status,font,size,binding_site,source,source_px,headroom_px,fits_expanded,…
-Save,64.0,10,measured,Segoe UI,12,MainToolbar.xaml:42,Save,31.4,32.6,yes,…
+key,limit_px,limit_chars,status,font,size,binding_site,source,source_px,headroom_px,…
+Save,64.0,10,measured,Segoe UI,12,MainToolbar.xaml:42,Save,31.4,32.6,…
+Help,,,wraps,Segoe UI,12,About.xaml:9,…
 Unbounded,,,no-declared-limit,,,,…
 ```
 
-`limit_px` is authoritative; `limit_chars` is an estimate, because glyph widths differ. The
-column order puts the limit before the source string, which is what Smartling-style CSV imports
-expect.
+`limit_px` is authoritative; `limit_chars` is an estimate, because glyph widths differ. Four
+statuses, never a blank cell:
+
+| status | meaning |
+|---|---|
+| `measured` | `limit_px` applies |
+| `wraps` | the text wraps and its height is free — only a single word wider than the line is cut |
+| `no-declared-limit` | no width bound found in the XAML. **Not** a guarantee |
+| `not-analysed` | a bound exists but could not be resolved |
+
+`--sites sites.csv` writes one row per text site with the reason it is blocked.
 
 Text fields that start with `=`, `+`, `-`, `@`, a tab or a carriage return are prefixed with a
-single quote, so a spreadsheet does not treat them as formulas. Real UI strings do start with
-`+` and `-`, so if you feed the CSV straight into a translation API rather than opening it,
-use `--csv-raw` to get byte-exact source strings — and do not open that file in Excel.
-
-Translation platforms let you set a length limit per string — this is where the number comes
-from, instead of someone guessing.
-
-`headroom_px` is useful on its own, with no translations at all: a slot with 2 px of slack in
-English is already counting down.
+single quote so a spreadsheet does not run them as formulas. Use `--csv-raw` for byte-exact
+strings when feeding an API — and do not open that file in Excel.
 
 ## `check` — after translation
 
@@ -165,25 +229,46 @@ English is already counting down.
 xamlfit check ./src --resx ./Resources --baseline xamlfit-baseline.json
 ```
 
-Each measurable slot is judged independently — the same string can overflow in one place and be
-vertically clipped in another:
+Translations come from `.resx` (`{x:Static p:Strings.Save}`) and from XAML string dictionaries
+(`<sys:String x:Key="Save">` with `{DynamicResource Save}`), which are found automatically.
+The second form is by far the more common in real WPF applications.
 
-| wrapping | trimming | height | result | severity |
-|---|---|---|---|---|
-| `NoWrap` | `None` | — | `overflow` — text spills out | **fail** |
-| `NoWrap` | ellipsis | — | `trimmed` — information lost | warn |
-| `Wrap` | — | fixed | `vertical-clip` — lines don't fit | **fail** |
-| `Wrap` | — | `Auto` | `reflow` — layout grows | info |
-| any | any | — | `tight` — less than `--margin` slack | warn |
+| the text | result | severity |
+|---|---|---|
+| does not wrap, no trimming, too wide | `overflow` — spills out or is clipped | **fail** |
+| does not wrap, ellipsis, too wide | `trimmed` — information lost | warn |
+| wraps into more lines than a fixed height holds | `vertical-clip` | **fail** |
+| wraps into more lines than the source language | `reflow` — layout grows | info |
+| does not wrap, less than `--margin` slack | `tight` | warn |
 
-Without translations, `--pseudo` expands the **source** string using a length-bucketed table.
-It needs a source string to expand: literal text in the XAML, or `--resx` pointing at the
-neutral-culture `.resx` the keys come from. If it can measure nothing it exits **3** rather than
-reporting success. The table is
-(`< 10` chars → 200%, `11–20` → 180%, `21–30` → 160%, `31–50` → 130%, `50+` → 120%). A single
-flat factor is wrong: short strings grow most, and button labels are the shortest and the most
-likely to break. **Pseudo findings are always downgraded one level and never fail a build** —
-a guess should not block someone's pull request.
+Line counts come from real word wrap, not total width divided by line width.
+
+Three things that are easy to get wrong and are checked against WPF:
+
+- **Wrapping that cannot happen.** Inside a horizontal `StackPanel`, an `Auto` grid column or a
+  `WrapPanel`, WPF measures the child with unlimited width: `TextWrapping="Wrap"` does nothing
+  and the text is cut. That is reported as `overflow`, not as harmless `reflow`.
+- **Rows of translated strings.** A row of buttons shares its width. What is left for one
+  depends on how wide the others are *in that language* — so each culture is laid out again
+  with its own strings.
+- **Access keys.** In `_Save` on a `Button`, `Label`, `CheckBox`, `MenuItem`… the underscore is
+  not drawn. On a `TextBlock` or `ListBoxItem` it is.
+
+On two public projects with their real translations — Playnite (37 languages, 5,953
+measurements, 11 seconds) and ScreenToGif (29 languages, 1,229 measurements, 9 seconds) — it
+reported 148 overflows at 20 sites and 7 at 6, with none in the source language of either.
+In Playnite, 142 of the 148 are rows of controls that share their width: they fit in English
+and not in 28 of the other languages. These have not been confirmed by running the apps.
+
+What is *not* judged is counted and printed: strings with run-time placeholders (`{0}`), text
+the metrics do not cover (with the code points, so you know which font to export), and
+scripts that reshape in context (Arabic, Hebrew, Indic, Thai). **A culture in which nothing
+could be measured makes the run exit 3** — "not checked" must not look like "passed".
+
+`--source-only` checks just the source language and needs no translations. `--pseudo`
+simulates expansion from a length-bucketed table (`< 10` chars → 200%, `11–20` → 180%,
+`21–30` → 160%, `31–50` → 130%, `50+` → 120%); its findings are downgraded one level and never
+fail a build, because a guess should not block someone's pull request.
 
 ### Exit codes
 
@@ -192,27 +277,28 @@ a guess should not block someone's pull request.
 | 0 | pass |
 | 1 | findings at or above the gate (`--fail-on fail` by default) |
 | 2 | usage, config or input error |
-| 3 | **result not trustworthy** — resolution below `--min-coverage`, or nothing measurable |
+| 3 | **result not trustworthy** — resolution below `--min-coverage`, nothing measured, or a whole culture that could not be measured |
 
 ## Known limitations
 
-| | effect | handling |
-|---|---|---|
-| `TreeView` items | indentation depends on runtime nesting depth (~19 DIP per level) | `blocked`, counted |
-| `DataGrid` cells | width comes from `DataGridColumn`, a separate sizing system | `blocked`, counted |
-| `SharedSizeGroup` columns | width is decided across several grids, which the analysis cannot see | `blocked`, counted |
-| `Auto` / `*` Grid columns | solved, verified against WPF layout (14/14 exact). 2–12 sites per project still blocked because an Auto column holds data-bound text or a custom control | `blocked`, counted |
-| `ControlTemplate` / `DataTemplate` contents | width comes from the consumer | `not-analysed` |
-| no kerning or shaping | ≤ 1.43% over-estimate | safety margin; never under-estimates |
-| Arabic, Indic, Thai | advance widths do not sum | `unmeasurable`, not guessed |
-| `TextFormattingMode="Display"` | slight width difference | measured as `Ideal` (the WPF default), noted in the report |
-| custom `ControlTemplate` | the chrome table no longer applies | detected and marked |
-| automatic font fallback | Windows font linking may pick a different face than the metrics file | measurement is flagged in the report |
-| **`{DynamicResource}`-based localization** | apps that keep UI strings in `ResourceDictionary` files rather than `.resx` (ScreenToGif is one) — those strings are classified as data-bound and skipped | `.resx` only in v1; roadmap item. The M0 coverage survey counted such sites as localizable, so a project using this pattern will report far fewer localizable sites than the survey suggests |
+| | handling |
+|---|---|
+| `ControlTemplate` / `DataTemplate` contents | width is decided where the template is used; counted separately as "in a template" |
+| An element with `Width` inside something narrower *and unresolvable* | the explicit `Width` is taken at face value. When the outer width *is* resolvable, the smaller wins |
+| A label in an `Auto` column | budgeted up to the point where it would be clipped; it will squeeze `*` columns before that |
+| Fonts set by a control's own template or by code | not visible; the site's font is whatever the XAML says |
+| Styles applied by triggers, visual states or code-behind | not followed |
+| Text set through properties not scanned (`ToolTip`, `Title`, watermark/hint attached properties, `Hyperlink`/`Span` content) | not seen at all |
+| Resource dictionaries merged in code at run time | every dictionary file is assumed merged; conflicting definitions make the value unknown |
+| No kerning or shaping | ≤ 1.43% over-estimate of text width; never under |
+| Vertical clipping | only when the text element itself declares `Height`/`MaxHeight` |
+| Window frame, scroll bar width | taken at the display scaling where they are largest in DIPs |
+| Default UI font per language | only Traditional Chinese was measured on a real system; the others are from Windows' font configuration. Override with `defaultFontByCulture` |
 
 ## Configuration
 
-`xamlfit.config.json` next to the scanned root, or `--config <path>`:
+`xamlfit.config.json` next to the scanned root, or `--config <path>`. Besides the keys under
+[What you have to tell it](#what-you-have-to-tell-it):
 
 ```jsonc
 {
@@ -228,11 +314,9 @@ a guess should not block someone's pull request.
 }
 ```
 
-Comments and trailing commas are allowed. **Command-line flags always win over the file** —
-the command line is what you meant right now, the file is a default.
-
-A misspelled property is an **error**, not a silent skip: the run exits 2 and names the
-property. A typo that gets quietly ignored is the worst thing a config file can do.
+Comments and trailing commas are allowed. Relative paths are relative to the config file.
+**Command-line flags always win over the file.** A misspelled property is an **error**, not a
+silent skip: the run exits 2 and names it.
 
 ## CI output
 
@@ -240,13 +324,10 @@ property. A typo that gets quietly ignored is the worst thing a config file can 
 xamlfit check ./src --resx ./Resources --sarif fit.sarif --msbuild
 ```
 
-`--sarif` writes SARIF 2.1.0 for GitHub code scanning, one rule per finding kind so the
-Security tab can triage them separately. `reflow` is left out — it is not a defect.
-
-`--msbuild` prints MSBuild diagnostics on stdout, so a `dotnet build` that runs the tool via
-`Exec` surfaces them in the Visual Studio Error List: `XF0001` for gated findings, `XF0002` for
-warnings, and `XF0003` when the result is not trustworthy — because a build that passes while
-the tool only saw part of the UI is worse than one that fails.
+`--sarif` writes SARIF 2.1.0 for GitHub code scanning. `--msbuild` prints MSBuild diagnostics
+on stdout, so a build that runs the tool via `Exec` surfaces them in the Visual Studio Error
+List: `XF0001` for gated findings, `XF0002` for warnings, `XF0003` when the result is not
+trustworthy.
 
 Suppress a single slot with a reason — the reason is required, and suppressed slots are counted:
 

@@ -34,6 +34,10 @@ public sealed class TextSite
     /// <summary>Source 是 Resource 時，抽出來的資源鍵（抽不出來是 null）。</summary>
     public string? ResourceKey { get; init; }
 
+    /// <summary>來源語言的實際文字：字面字串就是它自己；資源字串是掃描時就查得到的值
+    /// （XAML 字串字典）。查不到是 null —— .resx 的值要等 check 模式才讀。</summary>
+    public string? SourceText { get; init; }
+
     public string? FontFamily { get; init; }
     public double FontSize { get; init; }
     public int FontWeight { get; init; } = 400;

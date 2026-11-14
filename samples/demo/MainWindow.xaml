@@ -39,8 +39,8 @@
     <!-- [reflow / info] 會換行、高度自動 → 只是把版面撐高，水平沒事 -->
     <TextBlock Width="90" TextWrapping="Wrap" Text="{x:Static p:Strings.Description}"/>
 
-    <!-- [vertical-clip / fail] 會換行但高度寫死 20 → 四行塞進一行的高度 -->
-    <TextBlock Width="90" Height="20" TextWrapping="Wrap" Text="{x:Static p:Strings.Description}"/>
+    <!-- [vertical-clip / fail] 會換行但高度寫死 50：英文三行剛好放得下，德文五行放不下 -->
+    <TextBlock Width="90" Height="50" TextWrapping="Wrap" Text="{x:Static p:Strings.Description}"/>
 
     <!-- [tight / warn] 德文 70.7 px 塞得進 73 px，但餘裕只有 3%，低於預設 5% 邊界 -->
     <TextBlock Width="73" Text="{x:Static p:Strings.Settings}"/>

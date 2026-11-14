@@ -18,16 +18,16 @@ public enum WidthStatus
     /// 輸出時必須是具名值，**不准是空白** —— 在地化負責人看到空白會當成「沒限制」。</summary>
     NoDeclaredLimit,
 
-    /// <summary>有上界，但路上有 Grid 的 Auto／星號欄（v2 解）。</summary>
+    /// <summary>有上界，但路上有解不開的 Grid <c>Auto</c>／<c>*</c> 欄。</summary>
     NeedsGrid,
 
-    /// <summary>有上界，但路上有會限制項目寬度的 ItemsControl（v2 解）。</summary>
+    /// <summary>有上界，但路上有項目寬度另有一套算法的清單控制項（DataGrid、自訂 ItemsPanel…）。</summary>
     NeedsItems,
 
-    /// <summary>在 ControlTemplate／DataTemplate／Style 裡：寬度由使用端決定。</summary>
+    /// <summary>在 ControlTemplate／DataTemplate／Style／資源字典裡：寬度由使用端決定。</summary>
     InTemplate,
 
-    /// <summary>其他看不下去的情形（chrome 未知、SizeToContent、水平捲動…）。</summary>
+    /// <summary>其他看不下去的情形（內距未知、屬性讀不出來、兄弟元素寬度未知…）。</summary>
     Unmeasurable,
 }
 
@@ -39,6 +39,22 @@ public sealed record AvailableWidth(
     bool UsedChromeTable,
     string Reason)
 {
+    /// <summary>算的時候假設了垂直捲軸在場（少算可用寬度只會誤報，多算會漏報）。</summary>
+    public bool AssumedScrollBar { get; init; }
+
+    /// <summary>
+    /// 這個位置的文字是用**無限寬**去量的（水平 StackPanel、Grid 的 Auto 欄、WrapPanel）。
+    /// WPF 實測：這種位置上 <c>TextWrapping="Wrap"</c> **不會換行**，文字一路畫出去被裁掉。
+    /// 判定時要把它當成 NoWrap，否則會把「溢出」報成無害的「換行」。
+    /// </summary>
+    public bool WrapDefeated { get; init; }
+
+    /// <summary>
+    /// 這個寬度是「扣掉同一排其他在地化字串之後」剩下的 —— 那些字串換一個語言就不一樣寬。
+    /// check 模式會用每個語言自己的譯文重算；budget 的數字則是「其他字串維持來源語言寬度」時的值。
+    /// </summary>
+    public bool DependsOnNeighbourText { get; init; }
+
     public static AvailableWidth NotKnown(WidthStatus status, string reason) =>
         new(status, 0, "", 0, false, reason);
 

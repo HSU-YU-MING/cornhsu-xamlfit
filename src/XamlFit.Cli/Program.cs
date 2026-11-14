@@ -1,4 +1,3 @@
-using System.Reflection;
 using XamlFit.Cli;
 
 // XamlFit CLI —— XAML 文字容納度的靜態稽核。
@@ -28,7 +27,7 @@ switch (args[0])
         return 0;
 
     case "--version":
-        Console.WriteLine(ToolVersion() ?? "unknown");
+        Console.WriteLine(CommonOptions.ToolVersion());
         return 0;
 
     case "fonts":
@@ -45,8 +44,3 @@ switch (args[0])
         Console.Error.WriteLine("run 'xamlfit --help' for usage");
         return 2;
 }
-
-static string? ToolVersion() =>
-    Assembly.GetExecutingAssembly()
-        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
-        is { } v && v.IndexOf('+') is var plus && plus > 0 ? v[..plus] : null;

@@ -24,8 +24,33 @@ public sealed class FitConfig
     /// <summary>相對於掃描根的路徑片段；比對不分大小寫。</summary>
     [JsonPropertyName("exclude")] public List<string>? Exclude { get; set; }
 
-    /// <summary>執行期才組出來的鍵名（`Icon*`）。被蓋到的字串列入 suppressed 並可列出。</summary>
-    [JsonPropertyName("usedAtRuntime")] public List<string>? UsedAtRuntime { get; set; }
+    /// <summary>
+    /// 自己宣告的控制項內距（DIP，左右合計）：<c>{ "Card": 16, "MetroWindow": 2, "GroupBox.Header": 9 }</c>。
+    /// 鍵是元素的區域名稱（不含命名空間前綴）。第三方控制項、或被佈景重畫的標準控制項，
+    /// 工具不知道它們的範本吃掉多少寬度 —— 宣告之後才量得到。
+    /// </summary>
+    [JsonPropertyName("chrome")] public Dictionary<string, double>? Chrome { get; set; }
+
+    /// <summary>
+    /// 來源語言（XAML 裡寫死的文字、中性語言的 .resx）是哪個語言。
+    /// 只影響「沒寫 FontFamily 的文字用什麼字型量」：WPF 的預設字型跟著 Windows 語言走（見 CultureFonts）。
+    /// </summary>
+    [JsonPropertyName("sourceCulture")] public string? SourceCulture { get; set; }
+
+    /// <summary>各語言 Windows 的預設 UI 字型，蓋掉內建的對應：<c>{ "th": "Leelawadee UI" }</c>。</summary>
+    [JsonPropertyName("defaultFontByCulture")] public Dictionary<string, string>? DefaultFontByCulture { get; set; }
+
+    /// <summary>
+    /// 「把 A 當成 WPF 的 B」：<c>{ "GridEx": "Grid", "MetroWindow": "Window" }</c>。
+    /// 給只加了行為、沒改版面與範本的子類別用。鍵與值都是區域名稱（不含命名空間前綴）。
+    /// </summary>
+    [JsonPropertyName("treatAs")] public Dictionary<string, string>? TreatAs { get; set; }
+
+    /// <summary>目標機器上沒有的字型家族。出現在 FontFamily 的後備清單裡時直接跳過，用下一個。</summary>
+    [JsonPropertyName("absentFonts")] public List<string>? AbsentFonts { get; set; }
+
+    /// <summary>專案套了外部佈景也照樣用內建的 Aero2 內距表（你確認過那個佈景沒有改動控制項的內距）。</summary>
+    [JsonPropertyName("assumeDefaultTheme")] public bool? AssumeDefaultTheme { get; set; }
 
     [JsonPropertyName("cultures")] public List<string>? Cultures { get; set; }
     [JsonPropertyName("resx")] public List<string>? Resx { get; set; }
@@ -80,7 +105,7 @@ public sealed class FitConfig
 
         foreach (var (field, list) in new (string, List<string>?)[]
                  {
-                     ("exclude", config.Exclude), ("usedAtRuntime", config.UsedAtRuntime),
+                     ("exclude", config.Exclude), ("absentFonts", config.AbsentFonts),
                      ("cultures", config.Cultures), ("resx", config.Resx),
                  })
         {
@@ -89,6 +114,28 @@ public sealed class FitConfig
                 if (string.IsNullOrWhiteSpace(list[i]))
                     problems.Add(new Problem($"{field}[{i}]", "must not be empty"));
         }
+
+        if (config.SourceCulture is { Length: 0 })
+            problems.Add(new Problem("sourceCulture", "must not be empty"));
+
+        if (config.DefaultFontByCulture is not null)
+            foreach (var (culture, font) in config.DefaultFontByCulture)
+                if (string.IsNullOrWhiteSpace(culture) || string.IsNullOrWhiteSpace(font))
+                    problems.Add(new Problem($"defaultFontByCulture[\"{culture}\"]", "culture and font must not be empty"));
+
+        if (config.TreatAs is not null)
+            foreach (var (from, to) in config.TreatAs)
+                if (string.IsNullOrWhiteSpace(from) || string.IsNullOrWhiteSpace(to) || from.Contains(':') || to.Contains(':'))
+                    problems.Add(new Problem($"treatAs[\"{from}\"]", "both names are local element names, without a namespace prefix"));
+
+        if (config.Chrome is not null)
+            foreach (var (name, value) in config.Chrome)
+            {
+                if (string.IsNullOrWhiteSpace(name) || name.Contains(':'))
+                    problems.Add(new Problem($"chrome[\"{name}\"]", "the key is an element's local name, without a namespace prefix"));
+                if (!double.IsFinite(value) || value < 0 || value > 2000)
+                    problems.Add(new Problem($"chrome[\"{name}\"]", "must be a number between 0 and 2000"));
+            }
 
         return (config, problems);
 

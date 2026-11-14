@@ -1,7 +1,5 @@
 using XamlFit.Core.Analysis;
-using XamlFit.Core.Layout;
 using XamlFit.Core.Report;
-using XamlFit.Core.Xaml;
 
 namespace XamlFit.Cli;
 
@@ -14,36 +12,24 @@ internal static class CheckCommand
         if (opts.Root is null) { Console.Error.WriteLine("check needs a root directory"); return 2; }
         if (!Directory.Exists(opts.Root)) { Console.Error.WriteLine($"not a directory: {opts.Root}"); return 2; }
 
-        // check 是閘門，所以覆蓋率下限預設是 60（budget 是匯出，預設 0）
+        // check 是閘門，所以可解析率下限預設是 60（budget 是匯出，預設 0）
         if (!opts.WasGiven("--min-coverage")) opts.MinCoverage = 60;
 
         // ⚠ 設定檔要在「必填參數檢查」**之前**套用。
         //   反過來的話，設定檔裡寫了 resx 也永遠不會生效 —— 檢查會先把人擋掉。
         if (CommonOptions.ApplyConfig(opts) is var cfgCode and not 0) return cfgCode;
 
-        if (!opts.Pseudo && opts.ResxDirs.Count == 0)
-        {
-            Console.Error.WriteLine(
-                "check needs translations: pass --resx <dir>, set \"resx\" in xamlfit.config.json, " +
-                "or use --pseudo to simulate expansion");
-            return 2;
-        }
+        foreach (var dir in opts.ResxDirs)
+            if (!Directory.Exists(dir)) { Console.Error.WriteLine($"--resx directory not found: {dir}"); return 2; }
 
-        var fonts = CommonOptions.LoadFonts(opts, out var fontError);
-        if (fontError is not null) { Console.Error.WriteLine(fontError); return 2; }
+        if (opts.BaselinePath is not null && !File.Exists(opts.BaselinePath))
+        { Console.Error.WriteLine($"baseline not found: {opts.BaselinePath}"); return 2; }
 
-        var chrome = ChromeTable.Builtin();
-        var scanner = new XamlScanner(chrome, new ScanOptions
-        {
-            DefaultFontFamily = opts.DefaultFont,
-            DefaultFontSize = opts.DefaultSize,
-            ExcludeGlobs = opts.Exclude,
-        }, fonts);
+        if (Pipeline.Prepare(opts, out var prepareCode) is not { } prepared) return prepareCode;
+        var scan = prepared.Scan;
 
-        var scan = scanner.Scan(opts.Root);
-        var budget = new BudgetAnalyzer(fonts, opts.DefaultFont).Analyze(scan, chrome.Theme);
-
-        var cultures = new List<CultureStrings>();
+        // ===== 字串表：.resx 加上掃描時找到的 XAML 字串字典 =====
+        var cultures = new List<CultureStrings>(scan.Strings);
         foreach (var dir in opts.ResxDirs)
         {
             var found = ResxReader.ReadDirectory(dir);
@@ -51,19 +37,107 @@ internal static class CheckCommand
             cultures.AddRange(found);
         }
 
-        if (opts.Cultures.Count > 0)
-            cultures = cultures.Where(c => opts.Cultures.Contains(c.Culture, StringComparer.OrdinalIgnoreCase)).ToList();
+        // ⚠ 什麼字串表都沒有、又不是 --pseudo：使用者多半是忘了給 --resx。
+        //   照樣跑下去只會檢查寫死的文字然後亮綠燈，看起來像「譯文檢查過了」。
+        if (opts.SourceOnly && opts.Pseudo)
+        { Console.Error.WriteLine("--source-only and --pseudo cannot be combined"); return 2; }
 
-        var result = new CheckAnalyzer(fonts, opts.DefaultFont, opts.MarginPercent)
-            .Analyze(scan, budget, cultures, opts.Pseudo);
+        if (opts.SourceOnly)
+            cultures = cultures.Where(c => c.Culture == ResxReader.NeutralCulture).ToList();
+
+        if (!opts.Pseudo && !opts.SourceOnly && cultures.Count == 0)
+        {
+            Console.Error.WriteLine(
+                "check needs translations: pass --resx <dir>, set \"resx\" in xamlfit.config.json, " +
+                "keep XAML string dictionaries (<sys:String x:Key=…>) under <root>, " +
+                "use --pseudo to simulate expansion, or --source-only to check just the source-language text");
+            return 2;
+        }
+
+        if (opts.Cultures.Count > 0 && !opts.SourceOnly)
+        {
+            var available = cultures.Select(c => c.Culture).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var unknown = opts.Cultures.Where(c => !available.Contains(c, StringComparer.OrdinalIgnoreCase)).ToList();
+            if (unknown.Count > 0)
+            {
+                Console.Error.WriteLine(
+                    $"--culture {string.Join(", ", unknown)}: no string table for it. Found: " +
+                    string.Join(", ", available.Where(c => c != ResxReader.NeutralCulture).DefaultIfEmpty("(none)")));
+                return 2;
+            }
+
+            // ⚠ 中性語言一定要留著：它是來源字串，--pseudo 與「目前有多寬」都靠它。
+            //   第一版的篩選把它一起濾掉，於是 `--pseudo --culture de` 量到 0 筆。
+            cultures = cultures
+                .Where(c => c.Culture == ResxReader.NeutralCulture
+                            || opts.Cultures.Contains(c.Culture, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        CheckAnalyzer.MergeByCulture(cultures).TryGetValue(ResxReader.NeutralCulture, out var neutral);
+
+        // 同一排的兄弟也是 .resx 字串時，要有來源語言的值才量得出它們多寬
+        if (neutral is { Count: > 0 } && scan.NeighbourTextUses > 0)
+            scan = prepared.Scanner.Rescan(opts.DefaultFont, neutral);
+
+        var budget = new BudgetAnalyzer(prepared.Fonts, opts.DefaultFont).Analyze(scan, prepared.Chrome.Theme, neutral);
+
+        var neutralTables = cultures.Where(c => c.Culture == ResxReader.NeutralCulture).ToList();
+        var byCulture = CheckAnalyzer.MergeByCulture(cultures);
+
+        var parts = new List<CheckResult>
+        {
+            // 來源語言自己（--pseudo 也在這裡：拿來源字串去膨脹）
+            new CheckAnalyzer(prepared.Fonts, opts.DefaultFont, opts.MarginPercent)
+                .Analyze(scan, budget, neutralTables, opts.Pseudo),
+        };
+
+        // ⚠ 每個語言各掃一次，理由有兩個（都是 LayoutOracle 實測出來的）：
+        //   1. 沒寫 FontFamily 的文字用「系統訊息字型」畫，而它跟著 Windows 的語言走（見 CultureFonts）。
+        //   2. 同一排的兄弟也是在地化字串時，留給這個位置的寬度取決於兄弟**在那個語言**有多寬。
+        //   兩者都不成立時（同一支字型、版面不依賴兄弟的文字）沿用同一次掃描。
+        var unmeasuredCultures = new List<(string Font, string Cultures)>();
+        var scansByFont = new Dictionary<string, XamlFit.Core.Xaml.ScanResult>(StringComparer.OrdinalIgnoreCase)
+        {
+            [opts.DefaultFont] = scan,
+        };
+
+        if (!opts.Pseudo)
+        {
+            foreach (var culture in byCulture.Keys
+                         .Where(c => c != ResxReader.NeutralCulture)
+                         .OrderBy(c => c, StringComparer.OrdinalIgnoreCase))
+            {
+                var font = CultureFonts.DefaultFor(culture, opts.DefaultFontByCulture) ?? opts.DefaultFont;
+
+                if (prepared.Fonts.Resolve(font, 400, XamlFit.Core.Fonts.FontStyleKind.Normal, font).Chain.Count == 0)
+                {
+                    unmeasuredCultures.Add((font, culture));
+                    continue;
+                }
+
+                XamlFit.Core.Xaml.ScanResult localized;
+                if (scan.NeighbourTextUses > 0)
+                    localized = prepared.Scanner.Rescan(font, Pipeline.Overlay(neutral, byCulture[culture]));
+                else if (!scansByFont.TryGetValue(font, out localized!))
+                    scansByFont[font] = localized = prepared.Scanner.Rescan(font, null);
+
+                parts.Add(new CheckAnalyzer(prepared.Fonts, font, opts.MarginPercent)
+                    .Analyze(localized, budget,
+                        [.. neutralTables, .. cultures.Where(c => c.Culture.Equals(culture, StringComparison.OrdinalIgnoreCase))],
+                        pseudo: false, judgeSource: false));
+            }
+        }
+
+        var result = CheckAnalyzer.Merge(parts);
 
         var all = result.Findings;
 
         // ===== baseline =====
         if (opts.WriteBaselinePath is not null)
         {
-            File.WriteAllText(opts.WriteBaselinePath,
-                Baseline.FromFindings(all, DateOnly.FromDateTime(DateTime.Now)).ToJson());
+            if (!Pipeline.TryWrite(opts.WriteBaselinePath,
+                    Baseline.FromFindings(all, DateOnly.FromDateTime(DateTime.Now)).ToJson())) return 2;
             Console.WriteLine($"wrote baseline with {all.Count} known finding(s) → {opts.WriteBaselinePath}");
             return 0;
         }
@@ -72,9 +146,6 @@ internal static class CheckCommand
         var baselined = 0;
         if (opts.BaselinePath is not null)
         {
-            if (!File.Exists(opts.BaselinePath))
-            { Console.Error.WriteLine($"baseline not found: {opts.BaselinePath}"); return 2; }
-
             try
             {
                 var known = Baseline.Parse(File.ReadAllText(opts.BaselinePath)).AsSet();
@@ -86,22 +157,40 @@ internal static class CheckCommand
 
         // ===== console =====
         var s = result.Summary;
-        Console.WriteLine($"xamlfit check — {s.Budget.Files} XAML file(s), {s.Budget.MeasuredStrings} string(s) with a budget");
+        Console.WriteLine($"xamlfit check — {s.Budget.Files} XAML file(s), {s.Budget.MeasuredSites} measurable text site(s)");
         Console.WriteLine(opts.Pseudo
             ? "  mode             pseudo (simulated expansion — reports risk, never fails the build)"
-            : $"  cultures         {string.Join(", ", s.Cultures.Where(c => c != ResxReader.NeutralCulture))}");
-        Console.WriteLine($"  measurements     {s.StringsChecked}");
-        // ⚠ 解析失敗的檔案一定要講。一個壞掉的 XAML 靜默消失 = 謊報健康
-        //   （示範專案的註解裡放了連續兩個減號，整份解析失敗，而 check 模式一聲不吭）。
-        if (s.Budget.ParseErrors > 0)
-            Console.Error.WriteLine($"  !! {s.Budget.ParseErrors} file(s) failed to parse and were not analysed");
+            : $"  cultures         {(s.Cultures.Count > 0 ? string.Join(", ", s.Cultures) : "(none — only the source language was checked)")}");
+        Console.WriteLine($"  default font     {opts.DefaultFont} {opts.DefaultSize:G}  (used where XAML sets no FontFamily; WPF takes it from the Windows display language)");
+        Console.WriteLine($"  measurements     {s.Measurements}" +
+                          (opts.Pseudo ? "" : $"  ({s.TranslatedMeasurements} translated, {s.Measurements - s.TranslatedMeasurements} source-language)"));
+
+        if (s.Unreliable > 0)
+        {
+            Console.Error.WriteLine(
+                $"  !! {s.Unreliable} measurement(s) were NOT judged because the width cannot be trusted:");
+            foreach (var (culture, reason, count) in s.UnreliableReasons.Take(6))
+                Console.Error.WriteLine($"       {count,5}  [{culture}] {reason}");
+            if (s.UncoveredCodepoints.Count > 0)
+                Console.Error.WriteLine(
+                    "       characters with no metrics: " +
+                    string.Join(", ", s.UncoveredCodepoints.Take(10).Select(u => $"U+{u.Codepoint:X4} ×{u.Count}")) +
+                    (s.UncoveredCodepoints.Count > 10 ? ", …" : "") +
+                    "  (export a font that has them, e.g. Segoe UI Emoji or Segoe UI Symbol)");
+        }
+        if (s.Placeholders > 0)
+            Console.WriteLine($"  not judged       {s.Placeholders}  (format placeholders like {{0}}: the displayed length depends on run-time values)");
+        if (s.NoSourceText > 0)
+            Console.Error.WriteLine(
+                $"  !! {s.NoSourceText} resource string(s) have no source text to expand " +
+                "(pass --resx pointing at the neutral-culture .resx)");
         if (s.MissingTranslations > 0) Console.WriteLine($"  missing strings  {s.MissingTranslations}  (key has no value in that culture)");
         if (s.Suppressed > 0) Console.WriteLine($"  suppressed       {s.Suppressed}");
-        if (s.Budget.InvalidIgnores > 0)
-            Console.Error.WriteLine(
-                $"  !! {s.Budget.InvalidIgnores} xamlfit-ignore comment(s) have no reason and were NOT applied");
         if (baselined > 0) Console.WriteLine($"  in baseline      {baselined}");
-        Console.WriteLine($"  resolution       {s.Budget.Resolution:F1}%");
+        Console.WriteLine($"  resolution       {s.Budget.Resolution:F1}%  ({s.Budget.MeasuredSites} measured, {s.Budget.BlockedSites} blocked; " +
+                          $"{s.Budget.NoDeclaredLimitSites} with no width bound and {s.Budget.InTemplateSites} in templates are not checked)");
+
+        Pipeline.PrintBlindSpots(scan, s.Budget);
 
         foreach (var kind in new[] { "overflow", "vertical-clip", "trimmed", "tight", "reflow" })
             if (s.Counts.TryGetValue(kind, out var n) && n > 0)
@@ -114,9 +203,9 @@ internal static class CheckCommand
             {
                 Console.WriteLine(
                     $"  {FitFinding.SeveritySlug(f.Severity),-4} {FitFinding.KindSlug(f.Kind),-13} " +
-                    $"[{f.Culture}] {f.Site}");
+                    $"[{f.Culture}] {CheckDiagnostics.ConsoleSafe(f.Site)}");
                 Console.WriteLine(
-                    $"       {Trunc(f.Text, 60)}");
+                    $"       {Pipeline.Trunc(f.Text, 60)}");
                 Console.WriteLine(
                     $"       needs {f.ActualPx:F1} px, has {f.LimitPx:F1} px" +
                     (f.OverflowPx > 0 ? $" — over by {f.OverflowPx:F1} px" : "") +
@@ -130,15 +219,26 @@ internal static class CheckCommand
         var gate = opts.FailOn == "warn" ? FitSeverity.Warn : FitSeverity.Fail;
         var exitCode = DecideExit(s, reported, opts, gate);
 
+        // 某個語言的系統字型沒有度量：那個語言整批沒檢查，不能當成通過
+        foreach (var (font, names) in unmeasuredCultures
+                     .GroupBy(u => u.Font, StringComparer.OrdinalIgnoreCase)
+                     .Select(g => (g.Key, string.Join(", ", g.Select(u => u.Cultures)))))
+            Console.Error.WriteLine(
+                $"\n{names}: NOT checked. Text without an explicit FontFamily is drawn with '{font}' on that " +
+                $"language's Windows, and the metrics file has no such font. Export it " +
+                $"(xamlfit fonts export --family \"{font}\" --merge), leave the culture out with --culture, " +
+                "or map it to another font under \"defaultFontByCulture\" in xamlfit.config.json.");
+        if (unmeasuredCultures.Count > 0 && exitCode is 0 or 1) exitCode = 3;
+
         if (opts.JsonPath is not null)
         {
-            File.WriteAllText(opts.JsonPath, CheckReport.ToJson(result, reported, CommonOptions.ToolVersion()));
+            if (!Pipeline.TryWrite(opts.JsonPath, CheckReport.ToJson(result, reported, CommonOptions.ToolVersion()))) return 2;
             Console.WriteLine($"\nwrote {opts.JsonPath}");
         }
 
         if (opts.SarifPath is not null)
         {
-            File.WriteAllText(opts.SarifPath, CheckDiagnostics.ToSarif(reported, CommonOptions.ToolVersion()));
+            if (!Pipeline.TryWrite(opts.SarifPath, CheckDiagnostics.ToSarif(reported, CommonOptions.ToolVersion()))) return 2;
             Console.WriteLine($"wrote {opts.SarifPath}");
         }
 
@@ -171,12 +271,33 @@ internal static class CheckCommand
         // ⚠ 量到 0 筆就回 exit 0，等於在什麼都沒看的情況下說「沒問題」。
         //   這條原本把 --pseudo 排除在外，而 --pseudo 剛好是最容易量到 0 的模式
         //   （資源引用取不到來源字串時）—— 那個排除本身就是一個謊報健康的洞。
-        if (s.StringsChecked == 0)
+        if (s.Measurements == 0)
         {
             Console.Error.WriteLine(opts.Pseudo
                 ? "\nnothing was measured — --pseudo needs source strings: either literal text in the " +
                   "XAML, or --resx pointing at the neutral-culture .resx the keys come from"
-                : "\nno translated string was actually measured — check --resx and that the keys match");
+                : "\nnothing was measured — result is not trustworthy");
+            return 3;
+        }
+
+        // 有譯文的語言，卻一筆譯文都沒量到：鍵對不上，或那些字串都不在量得到的位置上
+        if (!opts.Pseudo && s.Cultures.Count > 0 && s.TranslatedMeasurements == 0)
+        {
+            Console.Error.WriteLine(
+                "\nno translated string was actually measured — check --resx and that the keys match " +
+                "the ones the XAML refers to");
+            return 3;
+        }
+
+        // 某個語言整批沒有判定（阿拉伯文、泰文…，或度量檔沒有那個文字的字型）：
+        // 「沒檢查」不能長得跟「通過」一樣
+        var skipped = s.PerCulture.Where(p => p.Measured == 0 && p.Unreliable > 0).Select(p => p.Culture).ToList();
+        if (skipped.Count > 0)
+        {
+            Console.Error.WriteLine(
+                $"\nnot one string could be measured reliably for: {string.Join(", ", skipped)} — " +
+                "result is not trustworthy for those cultures (export a font that covers the script, " +
+                "or leave them out with --culture)");
             return 3;
         }
 
@@ -189,6 +310,4 @@ internal static class CheckCommand
 
         return 0;
     }
-
-    private static string Trunc(string s, int n) => s.Length <= n ? s : s[..(n - 1)] + "…";
 }

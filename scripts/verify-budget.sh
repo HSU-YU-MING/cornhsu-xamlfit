@@ -18,8 +18,8 @@ if [ "$CODE" -ne 0 ]; then
   exit 1
 fi
 
-# 第 4 欄是 status。跳過註解列與標題列。
-BLANK=$(awk -F, 'NR>2 && $4 == "" { n++ } END { print n+0 }' "$CSV")
+# 第 4 欄是 status。跳過註解列（# 開頭，數量會變）與標題列。
+BLANK=$(awk -F, '!/^#/ && $1 != "key" && $4 == "" { n++ } END { print n+0 }' "$CSV")
 if [ "$BLANK" -ne 0 ]; then
   echo "FAIL: $BLANK row(s) have a blank status column"
   exit 1

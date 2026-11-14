@@ -29,6 +29,9 @@ public sealed class MetricsFile
         [JsonPropertyName("weight")] public int Weight { get; set; } = 400;
         [JsonPropertyName("style")] public string Style { get; set; } = "Normal";
         [JsonPropertyName("stretch")] public string Stretch { get; set; } = "Normal";
+        [JsonPropertyName("legacyFamily")] public string? LegacyFamily { get; set; }
+        [JsonPropertyName("variable")] public bool Variable { get; set; }
+        [JsonPropertyName("aliases")] public List<string>? Aliases { get; set; }
         [JsonPropertyName("unitsPerEm")] public int UnitsPerEm { get; set; }
         [JsonPropertyName("ascender")] public int Ascender { get; set; }
         [JsonPropertyName("descender")] public int Descender { get; set; }
@@ -61,6 +64,9 @@ public sealed class MetricsFile
                 Weight = m.Weight,
                 Style = m.Style.ToString(),
                 Stretch = m.Stretch,
+                LegacyFamily = m.LegacyFamily,
+                Variable = m.Variable,
+                Aliases = m.Aliases.Count > 0 ? [.. m.Aliases] : null,
                 UnitsPerEm = m.UnitsPerEm,
                 Ascender = m.Ascender,
                 Descender = m.Descender,
@@ -91,6 +97,9 @@ public sealed class MetricsFile
             sb.Append($"      \"weight\": {f.Weight},\n");
             sb.Append($"      \"style\": {Quote(f.Style)},\n");
             sb.Append($"      \"stretch\": {Quote(f.Stretch)},\n");
+            if (!string.IsNullOrWhiteSpace(f.LegacyFamily)) sb.Append($"      \"legacyFamily\": {Quote(f.LegacyFamily)},\n");
+            if (f.Variable) sb.Append("      \"variable\": true,\n");
+            if (f.Aliases is { Count: > 0 }) sb.Append($"      \"aliases\": [{string.Join(", ", f.Aliases.Select(Quote))}],\n");
             sb.Append($"      \"unitsPerEm\": {f.UnitsPerEm},\n");
             sb.Append($"      \"ascender\": {f.Ascender},\n");
             sb.Append($"      \"descender\": {f.Descender},\n");
@@ -140,6 +149,9 @@ public sealed class MetricsFile
                 Weight = e.Weight,
                 Style = Enum.TryParse<FontStyleKind>(e.Style, true, out var s) ? s : FontStyleKind.Normal,
                 Stretch = e.Stretch,
+                LegacyFamily = e.LegacyFamily,
+                Variable = e.Variable,
+                Aliases = e.Aliases ?? [],
                 UnitsPerEm = e.UnitsPerEm,
                 Ascender = e.Ascender,
                 Descender = e.Descender,

@@ -96,16 +96,19 @@ public class StyleIndexTests
     [Fact]
     public void Ambiguous_implicit_styles_are_not_guessed()
     {
-        // 兩個同 TargetType 的隱含樣式：哪個生效取決於作用域，靜態不猜
-        var (idx, probe) = Build("""
-            <Root.Resources>
-              <Style TargetType="TextBlock"><Setter Property="FontSize" Value="13"/></Style>
-              <Style TargetType="TextBlock"><Setter Property="FontSize" Value="17"/></Style>
-            </Root.Resources>
-            """ + """<TextBlock x:Name="probe" Text="hi"/>""");
+        // 兩個資源字典檔各有一個同 TargetType 的隱含樣式、值不一樣：
+        // 哪個生效取決於合併的順序，靜態不猜 —— 而且要說「讀不出來」，不是「沒設定」
+        const string ns = "xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" " +
+                          "xmlns:x=\"http://schemas.microsoft.com/winfx/2006/xaml\"";
+        var idx = new StyleIndex();
+        idx.Add(XDocument.Parse($"<ResourceDictionary {ns}><Style TargetType=\"TextBlock\"><Setter Property=\"FontSize\" Value=\"13\"/></Style></ResourceDictionary>"), "Light.xaml");
+        idx.Add(XDocument.Parse($"<ResourceDictionary {ns}><Style TargetType=\"TextBlock\"><Setter Property=\"FontSize\" Value=\"17\"/></Style></ResourceDictionary>"), "Dark.xaml");
+
+        var page = XDocument.Parse($"<Grid {ns}><TextBlock x:Name=\"probe\" Text=\"hi\"/></Grid>");
+        var probe = page.Descendants().First(e => e.Name.LocalName == "TextBlock");
 
         Assert.Null(idx.Resolve(probe, "FontSize", inheritable: true));
-        Assert.Contains("TextBlock", idx.AmbiguousImplicitTargets);
+        Assert.True(idx.ResolveEx(probe, "FontSize", inheritable: true).IsUnreadable);
     }
 
     [Fact]

@@ -53,14 +53,28 @@ run 0 "budget"                     budget "$DEMO"
 run 0 "budget --csv"               budget "$DEMO" --csv "$TMP/b.csv"
 run 0 "budget --json"              budget "$DEMO" --json "$TMP/b.json"
 run 0 "budget --csv-raw"           budget "$DEMO" --csv-raw --csv "$TMP/raw.csv"
+run 0 "budget --sites"             budget "$DEMO" --sites "$TMP/sites.csv"
+run 0 "budget --assume-default-theme" budget "$DEMO" --assume-default-theme
+run 0 "budget --source-culture"    budget "$DEMO" --source-culture de
 run 2 "budget, missing directory"  budget "$TMP/nope"
+# 明確指定的度量檔不存在：不能默默退回去用預設檔名的那一份
+run 2 "budget, --metrics not found" budget "$DEMO" --metrics "$TMP/nope.fonts.json"
+# 輸出檔寫不進去（路徑的上一層是一個檔案）：要是 exit 2 加一句話，不是堆疊追蹤
+printf 'x' > "$TMP/afile"
+run 2 "budget, output path not writable" budget "$DEMO" --json "$TMP/afile/out.json"
 run 3 "budget, nothing to scan"    budget "$TMP"
 
 # ===== check（閘門）=====
 run 1 "check --resx"               check "$DEMO" --resx "$RESX"
 run 1 "check --fail-on warn"       check "$DEMO" --resx "$RESX" --fail-on warn
 run 1 "check --culture de"         check "$DEMO" --resx "$RESX" --culture de
-run 3 "check, culture with no data" check "$DEMO" --resx "$RESX" --culture xx
+# 指定了一個沒有字串表的語言是輸入錯誤，不是「結果不可信」
+run 2 "check, culture with no data" check "$DEMO" --resx "$RESX" --culture xx
+# --pseudo 靠中性語言的字串當來源；--culture 的篩選不能把它一起濾掉
+run 0 "check --pseudo --culture de" check "$DEMO" --pseudo --resx "$RESX" --culture de
+run 0 "check --source-only"         check "$DEMO" --source-only --resx "$RESX"
+run 2 "check --source-only --pseudo" check "$DEMO" --source-only --pseudo
+run 2 "check, --resx is not a directory" check "$DEMO" --resx "$TMP/nope"
 run 1 "check --sarif"              check "$DEMO" --resx "$RESX" --sarif "$TMP/c.sarif"
 run 1 "check --msbuild"            check "$DEMO" --resx "$RESX" --msbuild
 run 2 "check, bad --fail-on"       check "$DEMO" --resx "$RESX" --fail-on sideways
@@ -92,6 +106,10 @@ run 2 "config, misspelled property" check "$DEMO" --resx "$RESX" --config "$TMP/
 printf '{ "marginPercent": 500 }' > "$TMP/range.json"
 run 2 "config, out of range"       check "$DEMO" --resx "$RESX" --config "$TMP/range.json"
 run 2 "config, missing file"       check "$DEMO" --resx "$RESX" --config "$TMP/nope.json"
+printf '{ "chrome": { "ui:Card": 16 } }' > "$TMP/chrome.json"
+run 2 "config, chrome key with a prefix" check "$DEMO" --resx "$RESX" --config "$TMP/chrome.json"
+printf '{ "chrome": { "Card": 16 }, "treatAs": { "GridEx": "Grid" }, "absentFonts": ["Nope"], "defaultFontByCulture": { "de": "XamlFit Demo Sans" }, "defaultFontFamily": "XamlFit Demo Sans" }' > "$TMP/full.json"
+run 1 "config, every new key accepted" check "$DEMO" --resx "$RESX" --config "$TMP/full.json"
 
 # 設定檔提供 resx：⚠ 設定檔要在必填參數檢查之前套用，否則這一條會是 exit 2
 run 1 "config supplies resx"       check "$DEMO"
