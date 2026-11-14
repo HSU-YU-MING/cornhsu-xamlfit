@@ -77,6 +77,9 @@ public sealed record BudgetSummary
     /// <summary>純符號／數字，沒有任何文字 —— 箭頭、圖示字型、「00」。不是翻譯對象。</summary>
     public int SymbolOnlySites { get; init; }
 
+    /// <summary>有 ignore 註解但沒寫理由 —— 沒有生效，要大聲講。</summary>
+    public int InvalidIgnores { get; init; }
+
     public int Strings { get; init; }
     public int MeasuredStrings { get; init; }
     public int NoDeclaredLimitStrings { get; init; }
@@ -240,6 +243,7 @@ public sealed class BudgetAnalyzer
                 is WidthStatus.NeedsGrid or WidthStatus.NeedsItems or WidthStatus.Unmeasurable),
             NoDeclaredLimitSites = localizable.Count(s => s.Width.Status == WidthStatus.NoDeclaredLimit),
             SymbolOnlySites = symbolOnly,
+            InvalidIgnores = localizable.Count(s => s.InvalidIgnore),
             Strings = budgets.Count,
             MeasuredStrings = budgets.Count(b => b.Status == BudgetStatus.Measured),
             NoDeclaredLimitStrings = budgets.Count(b => b.Status == BudgetStatus.NoDeclaredLimit),

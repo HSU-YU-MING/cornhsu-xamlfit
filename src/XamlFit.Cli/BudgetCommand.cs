@@ -43,6 +43,9 @@ internal static class BudgetCommand
         Console.WriteLine($"  resolution         {s.Resolution:F1}%  (of sites that should yield a number)");
         Console.WriteLine($"  coverage           {s.Coverage:F1}%  (of all localizable sites, informational)");
         if (s.Suppressed > 0) Console.WriteLine($"  suppressed         {s.Suppressed}");
+        if (s.InvalidIgnores > 0)
+            Console.Error.WriteLine(
+                $"  !! {s.InvalidIgnores} xamlfit-ignore comment(s) have no reason and were NOT applied");
         if (s.ParseErrors > 0) Console.WriteLine($"  parse errors       {s.ParseErrors}");
         if (s.MissingFonts.Count > 0)
             Console.WriteLine($"  !! no metrics for: {string.Join(", ", s.MissingFonts)}  (run 'xamlfit fonts export')");
@@ -65,7 +68,7 @@ internal static class BudgetCommand
 
         if (opts.CsvPath is not null)
         {
-            File.WriteAllText(opts.CsvPath, BudgetReport.ToCsv(result));
+            File.WriteAllText(opts.CsvPath, BudgetReport.ToCsv(result, neutralizeFormulas: !opts.CsvRaw));
             Console.WriteLine($"\nwrote {opts.CsvPath}");
         }
 
@@ -115,6 +118,9 @@ internal sealed class CommonOptions
     public double MarginPercent { get; set; } = 5;
     public List<string> ResxDirs { get; } = [];
     public List<string> Cultures { get; } = [];
+
+    /// <summary>CSV 不做公式中和。餵進翻譯平台 API、需要逐位元組相同的原文時用。</summary>
+    public bool CsvRaw { get; set; }
     public bool Pseudo { get; set; }
     public string FailOn { get; set; } = "fail";
     public string? BaselinePath { get; set; }
@@ -146,6 +152,7 @@ internal sealed class CommonOptions
                 case "--baseline": o.BaselinePath = Next(a); break;
                 case "--write-baseline": o.WriteBaselinePath = Next(a); break;
                 case "--pseudo": o.Pseudo = true; break;
+                case "--csv-raw": o.CsvRaw = true; break;
 
                 case "--fail-on":
                     var fo = Next(a);

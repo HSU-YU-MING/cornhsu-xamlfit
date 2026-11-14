@@ -90,6 +90,9 @@ internal static class CheckCommand
             Console.Error.WriteLine($"  !! {s.Budget.ParseErrors} file(s) failed to parse and were not analysed");
         if (s.MissingTranslations > 0) Console.WriteLine($"  missing strings  {s.MissingTranslations}  (key has no value in that culture)");
         if (s.Suppressed > 0) Console.WriteLine($"  suppressed       {s.Suppressed}");
+        if (s.Budget.InvalidIgnores > 0)
+            Console.Error.WriteLine(
+                $"  !! {s.Budget.InvalidIgnores} xamlfit-ignore comment(s) have no reason and were NOT applied");
         if (baselined > 0) Console.WriteLine($"  in baseline      {baselined}");
         Console.WriteLine($"  resolution       {s.Budget.Resolution:F1}%");
 

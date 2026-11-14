@@ -150,7 +150,9 @@ public sealed partial class XamlScanner
             Trim = ParseTrim(Nearest(el, "TextTrimming")),
             Height = WidthResolver.TryLength(el.Attribute("Height")?.Value, out var h) ? h : null,
             Width = _width.Resolve(el),
-            SuppressedReason = IgnoreReason(el),
+            SuppressedReason = IgnoreReason(el) is { Length: > 0 } r ? r : null,
+            // 理由必填：空理由的 ignore 不生效，但要讓使用者知道它沒生效
+            InvalidIgnore = IgnoreReason(el) is { Length: 0 },
         };
     }
 

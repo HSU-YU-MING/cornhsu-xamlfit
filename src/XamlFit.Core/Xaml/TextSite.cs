@@ -47,8 +47,13 @@ public sealed class TextSite
 
     public required AvailableWidth Width { get; init; }
 
-    /// <summary>被 ignore 註解壓掉的理由。</summary>
+    /// <summary>被 ignore 註解壓掉的理由。
+    /// ⚠ **理由必填**：沒寫理由的 ignore 是無效的（<see cref="InvalidIgnore"/> 會是 true，
+    /// 而這一欄維持 null）。沒有理由的壓抑，等於新開一條靜默退化的通道。</summary>
     public string? SuppressedReason { get; set; }
+
+    /// <summary>有 ignore 註解但沒寫理由 —— 不生效，而且要警告。</summary>
+    public bool InvalidIgnore { get; init; }
 
     public string Location => $"{File}:{Line}";
 

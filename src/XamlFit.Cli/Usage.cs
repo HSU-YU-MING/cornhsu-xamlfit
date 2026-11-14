@@ -28,10 +28,12 @@ internal static class Usage
 
             BUDGET
               --csv <path>         Write the budget table as CSV (for translation platforms)
+              --csv-raw            Do not prefix formula-like text with ' (byte-exact source
+                                   strings for API pipelines; unsafe to open in a spreadsheet)
               --json <path>        Write the full report as JSON
               --metrics <path>     Metrics file (default: xamlfit.fonts.json next to <root>)
-              --config <path>      Config file (default: xamlfit.config.json next to <root>)
-              --min-coverage <n>   Measurable-site floor, 0-100 (default 70). Below it: exit 3.
+              --min-coverage <n>   Resolution floor, 0-100. Below it: exit 3.
+                                   Default 0 for budget (an export, not a gate), 60 for check.
               --default-font <s>   Font family assumed when XAML does not say (default: Segoe UI)
               --default-size <n>   Font size assumed when XAML does not say (default: 12)
 

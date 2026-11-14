@@ -118,8 +118,15 @@ Unbounded,,,no-declared-limit,,,,…
 
 `limit_px` is authoritative; `limit_chars` is an estimate, because glyph widths differ. The
 column order puts the limit before the source string, which is what Smartling-style CSV imports
-expect. Translation platforms let you set a length limit per string — this is where the number
-comes from, instead of someone guessing.
+expect.
+
+Text fields that start with `=`, `+`, `-`, `@`, a tab or a carriage return are prefixed with a
+single quote, so a spreadsheet does not treat them as formulas. Real UI strings do start with
+`+` and `-`, so if you feed the CSV straight into a translation API rather than opening it,
+use `--csv-raw` to get byte-exact source strings — and do not open that file in Excel.
+
+Translation platforms let you set a length limit per string — this is where the number comes
+from, instead of someone guessing.
 
 `headroom_px` is useful on its own, with no translations at all: a slot with 2 px of slack in
 English is already counting down.
@@ -171,16 +178,7 @@ a guess should not block someone's pull request.
 
 ## Configuration
 
-`xamlfit.config.json` next to the scanned root, or `--config`:
-
-```jsonc
-{
-  "defaultFontFamily": "Segoe UI",
-  "defaultFontSize": 12,
-  "marginPercent": 5,
-  "exclude": ["Generated/"]
-}
-```
+Everything is a command-line flag today; a config file is a 0.x roadmap item.
 
 Suppress a single slot with a reason — the reason is required, and suppressed slots are counted:
 

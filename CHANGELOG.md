@@ -18,6 +18,8 @@ Everything below is the initial implementation; nothing has been released yet.
 - **`xamlfit check`** — measures real `.resx` translations against those budgets and fails
   CI. `--pseudo` simulates expansion when translations do not exist yet.
 - Baseline (`--baseline` / `--write-baseline`) and `<!-- xamlfit-ignore: reason -->`.
+  The reason is **required**: an ignore without one does not apply and is reported.
+- CSV formula neutralisation by default (`--csv-raw` opts out for API pipelines).
 - A deliberately broken demo project with CI count assertions.
 
 ### Verified
