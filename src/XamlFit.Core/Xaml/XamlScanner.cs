@@ -146,6 +146,13 @@ public sealed partial class XamlScanner
         var stack = new Stack<string>();
         stack.Push(root);
 
+        // ⚠ 兩道防線擋住無限遞迴。工具跑在 CI 上、掃的是任意 repo ——
+        //   一個 `ln -s .. loop` 就能讓建置掛死，而那不需要任何惡意，手滑就會有。
+        //   (1) 不進符號連結與 reparse point（junction）
+        //   (2) 記錄走過的真實路徑，擋住 (1) 漏掉的情形
+        var visited = new HashSet<string>(
+            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+
         while (stack.Count > 0)
         {
             var dir = stack.Pop();
@@ -154,12 +161,14 @@ public sealed partial class XamlScanner
             string[] files;
             try
             {
+                if (!visited.Add(Path.GetFullPath(dir))) continue;
                 subdirs = Directory.GetDirectories(dir);
                 files = Directory.GetFiles(dir);
             }
             catch (UnauthorizedAccessException) { continue; }   // 權限不足的目錄跳過，不要整個掃描失敗
-            catch (DirectoryNotFoundException) { continue; }
-            catch (PathTooLongException) { continue; }
+            // ⚠ IOException 要一起接：斷線的網路磁碟、壞掉的 mount 點
+            //   不該讓整個掃描失敗，只該跳過那一個目錄
+            catch (IOException) { continue; }
 
             foreach (var f in files)
             {
@@ -173,6 +182,7 @@ public sealed partial class XamlScanner
             {
                 var name = Path.GetFileName(sub);
                 if (IsExcludedDirectory(name)) continue;
+                if (IsLink(sub)) continue;
                 stack.Push(sub);
             }
         }
@@ -185,6 +195,27 @@ public sealed partial class XamlScanner
     /// <c>bin</c> 的目錄（<c>D:\bin\myproject</c>），**所有檔案都會被排除**，
     /// 然後吐 exit 3 說「找不到任何文字位置」而不解釋為什麼。
     /// </summary>
+    /// <summary>
+    /// 符號連結或 reparse point（Windows 的 junction）。
+    ///
+    /// ⚠ 不進去。理由不是安全而是**會掛死**：一個指向上層的連結就是無限遞迴，
+    ///   而那在 repo 裡不需要任何惡意，手滑就會有。指向 `/` 的連結更糟 ——
+    ///   不是迴圈，是把整個檔案系統掃一遍。
+    /// ⚠ 代價：放在連結底下的真實原始碼會掃不到。這是刻意的取捨，
+    ///   「漏掃一個不尋常的目錄」遠好過「CI 卡住直到逾時」。
+    /// </summary>
+    private static bool IsLink(string dir)
+    {
+        try
+        {
+            var info = new DirectoryInfo(dir);
+            return info.LinkTarget is not null
+                || info.Attributes.HasFlag(FileAttributes.ReparsePoint);
+        }
+        catch (IOException) { return true; }                  // 讀不到屬性就不要進去
+        catch (UnauthorizedAccessException) { return true; }
+    }
+
     private static bool IsExcludedDirectory(string name) =>
         // .claude/worktrees 裡是同一個專案的副本，不排除會重複計算好幾倍（M0 實查踩到）
         name.StartsWith('.')
