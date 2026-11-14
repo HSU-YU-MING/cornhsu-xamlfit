@@ -143,6 +143,9 @@ internal static partial class Program
         window.ShowActivated = false;
         window.Show();
         window.UpdateLayout();
+        // DataGrid 的星號欄寬是延後算的（排進 Dispatcher）：先讓它跑完再量（LayoutOracle「star column」踩到）
+        window.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+        window.UpdateLayout();
 
         Console.WriteLine($"{spec.Window}: window {window.ActualWidth:F1} wide; {loaded}/{merged.Count} dictionaries loaded ({dictionaryRepairs} repairs in dictionaries)");
         var windowRepairs = log.Skip(dictionaryRepairs).Where(l => l.StartsWith(Path.GetFileName(windowPath), StringComparison.Ordinal)).ToList();

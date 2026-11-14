@@ -70,6 +70,13 @@ public sealed class FitConfig
     /// </summary>
     [JsonPropertyName("controlWidths")] public Dictionary<string, double>? ControlWidths { get; set; }
 
+    /// <summary>
+    /// 垂直捲軸實際上不會出現的 ScrollViewer（或清單）：它們的 <c>x:Name</c>。
+    /// 捲軸是 Auto 時工具一律假設它在（佔掉捲軸寬）；內容永遠不會比它高的，在這裡宣告就不扣。
+    /// 宣告錯了就是把文字的空間算大 —— 只寫確定的。
+    /// </summary>
+    [JsonPropertyName("hiddenScrollBars")] public List<string>? HiddenScrollBars { get; set; }
+
     /// <summary>目標機器上沒有的字型家族。出現在 FontFamily 的後備清單裡時直接跳過，用下一個。</summary>
     [JsonPropertyName("absentFonts")] public List<string>? AbsentFonts { get; set; }
 
@@ -166,6 +173,11 @@ public sealed class FitConfig
                 else if (props.Any(p => p is not null && (p.Trim().Length == 0 || p.Contains(':') || p.Contains('.'))))
                     problems.Add(new Problem($"gridPanels[\"{name}\"]", "each value is the property name the class uses, such as \"ColumnCount\""));
             }
+
+        if (config.HiddenScrollBars is not null)
+            foreach (var name in config.HiddenScrollBars)
+                if (string.IsNullOrWhiteSpace(name) || name.Contains(':') || name.Contains('.') || name.Contains(' '))
+                    problems.Add(new Problem($"hiddenScrollBars[\"{name}\"]", "each entry is the x:Name of a ScrollViewer or a list"));
 
         if (config.ControlWidths is not null)
             foreach (var (name, value) in config.ControlWidths)

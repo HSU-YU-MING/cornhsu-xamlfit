@@ -48,6 +48,20 @@ public class NeighbourWidthTests
         else Assert.True(w.Px < 300 - 25);   // 勾選框：文字 25 + 勾選框的 chrome
     }
 
+    [Theory]
+    // 樣式設 10 個字、觸發器設 4 個字 → 取 50
+    [InlineData("<Setter Property=\"Text\" Value=\"0123456789\"/><Style.Triggers><DataTrigger Binding=\"{Binding Open}\" Value=\"True\"><Setter Property=\"Text\" Value=\"Hide\"/></DataTrigger></Style.Triggers>", 50)]
+    // 只有觸發器設：沒觸發時是空字串，觸發時 6 個字 → 取 30
+    [InlineData("<Style.Triggers><Trigger Property=\"IsMouseOver\" Value=\"True\"><Setter Property=\"Text\" Value=\"Hover!\"/></Trigger></Style.Triggers>", 30)]
+    // 綁定的值：不知道
+    [InlineData("<Setter Property=\"Text\" Value=\"{Binding Label}\"/>", -1)]
+    public void Text_set_by_its_own_style_takes_the_widest_value(string setters, double width)
+    {
+        var w = InAutoGrid($"<TextBlock><TextBlock.Style><Style TargetType=\"TextBlock\">{setters}</Style></TextBlock.Style></TextBlock>");
+        if (width < 0) { Assert.NotEqual(WidthStatus.Known, w.Status); return; }
+        Assert.Equal(300 - width, w.Px, 3);
+    }
+
     [Fact]
     public void A_property_element_is_not_content()
     {

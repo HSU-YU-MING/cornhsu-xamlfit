@@ -122,6 +122,14 @@ public sealed class WidthResolver
         return walk.Run(site, depth);
     }
 
+    /// <summary>
+    /// 元素自己的外框能有多寬（不扣它自己的內距；它自己能不能捲動也不算 —— 那影響的是它的內容）。
+    /// 給 DataGrid 的星號欄用：欄寬從 DataGrid 本身的寬度分出來。
+    /// </summary>
+    internal AvailableWidth OuterWidth(XElement element, int depth) =>
+        depth > 6 ? Blocked(WidthStatus.Unmeasurable, "layout nesting is too deep to resolve")
+                  : new Walk(this) { OuterOnly = true }.Run(element, depth);
+
     /// <summary>一次往上走的狀態。拆成類別是因為區域函式抓太多變數之後很難讀。</summary>
     private sealed class Walk(WidthResolver owner)
     {
@@ -140,6 +148,9 @@ public sealed class WidthResolver
         /// </summary>
         private double _trailing;
         private bool _trailingAllowed = true;
+
+        /// <summary>量的是起點元素自己的外框（見 <see cref="OuterWidth"/>）。</summary>
+        public bool OuterOnly { get; init; }
         private bool _usedChrome;
         private bool _assumedScrollBar;
         private bool _wrapDefeated;
@@ -257,16 +268,18 @@ public sealed class WidthResolver
                     || cur.Elements().Any(e => e.Name.LocalName.EndsWith(".LayoutTransform", StringComparison.Ordinal)))
                     Block(WidthStatus.Unmeasurable, $"<{local}> has a LayoutTransform");
 
-                // 水平可捲動 → 文字不會被裁
-                switch (owner.HorizontalScroll(cur))
-                {
-                    case (true, var why): return Open(why);
-                    case (null, var why): Block(WidthStatus.Unmeasurable, why); break;
-                }
+                // 水平可捲動 → 文字不會被裁（量外框時，起點自己的捲動影響的是它的內容，不是它自己）
+                if (!(isSite && OuterOnly))
+                    switch (owner.HorizontalScroll(cur))
+                    {
+                        case (true, var why): return Open(why);
+                        case (null, var why): Block(WidthStatus.Unmeasurable, why); break;
+                    }
 
                 // 這個元素內部吃掉的寬度
                 var useHeader = ReferenceEquals(cur, headerOwner) || (isSite && siteHasHeaderText);
-                var inner = useHeader ? owner.HeaderInset(cur, theme) : owner.InnerInset(cur, theme);
+                var inner = isSite && OuterOnly ? new InsetResult(0, false, false, null)
+                    : useHeader ? owner.HeaderInset(cur, theme) : owner.InnerInset(cur, theme);
                 if (inner.Blocked is { } innerWhy) Block(WidthStatus.Unmeasurable, innerWhy);
                 else { _usedChrome |= inner.UsedChrome; _assumedScrollBar |= inner.AssumedScrollBar; }
 
@@ -823,6 +836,7 @@ public sealed class WidthResolver
 
         double? bound = null;
         var which = "Width";
+        var assumedBar = false;
 
         var width = _styles.ResolveEx(column, "Width", inheritable: false);
         if (width.IsUnreadable)
@@ -831,6 +845,15 @@ public sealed class WidthResolver
         {
             var v = width.Value!.Trim();
             if (TryLength(v, out var px)) bound = px;
+            else if (v.EndsWith('*') && headerKey == "DataGridColumnHeader")
+            {
+                // 星號欄：從 DataGrid 的寬度分（LayoutOracle「star column」實測）
+                var star = StarColumnWidth(column);
+                if (star.Width is not { } starPx) return Blocked(star.Status, star.Why);
+                bound = starPx;
+                which = $"Width=\"{v}\" (the DataGrid's width minus its other columns)";
+                assumedBar = star.AssumedBar;
+            }
             else if (!(IsAutoLength(v) || v.Equals("SizeToHeader", StringComparison.OrdinalIgnoreCase)))
                 return Blocked(WidthStatus.Unmeasurable,
                     $"Width=\"{v}\" on <{local}> depends on the other columns or on cell content");
@@ -865,9 +888,89 @@ public sealed class WidthResolver
         var available = boundPx - chrome;
         return available > 0
             ? new AvailableWidth(WidthStatus.Known, available, $"{which}={boundPx:G} on <{local}>", LineOf(column), true,
-                $"minus {chrome:F1} DIP of column header chrome")
+                $"minus {chrome:F1} DIP of column header chrome" +
+                (assumedBar ? $", assuming the DataGrid shows a vertical scroll bar ({_chrome.ScrollBarWidth:F1} DIP)" : ""))
+            { AssumedScrollBar = assumedBar }
             : Blocked(WidthStatus.Unmeasurable, $"header chrome ({chrome:F1}) exceeds the column width ({boundPx:F1})");
     }
+
+    /// <summary>
+    /// DataGrid 星號欄的寬度（LayoutOracle「star column」實測，WPF 預設範本）：
+    /// DataGrid 的外框 − BorderThickness（預設左右各 1）− 垂直捲軸（沒關掉就假設在）= 欄可用的寬；
+    /// 扣掉其他欄之後依星號權重分，MinWidth／MaxWidth 夾住後重分（跟 Grid 的星號欄同一套）。
+    /// 其他欄只接受固定寬與星號欄；依內容長的欄（Auto、SizeToCells、SizeToHeader）寬度到執行期才知道 → 不知道。
+    /// 有列標題（HeadersVisibility 不是 Column／None）、換了範本、外部佈景、Padding：不知道。
+    /// </summary>
+    private (double? Width, WidthStatus Status, string Why, bool AssumedBar) StarColumnWidth(XElement column)
+    {
+        var holder = column.Parent;
+        var grid = holder?.Parent;
+        if (holder is null || grid is null || holder.Name.LocalName != "DataGrid.Columns" || !ChromeTable.IsWpf(grid, "DataGrid"))
+            return (null, WidthStatus.Unmeasurable, "a star column outside <DataGrid.Columns>", false);
+        if (ThemeOf(grid) is { } theme)
+            return (null, WidthStatus.Unmeasurable, $"the external theme {theme} restyles <DataGrid>", false);
+        if (_styles.TemplateOf(grid).Kind != TemplateKind.Default)
+            return (null, WidthStatus.Unmeasurable, "the DataGrid's template is replaced, so its column area is unknown", false);
+
+        var headers = _styles.ResolveEx(grid, "HeadersVisibility", inheritable: false);
+        if (!headers.IsValue || !IsOneOf(headers.Value, "Column", "None"))
+            return (null, WidthStatus.Unmeasurable, "the DataGrid shows row headers, whose width is not modelled", false);
+        var padding = Thickness(grid, "Padding");
+        if (padding.Blocked is not null || padding.Sum != 0)
+            return (null, WidthStatus.Unmeasurable, "the DataGrid sets a Padding", false);
+        var border = Thickness(grid, "BorderThickness");
+        if (border.Blocked is { } borderWhy) return (null, WidthStatus.Unmeasurable, borderWhy, false);
+
+        var bar = _styles.ResolveEx(grid, "ScrollViewer.VerticalScrollBarVisibility", inheritable: false);
+        var assumedBar = !(bar.IsValue && IsOneOf(bar.Value, "Disabled", "Hidden"));
+
+        var outer = OuterWidth(grid, 1);
+        if (outer.Status != WidthStatus.Known)
+            return (null, outer.Status == WidthStatus.NoDeclaredLimit ? WidthStatus.NoDeclaredLimit : WidthStatus.Unmeasurable,
+                outer.Status == WidthStatus.NoDeclaredLimit ? "the DataGrid sizes to its columns" : $"the DataGrid's own width is not known ({outer.Reason})",
+                false);
+
+        var specs = new List<ColumnSpec>();
+        var index = -1;
+        foreach (var c in holder.Elements())
+        {
+            if (c.Name.LocalName.Contains('.', StringComparison.Ordinal)) continue;
+            var visibility = _styles.ResolveEx(c, "Visibility", inheritable: false);
+            if (visibility.IsValue && IsOneOf(visibility.Value, "Collapsed") && !ReferenceEquals(c, column)) continue;   // 綁定的：當成看得見（只會更窄）
+
+            var w = _styles.ResolveEx(c, "Width", inheritable: false);
+            var min = _styles.ResolveEx(c, "MinWidth", inheritable: false);
+            var max = _styles.ResolveEx(c, "MaxWidth", inheritable: false);
+            if (w.IsUnreadable || min.IsUnreadable || max.IsUnreadable)
+                return (null, WidthStatus.Unmeasurable, $"a width of another column (<{c.Name.LocalName}>) is not statically readable", false);
+            double minPx = 0, maxPx = double.PositiveInfinity;
+            if (min.IsValue && !TryLength(min.Value, out minPx))
+                return (null, WidthStatus.Unmeasurable, $"MinWidth=\"{min.Value}\" on <{c.Name.LocalName}> is not readable", false);
+            if (max.IsValue && !TryLength(max.Value, out maxPx))
+                return (null, WidthStatus.Unmeasurable, $"MaxWidth=\"{max.Value}\" on <{c.Name.LocalName}> is not readable", false);
+
+            var text = w.IsValue ? w.Value!.Trim() : "SizeToHeader";
+            var spec = GridSolver.ParseLength(text, minPx, maxPx);
+            // ⚠ 依儲存格內容長的欄（Auto／SizeToCells）：寬度取決於執行期的資料。拿 MaxWidth 當上限算得出一個「最壞情況」，
+            //   但那會在來源語言報出只有資料夠長時才發生的溢出（QuillNest 的工作量模板實測冒出 1 筆）—— 維持不知道。
+            if (spec.Kind == ColumnKind.Fixed || spec.Kind == ColumnKind.Star) specs.Add(spec);
+            else return (null, WidthStatus.Unmeasurable,
+                $"another column (<{c.Name.LocalName}> Width=\"{text}\") sizes to its content, which only exists at run time", false);
+
+            if (ReferenceEquals(c, column)) index = specs.Count - 1;
+        }
+        if (index < 0) return (null, WidthStatus.Unmeasurable, "the column is not in its DataGrid's columns", false);
+
+        var area = outer.Px - (border.IsSet ? border.Sum : DefaultDataGridBorder) - (assumedBar ? _chrome.ScrollBarWidth : 0);
+        var widths = new double[specs.Count];
+        for (var i = 0; i < specs.Count; i++)
+            if (specs[i].Kind == ColumnKind.Fixed) widths[i] = GridSolver.Clamp(specs[i], specs[i].Value);
+        GridSolver.DistributeStars(specs, widths, area);
+        return (widths[index], WidthStatus.Known, "", assumedBar);
+    }
+
+    /// <summary>WPF 預設 DataGrid 的 BorderThickness（1）左右合計。</summary>
+    private const double DefaultDataGridBorder = 2;
 
     private string? HeaderRestyled(XElement column, string headerKey)
     {

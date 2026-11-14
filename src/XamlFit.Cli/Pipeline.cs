@@ -39,6 +39,7 @@ internal static class Pipeline
             TreatAs = opts.TreatAs,
             GridPanels = opts.GridPanels,
             ControlWidths = opts.ControlWidths,
+            HiddenScrollBars = opts.HiddenScrollBars,
             DefaultFontPinned = opts.DefaultFontPinned,
             ElementLanguage = opts.SourceElementLanguage,
             Sharing = sharing,

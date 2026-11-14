@@ -65,8 +65,8 @@ Measured out of the box, no configuration, on eleven projects:
 | project | localizable sites | measured | blocked | no width bound | resolution |
 |---|---:|---:|---:|---:|---:|
 | Cornea (maintainer app) | 68 | 59 | 0 | 9 | **100%** |
-| QuillNest (maintainer app) | 685 | 536 | 6 | 116 | **98.9%** |
-| Kindling (maintainer app) | 150 | 67 | 8 | 75 | **89.3%** |
+| QuillNest (maintainer app) | 685 | 538 | 3 | 117 | **99.4%** |
+| Kindling (maintainer app) | 150 | 68 | 7 | 75 | **90.7%** |
 | Playnite | 1,107 | 274 | 140 | 506 | **66.2%** |
 | ScreenToGif | 1,277 | 167 | 203 | 790 | **45.1%** |
 | HandyControl | 210 | 11 | 61 | 123 | 15.3% |
@@ -106,10 +106,10 @@ strings in English, German, French, Chinese, Japanese and Korean): mean error **
 worst under-estimate **0.068%**, worst over-estimate 1.43% (one kerning pair). XamlFit does not
 apply kerning, which makes text measure slightly *wide* — it errs toward reporting.
 
-**Layout, against real WPF windows.** `prototype/LayoutOracle` feeds 217 XAML snippets to an
+**Layout, against real WPF windows.** `prototype/LayoutOracle` feeds 228 XAML snippets to an
 actual off-screen `Window` and to the resolver, and compares what is really visible:
-**181 exact, 36 conservative, 0 over-estimates** — and in `check`'s row semantics (only the
-controls before it in a row count) 185 exact, 32 conservative, 0 over-estimates. The conservative ones
+**186 exact, 42 conservative, 0 over-estimates** — and in `check`'s row semantics (only the
+controls before it in a row count) 190 exact, 38 conservative, 0 over-estimates. The conservative ones
 are deliberate — an assumed vertical scroll bar, the window frame at its widest display scaling. This harness
 found most of what the last audit fixed; it needs Windows, so its conclusions are restated as
 portable unit tests.
@@ -126,13 +126,13 @@ including the editor's side panel and every kind of drop-down, 3,043 comparisons
 font on both sides (this machine's): **122 clipped by both, 28 false alarms, 0 missed**, 2,893 fit by
 both. The false alarms are all in one side panel whose `ScrollViewer` shows its bar only when
 needed; XamlFit assumes the bar is there (and says so), WPF's test window was tall enough that it
-was not. Another 76 are Expander headers that WPF draws 0.5–1.2 px short of their text with 200 px
+was not; declaring that panel in `hiddenScrollBars` leaves 1 false alarm (0.8 px) and still 0 missed. Another 76 are Expander headers that WPF draws 0.5–1.2 px short of their text with 200 px
 to spare, because `UseLayoutRounding` rounds every layer to device pixels. English loses up to
 0.4 px at the same places; the loss does not grow with the text. That is the pixel grid, not a
 translation that does not fit, so XamlFit does not report it and the comparison counts it apart. These comparisons found the bugs listed in `docs/M6-全面重讀.md`.
 
 **False positives, against shipped software.** Hard-coded text in a released app presumably
-fits. So the tool checks the *source* language too: **1,183 source-language measurements across
+fits. So the tool checks the *source* language too: **1,185 source-language measurements across
 the corpus.** While it was being built this number was not zero four times. Twice the tool was
 wrong. The third time — two overflows in the maintainer's own app, which appeared when the tool
 learned to measure Runs and restyled column headers — it was right: drawn by WPF, a note in a
@@ -166,6 +166,10 @@ them once in `xamlfit.config.json`.
   // Width still wins and MinWidth/MaxWidth still clamp it. Declare the real maximum — too small
   // and the text is given room it does not have. The tool never guesses this number.
   "controlWidths": { "IntegerUpDown": 100 },
+
+  // ScrollViewers or lists (by x:Name) whose vertical scroll bar never shows, because their content is
+  // never taller than they are. Otherwise an `Auto` bar is assumed to be there and takes its width.
+  "hiddenScrollBars": ["ActionScrollViewer"],
 
   // A family in a FontFamily fallback list that target machines do not have.
   "absentFonts": ["Segoe UI Variable"],

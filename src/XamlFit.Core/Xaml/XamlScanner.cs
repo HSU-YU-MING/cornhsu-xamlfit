@@ -25,6 +25,9 @@ public sealed record ScanOptions
     /// <summary>使用者宣告的「用屬性產生欄的 Grid 子類別」（見 <see cref="GridPanel"/>）。</summary>
     public IReadOnlyDictionary<string, GridPanel> GridPanels { get; init; } = new Dictionary<string, GridPanel>();
 
+    /// <summary>使用者宣告的「垂直捲軸實際上不會出現」的 ScrollViewer／清單（x:Name）。</summary>
+    public IReadOnlyCollection<string> HiddenScrollBars { get; init; } = [];
+
     /// <summary>使用者宣告的「執行期才知道寬度的控制項最寬多寬」（見 <see cref="ElementMeasurer.DeclaredWidths"/>）。</summary>
     public IReadOnlyDictionary<string, double> ControlWidths { get; init; } = new Dictionary<string, double>();
 
@@ -387,6 +390,27 @@ public sealed partial class XamlScanner
         };
     }
 
+    /// <summary>
+    /// 使用者宣告「垂直捲軸不會出現」的元素：當成 VerticalScrollBarVisibility="Hidden"（不佔寬度）。
+    /// ScrollViewer 改它自己的屬性；清單（ListBox、TreeView…）改附加屬性 ScrollViewer.VerticalScrollBarVisibility。
+    /// </summary>
+    private static void HideScrollBars(XDocument doc, IReadOnlyCollection<string> names)
+    {
+        if (names.Count == 0 || doc.Root is null) return;
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        foreach (var e in doc.Descendants().ToList())
+        {
+            var name = (string?)e.Attribute(x + "Name") ?? (string?)e.Attribute("Name");
+            if (name is null || !names.Contains(name)) continue;
+            foreach (var child in e.Elements().Where(c => c.Name.LocalName.EndsWith(".VerticalScrollBarVisibility", StringComparison.Ordinal)).ToList())
+                child.Remove();
+            if (e.Name.LocalName.EndsWith("ScrollViewer", StringComparison.Ordinal))
+                e.SetAttributeValue("VerticalScrollBarVisibility", "Hidden");
+            else
+                e.SetAttributeValue("ScrollViewer.VerticalScrollBarVisibility", "Hidden");
+        }
+    }
+
     /// <summary>根元素是不是視窗（含第三方的 MetroWindow、FluentWindow…）。</summary>
     private static bool IsWindowRoot(XElement root) =>
         root.Name.LocalName.EndsWith("Window", StringComparison.Ordinal);
@@ -398,6 +422,7 @@ public sealed partial class XamlScanner
     private void ApplyAliases(XDocument doc)
     {
         GridPanel.Rewrite(doc, _options.GridPanels);
+        HideScrollBars(doc, _options.HiddenScrollBars);
         if (_options.TreatAs.Count == 0 || doc.Root is null) return;
 
         foreach (var el in doc.Root.DescendantsAndSelf().ToList())

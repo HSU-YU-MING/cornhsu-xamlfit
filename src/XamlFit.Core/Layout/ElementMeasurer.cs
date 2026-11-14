@@ -165,7 +165,20 @@ public sealed class ElementMeasurer : IElementMeasurer
         //     每個 Run 用自己的字型量，元素之間的空白是一個 TextBlock 字型的空格
         //    （Playnite 的關於視窗：連結放在 Auto 欄；Kindling：勾選框的「動態補間（實驗性）」兩個字級）
         if (local == "TextBlock" && element.HasElements)
+        {
+            // 2b. 文字由自己的內嵌樣式給（Kindling 的「進階 ▾／進階 ▴」：Setter 加 DataTrigger 切換）：每一種都量，取最寬
+            if (StyleTexts(element) is { } texts)
+            {
+                double widest = 0;
+                foreach (var t in texts)
+                {
+                    if (MeasureText(element, t) is not { } w) return null;
+                    widest = Math.Max(widest, w);
+                }
+                return Finish(widest + inner);
+            }
             return InlineLine(element, depth) is { } line ? Finish(line + inner) : null;
+        }
 
         // 2. 文字元素
         var text = TextOf(element);
@@ -350,6 +363,39 @@ public sealed class ElementMeasurer : IElementMeasurer
         if (lookup.Chain.Count == 0) return null;
         var m = TextMeasure.Measure(" ", lookup, font.Size);
         return m.IsReliable ? m.WidthPx : null;
+    }
+
+    /// <summary>
+    /// TextBlock 沒有 Text 屬性、也沒有行內內容，文字由它自己的 <c>&lt;TextBlock.Style&gt;</c> 設定：
+    /// 樣式（含觸發器）裡每一個設 Text 的值。樣式有 BasedOn、值不是字面文字、或還有別的內容：null。
+    /// 樣式本身沒設 Text（只有觸發器設）時，沒觸發的狀態是空字串。
+    /// </summary>
+    private List<string>? StyleTexts(XElement textBlock)
+    {
+        if (textBlock.Attribute("Text") is not null || textBlock.Attribute("Style") is not null) return null;
+        XElement? style = null;
+        foreach (var node in textBlock.Nodes())
+        {
+            if (node is XComment or XProcessingInstruction) continue;
+            if (node is XText t) { if (!string.IsNullOrWhiteSpace(t.Value)) return null; continue; }
+            if (node is not XElement e) continue;
+            if (e.Name.LocalName == "TextBlock.Style") { style = e.Elements().SingleOrDefault(); continue; }
+            if (!e.Name.LocalName.Contains('.', StringComparison.Ordinal)) return null;   // 行內內容
+        }
+        if (style is null || style.Name.LocalName != "Style" || style.Attribute("BasedOn") is not null) return null;
+
+        var texts = new List<string>();
+        var baseSetsText = false;
+        foreach (var setter in style.Descendants().Where(d => d.Name.LocalName == "Setter" && (string?)d.Attribute("Property") == "Text"))
+        {
+            if (setter.Attribute("Value")?.Value is not { } value) return null;
+            if (AttributeText(value) is not { } text) return null;
+            texts.Add(text);
+            if (setter.Parent == style) baseSetsText = true;
+        }
+        if (texts.Count == 0) return null;
+        if (!baseSetsText) texts.Add("");
+        return texts;
     }
 
     /// <summary>行內元素裡的那個 Run：Run 本身，或一層只裝著一個 Run 的 Hyperlink／Span／Underline。</summary>

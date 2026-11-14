@@ -161,6 +161,8 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 77 | **UseLayoutRounding 的差距不是「裝不下」** | 每一層捨入到裝置像素，內容大小的文字少畫 0.5～1.2 px；英文在同一位置也少 0.4 px，跟字串長短無關。對照時另外算（drive.js 的 rounding），工具不報 | CorpusRender（ScreenToGif） |
 | 78 | **CorpusRender 的「被裁」要看字形** | 字幅比字形寬：只裁到最後一個字右邊的空白時字其實完整（標成 2）。用 FormattedText.BuildGeometry 的右緣判斷 | CorpusRender |
 | 79 | **綁定的 Visibility 當成看得見** | 鄰居的寬度一律是被扣掉的（Auto 欄、同一排、標籤列），取大的只會少給文字空間。Canvas 沒寫 Width 時寬度 0（不量子元素） | LayoutOracle |
+| 80 | **DataGrid 的星號欄寬是延後算的** | 排進 Dispatcher：只呼叫 UpdateLayout 量到的是 MinWidth（每一案都是 70）。LayoutOracle／CorpusRender 要先讓 Dispatcher 跑完（ContextIdle）再量 | LayoutOracle「star column」 |
+| 81 | **依儲存格內容長的欄不能拿 MaxWidth 當寬度** | 那是「資料夠長時」的最壞情況；拿來算星號欄，QuillNest 的來源語言冒出 1 筆只有資料夠長才會發生的溢出。維持不知道 | 語料重跑 |
 
 ### 環境層級的坑
 
@@ -177,11 +179,11 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 589 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 604 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 42 條 CLI 路徑的退出碼
-dotnet run -c Release --project prototype/LayoutOracle   # 217 案 vs 真的 WPF 視窗（--check 用檢查模式的排法再跑一次）（Windows）；有高估就回 1
+dotnet run -c Release --project prototype/LayoutOracle   # 228 案 vs 真的 WPF 視窗（--check 用檢查模式的排法再跑一次）（Windows）；有高估就回 1
 ```
 
 **來源語言自我檢驗**（沒有腳本，手動跑）：對一個已經出貨的 App 跑

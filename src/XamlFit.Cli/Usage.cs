@@ -75,6 +75,8 @@ internal static class Usage
                                    a Grid subclass that generates its columns from properties
               "controlWidths": { "IntegerUpDown": 100 }   the widest a control sized at run time
                                    (a number box, a drop-down filled from code) ever gets
+              "hiddenScrollBars": ["ActionScrollViewer"]   x:Name of a ScrollViewer or list
+                                   whose vertical bar never shows (content never taller)
               "absentFonts": ["Segoe UI Variable"]   skip a family target machines do not have
               "defaultFontByCulture": { "th": "Leelawadee UI" }
               "elementLanguage": "en-US"   the Language WPF uses to pick fallback fonts

@@ -74,11 +74,17 @@ that over-estimated the available width.
   child spanning an `Auto` and a star column (WPF never widens the `Auto` column for it).
   Text spanning an `Auto` column can grow until the grid is full.
 - `controlWidths` in `xamlfit.config.json`: the widest a control sized at run time ever gets.
+- `hiddenScrollBars` in `xamlfit.config.json`: ScrollViewers or lists (by `x:Name`) whose vertical bar never
+  shows, so it is not taken off the width (ScreenToGif's editor panel: 28 false alarms → 1).
+- `DataGrid` star columns: the grid's width minus its border, an assumed vertical scroll bar unless it is turned
+  off, and its other columns, shared by weight and clamped by `MinWidth`. Other columns must be fixed or star —
+  a column sized by its cells only has a width at run time.
+- A `TextBlock` whose text comes from its own inline style (a setter and triggers) is measured at its widest value.
 - A string with no translation in a language is judged in that language's layout (translated
   neighbours, that language's default font): WPF shows the source text there.
 - Findings under a project `ScrollViewer` template whose bar is `Auto` say that they assume the bar.
 - Playnite 48.3% → 66.2% without configuration (77.5% with `gridPanels`), ScreenToGif 40.0% → 45.1%,
-  Kindling 76.0% → 89.3%, QuillNest 98.3% → 98.9%.
+  Kindling 76.0% → 90.7%, QuillNest 98.3% → 99.4%.
 - Runs report the files that turn on `UseLayoutRounding`: WPF can shave about one pixel off text
   sized to its content, which XamlFit does not model.
 - `check` and `budget` reject each other's options (`check --sites` used to be accepted and
@@ -101,8 +107,8 @@ that over-estimated the available width.
 
 - **Text width** against WPF `FormattedText`, 1,400 comparisons: mean error 0.039%, worst
   under-estimate 0.068%, worst over-estimate 1.43% (a single kerning pair).
-- **Layout** against real off-screen WPF windows, 217 cases: 181 exact, 36 conservative,
-  0 over-estimates; with `check`'s row semantics 185 / 32 / 0 (`prototype/LayoutOracle --check`).
+- **Layout** against real off-screen WPF windows, 228 cases: 186 exact, 42 conservative,
+  0 over-estimates; with `check`'s row semantics 190 / 38 / 0 (`prototype/LayoutOracle --check`).
 - **Real project windows** drawn by WPF with their own themes and translations
   (`prototype/CorpusRender`): Playnite, 5,765 comparisons — 130 clipped by both, 3 false
   alarms, **0 missed**; ScreenToGif, 3,043 comparisons including the editor's side panel and
@@ -119,7 +125,7 @@ that over-estimated the available width.
   runs give identical results.
 - **Shipped software**: 984 source-language measurements over ten projects. The only two
   overflows are in the maintainer's app and are real (drawn by WPF).
-- 589 unit tests.
+- 604 unit tests.
 
 ### Not verified
 

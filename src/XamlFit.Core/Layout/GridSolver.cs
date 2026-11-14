@@ -153,7 +153,7 @@ internal sealed class GridSolver
     /// 做法：每一輪把還沒定案的欄按權重分、夾住；總違反量 &gt; 0（下限佔上風）就把撞下限的定案，
     /// &lt; 0 就把撞上限的定案，= 0 全部定案。跟 CSS flexbox 解彈性長度是同一個演算法。
     /// </summary>
-    private static void DistributeStars(List<ColumnSpec> specs, double[] widths, double available)
+    internal static void DistributeStars(List<ColumnSpec> specs, double[] widths, double available)
     {
         var open = new List<int>();
         double used = 0;
@@ -240,7 +240,7 @@ internal sealed class GridSolver
 
     /// <summary>⚠ 不要用 Math.Clamp：MinWidth 大於 MaxWidth 時它會丟例外（寫錯的 XAML 不該讓工具當掉）。
     /// WPF 的規則是 MinWidth 贏。</summary>
-    private static double Clamp(ColumnSpec s, double w) => Math.Max(s.Min, Math.Min(w, s.Max));
+    internal static double Clamp(ColumnSpec s, double w) => Math.Max(s.Min, Math.Min(w, s.Max));
 
     private static (int Column, int Span) ColumnOf(XElement el)
     {

@@ -27,6 +27,7 @@ internal sealed class CommonOptions
     public Dictionary<string, string> TreatAs { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, XamlFit.Core.Xaml.GridPanel> GridPanels { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, double> ControlWidths { get; } = new(StringComparer.Ordinal);
+    public HashSet<string> HiddenScrollBars { get; } = new(StringComparer.Ordinal);
     public string? SourceCulture { get; set; }
 
     /// <summary>沒寫 xml:lang 的元素的語言；"culture" = 跟著正在檢查的語言。</summary>
@@ -214,6 +215,8 @@ internal sealed class CommonOptions
         if (config.GridPanels is { Count: > 0 } gridPanels)
             foreach (var (name, p) in gridPanels)
                 o.GridPanels[name] = new XamlFit.Core.Xaml.GridPanel(p.ColumnCount, p.StarColumns, p.AutoLayoutColumns);
+        if (config.HiddenScrollBars is { Count: > 0 } hiddenBars)
+            foreach (var name in hiddenBars) o.HiddenScrollBars.Add(name);
         if (config.ControlWidths is { Count: > 0 } controlWidths)
             foreach (var (name, width) in controlWidths) o.ControlWidths[name] = width;
 

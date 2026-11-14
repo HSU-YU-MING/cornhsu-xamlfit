@@ -49,6 +49,33 @@ public class ControlWidthsTests
     }
 
     [Theory]
+    [InlineData("<ScrollViewer x:Name=\"Panel\" VerticalScrollBarVisibility=\"Auto\"><TextBlock x:Name=\"probe\" Text=\"x\"/></ScrollViewer>")]
+    [InlineData("<ListBox x:Name=\"Panel\" ScrollViewer.HorizontalScrollBarVisibility=\"Disabled\"><ListBoxItem><TextBlock x:Name=\"probe\" Text=\"x\"/></ListBoxItem></ListBox>")]
+    public void A_declared_hidden_scroll_bar_takes_no_width(string body)
+    {
+        // 設定檔的 hiddenScrollBars：這個 ScrollViewer／清單的垂直捲軸實際上不會出現（ScreenToGif 編輯器側邊面板，28 筆誤報）
+        AvailableWidth Scan(IReadOnlyCollection<string> hidden)
+        {
+            var dir = TempProject(("Main.xaml", $"<Window {Ns} Width=\"400\"><Grid Width=\"300\">{body}</Grid></Window>"));
+            try
+            {
+                return new XamlScanner(Chrome, new ScanOptions { DefaultFontFamily = MonoFamily, DefaultFontSize = MonoSize, HiddenScrollBars = hidden }, Fonts())
+                    .Scan(dir).Sites.Single(s => s.Text == "x").Width;
+            }
+            finally { Cleanup(dir); }
+        }
+
+        var assumed = Scan([]);
+        var hidden = Scan(["Panel"]);
+        Assert.True(assumed.AssumedScrollBar);
+        Assert.False(hidden.AssumedScrollBar);
+        Assert.Equal(assumed.Px + Chrome.ScrollBarWidth, hidden.Px, 3);
+        Assert.Equal(assumed.Px, Scan(["Other"]).Px, 3);   // 別的名字不影響
+    }
+
+    [Theory]
+    [InlineData("""{ "hiddenScrollBars": ["ActionScrollViewer"] }""", true)]
+    [InlineData("""{ "hiddenScrollBars": ["x:Panel"] }""", false)]
     [InlineData("""{ "controlWidths": { "IntegerUpDown": 100, "ComboBox": 180 } }""", true)]
     [InlineData("""{ "controlWidths": { "n:IntegerUpDown": 100 } }""", false)]
     [InlineData("""{ "controlWidths": { "IntegerUpDown": 0 } }""", false)]
