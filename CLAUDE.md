@@ -143,6 +143,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 59 | **DataGridColumnHeader 的 Padding** | 全 0 時範本自己用 5,0,5,0（表裡的 10）；否則取代它；BorderThickness 不影響寬度。13 種樣式逐一實測，第一版「加上去」的模型錯了 | LayoutOracle |
 | 60 | **報告輸出要 UTF-8** | .NET 被導向時用系統字碼頁；繁中 Windows 是 Big5，實跑 QuillNest 每句中文都是亂碼 | 自家 App 實際使用 |
 | 61 | **CorpusRender 的下拉選單** | 可編輯的看 TextBox 的捲動範圍（字元位置與視埠直接相減固定差 2 px）；放畫面元素的選項，框裡是 VisualBrush，下拉清單沒打開過就沒排版、寬度 0 | CorpusRender（ScreenToGif） |
+| 62 | **CorpusRender 量換行文字：中日韓每個字都是斷行點** | 用空格切「最長的字」會把一整句中文當成一個字，換行後明明全部顯示也報成被切掉 | 修 QuillNest 之後實測 |
 
 ### 環境層級的坑
 

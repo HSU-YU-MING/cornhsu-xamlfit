@@ -570,8 +570,11 @@ internal static partial class Program
         return wraps ? Math.Max(t.ActualWidth, LongestWord(t, text)) : ft.WidthIncludingTrailingWhitespace;
     }
 
+    // ⚠ 中日韓文字沒有空格，但每兩個字之間都可以斷行 —— 以空格切的話，一整句中文被當成一個「字」，
+    //   換行的說明文字明明全部顯示了，也會報成被切掉（QuillNest 修好之後實測踩到）。
     private static double LongestWord(FrameworkElement t, string text) =>
-        text.Split(' ').Select(w => new FormattedText(w, t.Language.GetSpecificCulture(), FlowDirection.LeftToRight,
+        Regex.Matches(text, @"[⺀-鿿가-힯豈-﫿＀-￯]|[^\s⺀-鿿가-힯豈-﫿＀-￯]+")
+            .Select(m => m.Value).Select(w => new FormattedText(w, t.Language.GetSpecificCulture(), FlowDirection.LeftToRight,
             new Typeface(TextElement.GetFontFamily(t), TextElement.GetFontStyle(t), TextElement.GetFontWeight(t), TextElement.GetFontStretch(t)),
             TextElement.GetFontSize(t), Brushes.Black, null, TextOptions.GetTextFormattingMode(t), 1.0).Width).DefaultIfEmpty(0).Max();
 
