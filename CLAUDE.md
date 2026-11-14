@@ -84,6 +84,10 @@ chrome 偏小 → 可用寬度偏大 → **漏報溢出**。
 | 21 | **ComboBox 的 ContentPresenter 預設不拉伸** | 它的 ActualWidth 是「內容的寬」不是「可用區域的寬」。加 `HorizontalContentAlignment="Stretch"` 才量得到可用區域（300 → 272.2，chrome 27.8） | ChromeGen 第四種量法 |
 | 23 | **ItemsControl 的探針把項目容器混進 chrome** | ListBox 量到 14.0（= 4.0 + ListBoxItem 的 10），解析器再扣一次 → 重複計算。要強制走 ItemsPresenter 那條路 | ChromeGen |
 | 24 | **捲軸出不出現靜態不可知** | `VerticalScrollBarVisibility` 預設 Auto，取決於執行期項目數。選「假設它在」（誤報），不選「假設不在」（漏報） | ItemsControl 求解 |
+| 25 | **排除規則比對完整路徑** | 掃描根目錄位在 `.config` 或 `bin` 底下時（`C:\Users\x\.config\app`、`D:\bin\myproject`），**所有檔案都被排除**，然後吐 exit 3 不解釋為什麼。要比對**目錄名**並做目錄剪枝 | 跨平台稽核 |
+| 26 | **`*.xaml` 在 Windows 不分大小寫、在 Linux 分** | 同一專案在 CI 上掃到的檔案比本機少，而且是靜默的。⚠ 語料 1,916 個檔全小寫，這個 bug **測不出來** —— 修它的理由是失敗模式（CI 比本機乾淨＝謊報健康），不是證據 | 跨平台稽核 |
+| 27 | **`action.yml` 把輸入文字替換進 shell** | `${{ inputs.x }}` 是文字替換，帶引號或 `$()` 的輸入會變成可執行程式碼。要全部走 `env:` | action.yml 檢視 |
+| 28 | ~~`set -e` 會因為 `[ -n ] &&` 條件為假而中止~~ | **這條是錯的，實測推翻。** `set -e` 不會因為 `&&` 清單的**條件部分**失敗而中止。留著免得下次又去修一個不存在的問題 | action.yml 檢視 |
 | 22 | **ComboBoxItem 的 chrome 不該跟 ComboBox 的一起扣** | 項目內距只存在於展開的下拉清單；關起來的選取框沒有它。兩個都扣會多扣約 10 DIP（約 6%） | 語意檢視 |
 | 20 | **M0 的「解 Grid 會推到 97.5%」是錯的** | 實測兩個專案完全沒改善（多數 Auto 欄裝綁資料的文字）；自家專案改善 25 個百分點，公開專案 0~5 —— 又一次取樣偏誤 | Grid 驗收 |
 | 16 | **`{DynamicResource}` 式在地化沒支援** | ScreenToGif 把 UI 字串放在 ResourceDictionary 裡，整批被當成「綁資料」跳過：M0 算 1,052 個位置，引擎只認 192 個 | 公開語料穩定性實跑 |
@@ -115,6 +119,6 @@ dotnet run --project prototype/GridOracle    # Grid 欄寬 vs WPF 真實版面�
 - `WpfOracle` —— 拿 WPF 的 `FormattedText` 當真值驗量測（Windows only）
 - `ChromeGen` —— 量控制項內距表（Windows only）
 - `DemoMetrics` —— 產生示範用的合成字型度量（跨平台）
-- `GridOracle` —— 拿 WPF 真實版面驗 Grid 欄寬求解（Windows only，14/14 吻合）
+- `GridOracle` —— 拿 WPF 真實版面驗 Grid 欄寬與 ItemsControl 項目寬（Windows only，16/16 吻合）
 
 `ChromeGen` 與 `DemoMetrics` 的產出要 commit；另外兩個只產生文件。
