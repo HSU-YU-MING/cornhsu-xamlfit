@@ -12,9 +12,10 @@
 - [x] M4 `check` 模式
 - [x] M5 repo 骨架、CI、示範專案的計數斷言
 - [x] M6 全面重讀：把「高估可用寬度」的洞補掉、拿真的 WPF 視窗逐案對照
-- [ ] GitHub repo 公開、Trusted Publishing 政策、推 tag 發 0.1.0
+- [x] GitHub repo 公開（2026-11-14），CI 在 Linux 與 Windows 上通過
+- [ ] Trusted Publishing 政策、推 tag 發 0.1.0
 
-**發版前必辦**：在 Linux 上實際執行一次（目前驗到建置層面與 globalization-invariant 模式，見 `docs/M5b-跨平台與CI驗證.md`、`docs/M6-全面重讀.md` 第 4 節）。
+~~**發版前必辦**：在 Linux 上實際執行一次~~ —— 2026-11-14 推上 GitHub 後 CI 第一次就在 Ubuntu 上全部通過（一般與 globalization-invariant 模式）。
 
 ## 0.x（介面凍結前）
 

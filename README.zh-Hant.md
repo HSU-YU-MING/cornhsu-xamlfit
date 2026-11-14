@@ -15,9 +15,8 @@ xamlfit check  ./src --resx ./Resources   # 翻譯之後：真的裝不下就擋
 
 > 需要 **.NET 10 runtime**。解析與量測都是純算術，不相依 WPF、沒有原生二進位。
 >
-> ⚠ **還沒有在 Linux 上實際跑過**：repo 尚未公開，CI 從來沒執行過。沒有 Linux 也驗得到的都驗了：
-> `linux-x64` 的建置只相依 `Microsoft.NETCore.App`；全部測試與兩個語料的完整檢查在 globalization-invariant 模式
->（很多 Linux CI 映像檔的設定）下結果完全相同。見 `docs/M5b-跨平台與CI驗證.md` 與 `docs/M6-全面重讀.md`。
+> CI 在 **Linux**（Ubuntu 24.04，一般模式與很多 Linux CI 映像檔用的 globalization-invariant 模式各跑一次）
+> 與 **Windows** 上跑：單元測試、示範專案的精確計數、budget 模式、每一條 CLI 路徑。
 >
 > **只做 WPF。** WinUI／UWP、Avalonia、MAUI 的檔案會被辨識出來並回報「沒有分析」——
 > 它們的控制項內距、預設字型、版面規則都不一樣，拿 WPF 的去算只會得到錯的數字。

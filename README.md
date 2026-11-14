@@ -18,11 +18,9 @@ xamlfit check  ./src --resx ./Resources   # after translation: fail CI on real o
 > Requires the **.NET 10 runtime**. The analysis is pure arithmetic over XML and font tables —
 > no WPF and no native dependencies.
 >
-> ⚠ It has **not yet been executed on Linux**: the CI workflow that would prove it has never
-> run, because the repository is not published. What could be checked without Linux was: the
-> `linux-x64` build depends on nothing but `Microsoft.NETCore.App`, and the whole test suite
-> and two full corpus runs give identical results in globalization-invariant mode, which many
-> Linux CI images use. See `docs/M5b-跨平台與CI驗證.md` and `docs/M6-全面重讀.md`.
+> CI runs on **Linux** (Ubuntu 24.04, once normally and once in globalization-invariant mode,
+> which many Linux CI images use) and on **Windows**: the unit tests, the demo audit with exact
+> counts, budget mode and every CLI path.
 >
 > **WPF only.** WinUI/UWP, Avalonia and MAUI files are recognised and reported as *not
 > analysed* — their chrome, default font and layout rules are different, and numbers computed

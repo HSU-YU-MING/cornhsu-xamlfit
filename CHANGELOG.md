@@ -75,9 +75,8 @@ that over-estimated the available width.
 
 ### Not verified
 
-- Execution on Linux, nuget.org installation, Trusted Publishing and GitHub-hosted runners:
-  the repository is not published. The release steps and the Action's script were rehearsed
-  locally.
+- nuget.org installation and Trusted Publishing: nothing has been released. The release steps
+  and the Action's script were rehearsed locally. (CI on Linux and Windows runs and passes.)
 - The default UI fonts for Japanese, Korean and Simplified Chinese Windows: taken from
   Windows' font configuration, not measured on those systems.
 - Text in drop-down lists, data templates and hidden panels: the render harness cannot draw
