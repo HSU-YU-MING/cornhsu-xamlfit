@@ -251,9 +251,19 @@ public static class TextRules
     }
 }
 
-/// <summary>安全地載入 XML：不處理 DTD、不解析外部實體。工具跑在 CI 上、讀的是任意 repo 的檔案。</summary>
+/// <summary>
+/// 安全地載入 XML：不處理 DTD、不解析外部實體、不收巢狀太深的檔案。
+/// 工具跑在 CI 上、讀的是任意 repo 的檔案 —— 包括陌生人送來的 pull request。
+/// </summary>
 public static class SafeXml
 {
+    /// <summary>
+    /// 超過這個深度的檔案當成解析錯誤。真實的 XAML 不會超過一百層。
+    /// ⚠ 沒有這個上限時，一個巢狀 100,000 層、1.7 MB 的檔案讓 budget 與 check 都跑超過 170 秒沒結束 ——
+    ///   CI 上就是一個 PR 讓整條管線卡到逾時。深度在串流時就量，還沒建出整棵樹之前。
+    /// </summary>
+    public const int MaxDepth = 512;
+
     public static System.Xml.Linq.XDocument Load(string path, bool lineInfo = false)
     {
         var settings = new System.Xml.XmlReaderSettings
@@ -261,6 +271,12 @@ public static class SafeXml
             DtdProcessing = System.Xml.DtdProcessing.Prohibit,
             XmlResolver = null,
         };
+
+        using (var probe = System.Xml.XmlReader.Create(path, settings))
+            while (probe.Read())
+                if (probe.Depth > MaxDepth)
+                    throw new System.Xml.XmlException($"elements are nested more than {MaxDepth} deep");
+
         using var reader = System.Xml.XmlReader.Create(path, settings);
         return System.Xml.Linq.XDocument.Load(
             reader, lineInfo ? System.Xml.Linq.LoadOptions.SetLineInfo : System.Xml.Linq.LoadOptions.None);

@@ -405,6 +405,19 @@ public class ScannerTests
     }
 
     [Fact]
+    public void A_pathologically_nested_document_is_a_parse_error_not_a_hang()
+    {
+        // ⚠ 100,000 層、1.7 MB 的檔案讓 budget 與 check 跑超過 170 秒沒結束（CI 上就是卡到逾時）
+        var depth = SafeXml.MaxDepth + 10;
+        var xaml = "<Window " + Ns + ">" + string.Concat(Enumerable.Repeat("<Border>", depth)) + "<TextBlock Text=\"x\"/>"
+                   + string.Concat(Enumerable.Repeat("</Border>", depth)) + "</Window>";
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var scan = Scan(("Deep.xaml", xaml));
+        Assert.Equal(1, scan.ParseErrors);
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
     public void A_document_with_a_doctype_is_a_parse_error_not_an_entity_expansion()
     {
         var scan = Scan(("Bad.xaml", "<!DOCTYPE x [<!ENTITY e \"boom\">]><Window " + Ns + "><TextBlock Text=\"&e;\"/></Window>"));

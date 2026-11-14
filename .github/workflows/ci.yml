@@ -25,6 +25,13 @@ jobs:
       - name: Test
         run: dotnet test XamlFit.slnx -c Release --no-build
 
+      # 很多 Linux CI 映像檔開著 globalization-invariant 模式：查不到任何文化資料。
+      # 語言比對曾經因此在 Linux 上認不出 zh-TW（docs/M6-全面重讀.md #54）。
+      - name: Test (globalization-invariant)
+        run: dotnet test XamlFit.slnx -c Release --no-build
+        env:
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: '1'
+
       # 示範專案是**刻意做壞的**，所以預期 exit 1 —— 這正是守門員該有的行為。
       # 計數斷言同時驗證「工具真的會擋」跟「擋的數量沒有莫名其妙變動」。
       - name: Audit the demo (expects exit 1 and exact counts)
@@ -37,3 +44,13 @@ jobs:
       # 測不到「旗標有沒有接線」—— 實查到的兩個洞都只有真的跑才看得到。
       - name: CLI smoke test
         run: bash scripts/verify-cli.sh
+
+  # 分析是純算術，不相依 WPF —— 但使用者大多在 Windows 上跑（路徑分隔、大小寫不分的副檔名）。
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet test XamlFit.slnx -c Release

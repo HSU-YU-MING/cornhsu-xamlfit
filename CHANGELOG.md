@@ -39,6 +39,9 @@ that over-estimated the available width.
 - Characters the requested font cannot draw are measured with the font WPF would use: another
   face of the same family first, then WPF's own composite fallback table
   (`data/font-fallback.json`, from dotnet/wpf, MIT), chosen by the element's `Language`.
+- Hardening for untrusted input (see `SECURITY.md`): files nested more than 512 elements
+  deep are parse errors instead of a hang, and `##vso[` / `##[` CI log commands in scanned
+  text are defused.
 - Detection of non-WPF XAML (WinUI/UWP, Avalonia, MAUI) and of external themes merged from
   other assemblies; both are reported instead of being measured with the wrong assumptions.
 - Baseline (`--baseline` / `--write-baseline`) and `<!-- xamlfit-ignore: reason -->`.
@@ -68,7 +71,7 @@ that over-estimated the available width.
   runs give identical results.
 - **False positives** against shipped software: 929 source-language measurements over ten
   projects, 0 overflows.
-- 486 unit tests.
+- 490 unit tests.
 
 ### Not verified
 

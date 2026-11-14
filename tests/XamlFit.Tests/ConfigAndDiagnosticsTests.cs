@@ -137,6 +137,18 @@ public class DiagnosticsTests
         Assert.Single(output.Split('\n', StringSplitOptions.RemoveEmptyEntries));
     }
 
+    [Theory]
+    [InlineData("##vso[task.setvariable variable=GATE]off")]
+    [InlineData("Speichern ##[error]forged")]
+    public void CI_log_commands_in_the_text_are_defused(string text)
+    {
+        // Azure Pipelines 在一行的任何位置都會執行 ##vso[…]；文字來自譯文
+        var output = CheckDiagnostics.ToMsBuild([Finding(text: text)], ".", FitSeverity.Fail, 0);
+        Assert.DoesNotContain("##vso[", output);
+        Assert.DoesNotContain("##[", output);
+        Assert.Contains(@"#\u0023", output);
+    }
+
     [Fact]
     public void Gated_findings_are_errors_and_the_rest_are_warnings()
     {

@@ -15,7 +15,19 @@ public static partial class CheckDiagnostics
     ///   文字來自使用者的 XAML 與譯文，所以那是真的會發生的輸入。
     ///   （U+2028／U+2029 也算換行，有些解析器會斷在那裡。）
     /// </summary>
-    public static string ConsoleSafe(string s)
+    public static string ConsoleSafe(string s) => DefuseCiCommands(EscapeControls(s));
+
+    /// <summary>
+    /// Azure Pipelines（<c>##vso[</c>）與 GitHub Actions 的舊格式（<c>##[</c>）在一行的**任何位置**都會被當成指令 ——
+    /// 譯文裡一句 <c>##vso[task.setvariable ...]</c> 印到 CI 的 log 上，就能改後續步驟的變數。
+    /// 第二個井號換成看得懂的 <c>#</c>，指令就不成立了。
+    /// </summary>
+    private static string DefuseCiCommands(string s) =>
+        s.Contains("##", StringComparison.Ordinal)
+            ? s.Replace("##vso[", @"#\u0023vso[", StringComparison.Ordinal).Replace("##[", @"#\u0023[", StringComparison.Ordinal)
+            : s;
+
+    private static string EscapeControls(string s)
     {
         // U+2028 / U+2029（行與段分隔符）用數值比對 —— 寫成字面會在原始碼裡變成真的換行。
         static bool Escape(char c) =>
