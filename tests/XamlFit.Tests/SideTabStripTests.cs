@@ -68,8 +68,15 @@ public class SideTabStripTests
         Assert.Equal(400 - 66, Resolve(Xaml("Left", ProbeTab + "<TabItem Header=\"A much longer header\" Visibility=\"Collapsed\"/>")).Px, 3);
 
     [Fact]
-    public void Tab_margin_and_MinWidth_count() =>
+    public void A_tab_MinWidth_counts() =>
         Assert.Equal(400 - 151, Resolve(Xaml("Left", ProbeTab + "<TabItem Header=\"x\" MinWidth=\"150\"/>")).Px, 3);
+
+    [Theory]
+    [InlineData("-10,0")]
+    [InlineData("15,0")]
+    public void A_tab_margin_does_not_change_the_strip(string margin) =>
+        // TabPanel 排在側邊時用不含 Margin 的期望寬度（LayoutOracle「long tab Margin」實測）
+        Assert.Equal(400 - 76, Resolve(Xaml("Left", ProbeTab + $"<TabItem Header=\"Age ratings\" Margin=\"{margin}\"/>")).Px, 3);
 
     [Fact]
     public void Localized_headers_are_measured_in_each_language()
@@ -101,10 +108,22 @@ public class SideTabStripTests
     public void Headers_it_cannot_read_leave_the_width_unknown(string other) =>
         Assert.NotEqual(WidthStatus.Known, Resolve(Xaml("Left", ProbeTab + other)).Status);
 
-    [Fact]
-    public void The_default_template_stays_unknown()
+    [Theory]
+    [InlineData("Left", "", 400 - (55 + 12 + 2) - 6)]                       // 標題 + 預設 Padding 6+6 + 標籤列邊距 2；內容區 6
+    [InlineData("Right", "", 400 - (55 + 12 + 2) - 6)]
+    [InlineData("Left", " Padding=\"20,2\"", 400 - (55 + 40 + 2) - 6)]     // 標籤的 Padding 取代預設
+    public void The_default_template_puts_the_widest_tab_beside_the_content(string placement, string tabPadding, double expected)
     {
-        var w = Resolve($"<Window {Ns}><TabControl Width=\"400\" TabStripPlacement=\"Left\">{Items}</TabControl></Window>");
+        var items = ProbeTab + $"<TabItem Header=\"Age ratings\"{tabPadding} BorderThickness=\"4\" Margin=\"7,0\"/>";
+        var w = Resolve($"<Window {Ns}><TabControl Width=\"400\" TabStripPlacement=\"{placement}\">{items}</TabControl></Window>");
+        Assert.Equal(WidthStatus.Known, w.Status);
+        Assert.Equal(expected, w.Px, 3);
+    }
+
+    [Fact]
+    public void An_external_theme_keeps_the_default_template_unknown()
+    {
+        var w = Resolve($"<Window {Ns}><TabControl Width=\"400\" TabStripPlacement=\"Left\">{Items}</TabControl></Window>", theme: "MahApps");
         Assert.NotEqual(WidthStatus.Known, w.Status);
     }
 

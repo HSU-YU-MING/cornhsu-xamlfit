@@ -133,13 +133,16 @@ public sealed class CheckAnalyzer
     /// （見 <see cref="CultureFonts"/>），來源語言只在第一次判。</param>
     /// <param name="measurableInSource">來源語言的掃描裡量得到的位置（檔案:行）。換成這個語言重排之後
     /// 量不到的，要算進「沒有判定」—— 不能默默消失。</param>
+    /// <param name="cultureFontDiffers">這個語言的預設字型跟來源語言不同（見 <see cref="CultureFonts"/>）。
+    /// 沒翻譯的字串在這個語言裡顯示來源語言的字，但用的是這個語言的字型 —— 要再量一次。</param>
     public CheckResult Analyze(
         ScanResult scan,
         BudgetResult budget,
         IReadOnlyList<CultureStrings> cultures,
         bool pseudo,
         bool judgeSource = true,
-        IReadOnlySet<string>? measurableInSource = null)
+        IReadOnlySet<string>? measurableInSource = null,
+        bool cultureFontDiffers = false)
     {
         var findings = new List<FitFinding>();
         var missing = new HashSet<(string Key, string Culture)>();
@@ -187,33 +190,42 @@ public sealed class CheckAnalyzer
             var source = site.SourceText
                          ?? (site.ResourceKey is { } rk && neutral is not null && neutral.TryGetValue(rk, out var nv) ? nv : null);
 
-            var candidates = new List<(string Culture, string Text, bool Pseudo)>();
+            var candidates = new List<(string Culture, string Text, bool Pseudo, bool Untranslated)>();
 
             if (pseudo)
             {
                 // 沒有翻譯時的退路：照分段膨脹表把來源字串拉長。
                 // ⚠ 這報的是**風險**不是事實，所以嚴重度一律降級（見 Judge）。
                 if (source is null) noSource.Add(key);
-                else candidates.Add((PseudoCulture, Pseudoize(source, ExpansionTable.FactorFor(source)), true));
+                else candidates.Add((PseudoCulture, Pseudoize(source, ExpansionTable.FactorFor(source)), true, false));
             }
             else
             {
                 // 來源語言自己。寫死的英文已經裝不下，也是真的裝不下 ——
                 // 而且它是工具自我檢查的基準：出貨的畫面上英文大概都裝得下，這裡報出一堆就是工具算錯了。
-                if (source is not null && judgeSource) candidates.Add((SourceCulture, source, false));
+                if (source is not null && judgeSource) candidates.Add((SourceCulture, source, false, false));
 
                 // 寫死的字面文字不會被翻譯，只有資源字串要對每個語言量
                 if (site.Source == TextSource.Resource)
                 {
                     foreach (var (culture, values) in translated)
                     {
-                        if (values.TryGetValue(key, out var text)) candidates.Add((culture, text, false));
-                        else missing.Add((key, culture));
+                        if (values.TryGetValue(key, out var text)) candidates.Add((culture, text, false, false));
+                        else
+                        {
+                            missing.Add((key, culture));
+                            // ⚠ 沒有譯文時 WPF 顯示來源語言的字 —— 但排在**這個語言**的版面裡：旁邊的譯文可能比較寬、
+                            //   預設字型也可能不同。CorpusRender 實測 ScreenToGif：義大利文裡沒翻的英文下拉選項
+                            //   只剩 101.6 px（英文版面是 122.4），工具先前只在來源語言判一次，那幾筆漏報。
+                            //   版面跟來源語言一樣時不重複判。
+                            if (!judgeSource && source is not null && (site.Width.DependsOnNeighbourText || cultureFontDiffers))
+                                candidates.Add((culture, source, false, true));
+                        }
                     }
                 }
             }
 
-            foreach (var (culture, text, isPseudo) in candidates)
+            foreach (var (culture, text, isPseudo, untranslated) in candidates)
             {
                 if (text.Length == 0) continue;
 
@@ -241,7 +253,7 @@ public sealed class CheckAnalyzer
                     : string.Equals(source, text, StringComparison.Ordinal) ? layout.Lines
                     : Layout(site, source, lookup) is { Unreliable: null } sl ? sl.Lines : null;
 
-                var finding = Judge(site, key, culture, text, layout, sourceLines, isPseudo);
+                var finding = Judge(site, key, culture, text, layout, sourceLines, isPseudo, untranslated);
                 if (finding is not null) findings.Add(finding);
             }
         }
@@ -478,7 +490,8 @@ public sealed class CheckAnalyzer
            or (>= 0x20000 and <= 0x3FFFF);   // 擴充區
 
     private FitFinding? Judge(
-        TextSite site, string key, string culture, string text, TextLayout layout, int? sourceLines, bool pseudo)
+        TextSite site, string key, string culture, string text, TextLayout layout, int? sourceLines, bool pseudo,
+        bool untranslated = false)
     {
         var limit = site.Width.Px;
         var actual = layout.WidestLine;
@@ -539,6 +552,8 @@ public sealed class CheckAnalyzer
             warnings.Add("the available width is what the other strings in the same row leave in this language");
         if (kind is FitKind.VerticalClip or FitKind.Reflow)
             warnings.Add($"{layout.Lines} line(s)");
+        if (untranslated)
+            warnings.Add("this language has no translation for it, so WPF shows the source text in this language's layout");
 
         return new FitFinding
         {

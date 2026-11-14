@@ -404,18 +404,21 @@ internal static class Program
         return over > 0 || wrong > 0 ? 1 : 0;
     }
 
+    /// <summary>--check：用檢查模式的排法（同一排只扣前面的兄弟），對應 WPF 實際看得見的寬度。</summary>
+    private static bool CheckMode = Environment.GetCommandLineArgs().Contains("--check");
+
     private static string Short(string s) => s.Length <= 70 ? s : s[..69] + "…";
 
     private static AvailableWidth ResolveWithXamlFit(string xaml, ChromeTable chrome, FontResolver fonts)
     {
-        var doc = XDocument.Parse(xaml);
+        var doc = XDocument.Parse(xaml, LoadOptions.PreserveWhitespace);   // 跟 XamlScanner 一樣保留空白（Run 之間的空格）
         doc.AddAnnotation(new SourceFile("oracle.xaml"));
 
         var styles = new StyleIndex();
         styles.Add(doc, "oracle.xaml");
 
         var measurer = new ElementMeasurer(fonts, styles, chrome, DefaultFamily, 12);
-        var resolver = new WidthResolver(chrome, styles, measurer);
+        var resolver = new WidthResolver(chrome, styles, measurer) { Sharing = CheckMode ? RowSharing.Preceding : RowSharing.WholeRow };
 
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
         var probe = doc.Descendants().First(e => (string?)e.Attribute(x + "Name") == "probe");
@@ -661,19 +664,92 @@ internal static class Program
         Add("side tabs Left, bold FontSize 16 headers", Side("Left", probeTab + "<TabItem Header='Age ratings and regions' FontWeight='Bold' FontSize='16'/>"));
         Add("side tabs Left, plain TabItem template", Side("Left", probeTab + "<TabItem Header='Age ratings and regions'/>", plainTabItem));
         Add("side tabs Left, collapsed long tab", Side("Left", probeTab + "<TabItem Header='Age ratings and regions and much more' Visibility='Collapsed'/>"));
+        // TabPanel 排在側邊時不算標籤的 Margin（GetDesiredSizeWithoutMargin）：負的不會讓標籤列變窄，正的也不會變寬
+        Add("side tabs Left, long tab Margin -10,0", Side("Left", probeTab + "<TabItem Header='Age ratings and regions' Margin='-10,0'/>"));
+        Add("side tabs Left, long tab Margin 15,0", Side("Left", probeTab + "<TabItem Header='Age ratings and regions' Margin='15,0'/>"));
         Add("side tabs Top, Playnite templates", Side("Top", probeTab + "<TabItem Header='Categories'/>"));
         Add("side tabs Bottom, Playnite templates", Side("Bottom", probeTab + "<TabItem Header='Categories'/>"));
         Add("side tabs Left, element header", Side("Left", probeTab + "<TabItem><TabItem.Header><StackPanel><TextBlock Text='Wide header here'/></StackPanel></TabItem.Header></TabItem>"), Want.Blocked);
         Add("side tabs Left, bound header", Side("Left", probeTab + "<TabItem Header='{Binding Name}'/>"), Want.Blocked);
-        // 預設範本：選取的標籤用負邊距放大，沒有建模 —— 維持不知道
+        // 預設範本的側邊標籤：拆開量（標籤選取與否、Padding、TabControl 的 Padding／邊框）
+        Add("default tabs: Left, long tab selected", W($"<TabControl Width='500' HorizontalAlignment='Left' TabStripPlacement='Left'><TabItem Header='Age ratings and regions' IsSelected='True'><Border x:Name='probe'/></TabItem><TabItem Header='Platforms'/></TabControl>"));
+        Add("default tabs: Left, TabItem Padding 20,2", W($"<TabControl Width='500' HorizontalAlignment='Left' TabStripPlacement='Left'>{probeTab}<TabItem Header='Age ratings and regions' Padding='20,2'/></TabControl>"));
+        Add("default tabs: Left, TabControl Padding 0 Border 0", W($"<TabControl Width='500' HorizontalAlignment='Left' TabStripPlacement='Left' Padding='0' BorderThickness='0'>{probeTab}<TabItem Header='Age ratings and regions'/></TabControl>"));
+        Add("default tabs: Left, TabItem Margin 7,0", W($"<TabControl Width='500' HorizontalAlignment='Left' TabStripPlacement='Left'>{probeTab}<TabItem Header='Age ratings and regions' Margin='7,0'/></TabControl>"));
+        Add("default tabs: Left, TabItem BorderThickness 4", W($"<TabControl Width='500' HorizontalAlignment='Left' TabStripPlacement='Left'>{probeTab}<TabItem Header='Age ratings and regions' BorderThickness='4'/></TabControl>"));
+        Add("default tabs: Right, long tab selected", W($"<TabControl Width='500' HorizontalAlignment='Left' TabStripPlacement='Right'><TabItem Header='Age ratings and regions' IsSelected='True'><Border x:Name='probe'/></TabItem><TabItem Header='Platforms'/></TabControl>"));
+        Add("default tabs: Left, only short tabs", W($"<TabControl Width='500' HorizontalAlignment='Left' TabStripPlacement='Left'>{probeTab}<TabItem Header='Ab'/></TabControl>"));
+
+        // WPF 預設範本（Aero2）：標籤列 = 最寬的「標題 + 左右 Padding」+ 2
         // 範本自己決定標籤列在哪：寫死在上方（不理會 TabStripPlacement）、或用 TemplateBinding 讓 DockPanel 跟著放
         const string dockTop = "<TabControl.Template><ControlTemplate TargetType='TabControl'><DockPanel><TabPanel DockPanel.Dock='Top' IsItemsHost='True'/><ContentPresenter ContentSource='SelectedContent'/></DockPanel></ControlTemplate></TabControl.Template>";
         const string dockBound = "<TabControl.Template><ControlTemplate TargetType='TabControl'><DockPanel><TabPanel DockPanel.Dock='{TemplateBinding TabStripPlacement}' IsItemsHost='True'/><ContentPresenter ContentSource='SelectedContent'/></DockPanel></ControlTemplate></TabControl.Template>";
         Add("side tabs Left, template docks the strip on top", W($"<Grid Width='500' HorizontalAlignment='Left'><Grid.Resources>{sideTabItem}</Grid.Resources><TabControl TabStripPlacement='Left'>{dockTop}{probeTab}<TabItem Header='Age ratings and regions'/></TabControl></Grid>"));
         Add("side tabs Left, DockPanel.Dock TemplateBinding", W($"<Grid Width='500' HorizontalAlignment='Left'><Grid.Resources>{sideTabItem}</Grid.Resources><TabControl TabStripPlacement='Left'>{dockBound}{probeTab}<TabItem Header='Age ratings and regions'/></TabControl></Grid>"));
         Add("side tabs Right, DockPanel.Dock TemplateBinding", W($"<Grid Width='500' HorizontalAlignment='Left'><Grid.Resources>{sideTabItem}</Grid.Resources><TabControl TabStripPlacement='Right'>{dockBound}{probeTab}<TabItem Header='Age ratings and regions'/></TabControl></Grid>"));
-        Add("side tabs Left, default WPF template", W($"<TabControl Width='500' HorizontalAlignment='Left' TabStripPlacement='Left'>{probeTab}<TabItem Header='Age ratings and regions'/></TabControl>"), Want.Blocked);
-        Add("side tabs Right, default WPF template", W($"<TabControl Width='500' HorizontalAlignment='Left' TabStripPlacement='Right'>{probeTab}<TabItem Header='Age ratings and regions'/></TabControl>"), Want.Blocked);
+        Add("side tabs Left, default WPF template", W($"<TabControl Width='500' HorizontalAlignment='Left' TabStripPlacement='Left'>{probeTab}<TabItem Header='Age ratings and regions'/></TabControl>"));
+        Add("side tabs Right, default WPF template", W($"<TabControl Width='500' HorizontalAlignment='Left' TabStripPlacement='Right'>{probeTab}<TabItem Header='Age ratings and regions'/></TabControl>"));
+
+        // ── 7c. 太長的按鈕被外層裁掉時，按鈕自己右邊的內距／邊距算不算 ──
+        // 按鈕：左右 Padding 不對稱（10／30）、Margin 5／20、預設邊框 1。文字超出可用寬度。
+        const string longButton = "<Button Padding='10,0,30,0' Margin='5,0,20,0'><TextBlock x:Name='probe' Text='" + Long + "'/></Button>";
+        Add("trailing: horizontal StackPanel, after a 100 box", W($"<StackPanel Orientation='Horizontal' Width='300' HorizontalAlignment='Left'><Border Width='100'/>{longButton}</StackPanel>"));
+        Add("trailing: horizontal StackPanel in a 300 Border", W($"<Border Width='300' HorizontalAlignment='Left'><StackPanel Orientation='Horizontal'><Border Width='100'/>{longButton}</StackPanel></Border>"));
+        Add("trailing: nested horizontal StackPanels", W($"<StackPanel Orientation='Horizontal' Width='300' HorizontalAlignment='Left'><Border Width='100'/><Border Padding='0,0,40,0' Margin='0,0,15,0'><StackPanel Orientation='Horizontal'>{longButton}</StackPanel></Border></StackPanel>"));
+        Add("trailing: DockPanel docked left", W($"<DockPanel Width='300' HorizontalAlignment='Left' LastChildFill='False'><Border Width='100'/>{longButton}</DockPanel>"));
+        Add("trailing: DockPanel last child fills", W($"<DockPanel Width='300' HorizontalAlignment='Left'><Border Width='100'/>{longButton}</DockPanel>"));
+        Add("trailing: Grid star column", W($"<Grid Width='300' HorizontalAlignment='Left'><Grid.ColumnDefinitions><ColumnDefinition Width='100'/><ColumnDefinition/></Grid.ColumnDefinitions>" + longButton.Replace("<Button ", "<Button Grid.Column='1' ") + "</Grid>"));
+        Add("trailing: Border single child", W($"<Border Width='300' HorizontalAlignment='Left'>{longButton}</Border>"));
+        Add("trailing: Button with Width", W("<StackPanel Orientation='Horizontal' Width='300' HorizontalAlignment='Left'><Border Width='100'/>" + longButton.Replace("<Button ", "<Button Width='150' ") + "</StackPanel>"));
+        Add("trailing: TextBlock with right Margin in StackPanel", W($"<StackPanel Orientation='Horizontal' Width='300' HorizontalAlignment='Left'><Border Width='100'/><TextBlock x:Name='probe' Margin='5,0,40,0' Text='{Long}'/></StackPanel>"));
+
+        // Playnite 的按鈕範本：Border(BorderThickness) > ContentPresenter(Margin=Padding)
+        const string customButtonStyle = "<Style TargetType='Button'><Setter Property='Padding' Value='10,5,30,5'/><Setter Property='BorderThickness' Value='1'/><Setter Property='Template'><Setter.Value><ControlTemplate TargetType='Button'><Border BorderThickness='{TemplateBinding BorderThickness}' BorderBrush='Gray'><ContentPresenter Margin='{TemplateBinding Padding}'/></Border></ControlTemplate></Setter.Value></Setter></Style>";
+        const string iconButtonStyle = "<Style TargetType='Button'><Setter Property='Padding' Value='10,5,30,5'/><Setter Property='Template'><Setter.Value><ControlTemplate TargetType='Button'><Border Padding='0,0,12,0'><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width='Auto'/></Grid.ColumnDefinitions><ContentPresenter Margin='{TemplateBinding Padding}'/><Border Grid.Column='1' Width='16'/></Grid></Border></ControlTemplate></Setter.Value></Setter></Style>";
+        const string plainButton = "<Button Margin='5,0,20,0'><TextBlock x:Name='probe' Text='" + Long + "'/></Button>";
+        Add("trailing: custom template in StackPanel", W($"<StackPanel Orientation='Horizontal' Width='300' HorizontalAlignment='Left'><StackPanel.Resources>{customButtonStyle}</StackPanel.Resources><Border Width='100'/>{plainButton}</StackPanel>"));
+        Add("trailing: template with an icon column", W($"<StackPanel Orientation='Horizontal' Width='300' HorizontalAlignment='Left'><StackPanel.Resources>{iconButtonStyle}</StackPanel.Resources><Border Width='100'/>{plainButton}</StackPanel>"));
+
+        // Canvas 不量子元素：沒寫 Width 的 Canvas 在 Auto 欄裡寬度 0
+        Add("Auto column with an empty Canvas", W($"<Grid Width='300' HorizontalAlignment='Left'><Grid.ColumnDefinitions><ColumnDefinition Width='Auto'/><ColumnDefinition/></Grid.ColumnDefinitions><Canvas/><TextBlock x:Name='probe' Grid.Column='1' Text='{Long}'/></Grid>"));
+        Add("Auto column with a Canvas holding a 200 box", W($"<Grid Width='300' HorizontalAlignment='Left'><Grid.ColumnDefinitions><ColumnDefinition Width='Auto'/><ColumnDefinition/></Grid.ColumnDefinitions><Canvas Margin='3,0'><Border Width='200' Height='5'/></Canvas><TextBlock x:Name='probe' Grid.Column='1' Text='{Long}'/></Grid>"));
+        Add("Auto column with a bound-visibility CheckBox", W($"<Grid Width='300' HorizontalAlignment='Left'><Grid.ColumnDefinitions><ColumnDefinition Width='Auto'/><ColumnDefinition/></Grid.ColumnDefinitions><CheckBox Visibility='{{Binding NoSuchProperty}}'/><TextBlock x:Name='probe' Grid.Column='1' Text='{Long}'/></Grid>"));
+
+        // 跨過 Auto 欄的元素：被跨的欄一起長，長到 Grid 佔滿為止
+        const string spanCols = "<Grid.ColumnDefinitions><ColumnDefinition Width='Auto'/><ColumnDefinition/><ColumnDefinition Width='60'/></Grid.ColumnDefinitions>";
+        Add("spans an Auto column: Auto + star", W($"<Grid Width='300' HorizontalAlignment='Left'>{spanCols}<TextBlock Text='Label'/><TextBlock x:Name='probe' Grid.Row='1' Grid.ColumnSpan='2' Text='{Long}'/></Grid>"));
+        Add("spans an Auto column: all three", W($"<Grid Width='300' HorizontalAlignment='Left'>{spanCols}<TextBlock Text='Label'/><TextBlock x:Name='probe' Grid.Row='1' Grid.ColumnSpan='3' Text='{Long}'/></Grid>"));
+        Add("spans an Auto column: Auto + fixed", W($"<Grid Width='300' HorizontalAlignment='Left'><Grid.ColumnDefinitions><ColumnDefinition Width='50'/><ColumnDefinition Width='Auto'/><ColumnDefinition Width='60'/><ColumnDefinition/></Grid.ColumnDefinitions><TextBlock Grid.Column='1' Text='Label'/><TextBlock x:Name='probe' Grid.Row='1' Grid.Column='1' Grid.ColumnSpan='2' Text='{Long}'/></Grid>"));
+        Add("spans an Auto column: wrapping text", W($"<Grid Width='300' HorizontalAlignment='Left'>{spanCols}<TextBlock Text='Label'/><TextBlock x:Name='probe' Grid.Row='1' Grid.ColumnSpan='2' TextWrapping='Wrap' Text='{Long}'/></Grid>"));
+
+        // Auto 欄裡只有一個 Run 的 TextBlock（包在 Hyperlink 裡）：兄弟的寬度量得出來
+        Add("Auto column with a Hyperlink Run", W($"<Grid Width='300' HorizontalAlignment='Left'><Grid.ColumnDefinitions><ColumnDefinition Width='Auto'/><ColumnDefinition/></Grid.ColumnDefinitions><TextBlock Margin='0,0,6,0'>\n  <Hyperlink NavigateUri='https://example.com'>\n    <Run Text='User manual and more'/>\n  </Hyperlink>\n</TextBlock><TextBlock x:Name='probe' Grid.Column='1' Text='{Long}'/></Grid>"));
+        Add("Auto column with a FontSize 16 Span Run", W($"<Grid Width='300' HorizontalAlignment='Left'><Grid.ColumnDefinitions><ColumnDefinition Width='Auto'/><ColumnDefinition/></Grid.ColumnDefinitions><TextBlock><Span FontSize='16'><Run>Bigger words here</Run></Span></TextBlock><TextBlock x:Name='probe' Grid.Column='1' Text='{Long}'/></Grid>"));
+
+        // 另一列有跨欄的元素時，它會不會把 Auto 欄撐大（probe 在星號欄）
+        const string autoStar = "<Grid.ColumnDefinitions><ColumnDefinition Width='Auto'/><ColumnDefinition/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height='Auto'/><RowDefinition Height='Auto'/><RowDefinition Height='Auto'/></Grid.RowDefinitions>";
+        Add("spanning sibling: wide, spans Auto + star", W($"<Grid Width='300' HorizontalAlignment='Left'>{autoStar}<TextBlock Text='Label'/><TextBlock Grid.Row='1' Grid.ColumnSpan='2' Text='{Long}'/><TextBlock x:Name='probe' Grid.Row='2' Grid.Column='1' Text='{Long}'/></Grid>"));
+        Add("spanning sibling: narrow, spans Auto + star", W($"<Grid Width='300' HorizontalAlignment='Left'>{autoStar}<TextBlock Text='Label'/><TextBlock Grid.Row='1' Grid.ColumnSpan='2' Text='ab'/><TextBlock x:Name='probe' Grid.Row='2' Grid.Column='1' Text='{Long}'/></Grid>"));
+        Add("spanning sibling: Border 200, spans Auto + star", W($"<Grid Width='300' HorizontalAlignment='Left'>{autoStar}<TextBlock Text='Label'/><Border Grid.Row='1' Grid.ColumnSpan='2' Width='200'/><TextBlock x:Name='probe' Grid.Row='2' Grid.Column='1' Text='{Long}'/></Grid>"));
+        Add("spanning sibling: spans two Auto columns", W($"<Grid Width='300' HorizontalAlignment='Left'><Grid.ColumnDefinitions><ColumnDefinition Width='Auto'/><ColumnDefinition Width='Auto'/><ColumnDefinition/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height='Auto'/><RowDefinition Height='Auto'/><RowDefinition Height='Auto'/></Grid.RowDefinitions><TextBlock Text='Label'/><Border Grid.Row='1' Grid.ColumnSpan='2' Width='150'/><TextBlock x:Name='probe' Grid.Row='2' Grid.Column='2' Text='{Long}'/></Grid>"), Want.Blocked);
+        Add("spanning sibling: Auto + star, star row", W($"<Grid Width='300' HorizontalAlignment='Left'><Grid.ColumnDefinitions><ColumnDefinition Width='Auto'/><ColumnDefinition/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height='Auto'/><RowDefinition/><RowDefinition Height='Auto'/></Grid.RowDefinitions><TextBlock Text='Label'/><Border Grid.Row='1' Grid.ColumnSpan='2' Width='200'/><TextBlock x:Name='probe' Grid.Row='2' Grid.Column='1' Text='{Long}'/></Grid>"));
+
+        // 同樣的 Grid 放在水平 StackPanel 裡（用無限寬量）：星號欄變得跟 Auto 一樣，跨欄的元素會撐大 Auto 欄
+        Add("spanning sibling: grid in a horizontal StackPanel", W($"<StackPanel Orientation='Horizontal' Width='300' HorizontalAlignment='Left'><Grid>{autoStar}<TextBlock Text='Label'/><Border Grid.Row='1' Grid.ColumnSpan='2' Width='200'/><TextBlock x:Name='probe' Grid.Row='2' Grid.Column='1' Text='{Long}'/></Grid></StackPanel>"));
+        Add("spanning sibling: grid in an Auto column", W($"<Grid Width='300' HorizontalAlignment='Left'><Grid.ColumnDefinitions><ColumnDefinition Width='Auto'/><ColumnDefinition/></Grid.ColumnDefinitions><Grid>{autoStar}<TextBlock Text='Label'/><Border Grid.Row='1' Grid.ColumnSpan='2' Width='200'/><TextBlock x:Name='probe' Grid.Row='2' Grid.Column='1' Text='{Long}'/></Grid></Grid>"));
+
+        // Auto 欄裡一行好幾個 Run（字級不同）、勾選框的內容是一個 TextBlock（Kindling 的「動態補間（實驗性）」）
+        const string autoCol = "<Grid.ColumnDefinitions><ColumnDefinition Width='Auto'/><ColumnDefinition/></Grid.ColumnDefinitions>";
+        Add("inline line: two Runs, sizes 12 and 10", W($"<Grid Width='400' HorizontalAlignment='Left'>{autoCol}<TextBlock>\n  <Run Text='Motion fill'/>\n  <Run Text='(experimental)' FontSize='10'/>\n</TextBlock><TextBlock x:Name='probe' Grid.Column='1' Text='{Long}'/></Grid>"));
+        Add("inline line: Runs without space between", W($"<Grid Width='400' HorizontalAlignment='Left'>{autoCol}<TextBlock><Run Text='Motion'/><Run Text='fill' FontWeight='Bold'/></TextBlock><TextBlock x:Name='probe' Grid.Column='1' Text='{Long}'/></Grid>"));
+        Add("inline line: CheckBox with a two-Run TextBlock", W($"<Grid Width='400' HorizontalAlignment='Left'>{autoCol}<CheckBox Margin='0,0,8,0'><TextBlock>\n  <Run Text='Motion fill'/>\n  <Run Text='(experimental)' FontSize='10'/>\n</TextBlock></CheckBox><TextBlock x:Name='probe' Grid.Column='1' Text='{Long}'/></Grid>"));
+        Add("inline line: Button with a TextBlock child", W($"<Grid Width='400' HorizontalAlignment='Left'>{autoCol}<Button Padding='12,4'><TextBlock Text='Regenerate all'/></Button><TextBlock x:Name='probe' Grid.Column='1' Text='{Long}'/></Grid>"));
+
+        Add("ws probe: gap newline only", W($"<Grid Width='400' HorizontalAlignment='Left'>{autoCol}<TextBlock><Run Text='Motion fill'/>\n  <Run Text='(experimental)' FontSize='10'/></TextBlock><TextBlock x:Name='probe' Grid.Column='1' Text='{Long}'/></Grid>"));
+        Add("ws probe: leading and trailing only", W($"<Grid Width='400' HorizontalAlignment='Left'>{autoCol}<TextBlock>\n  <Run Text='Motion fill'/><Run Text='(experimental)' FontSize='10'/>\n</TextBlock><TextBlock x:Name='probe' Grid.Column='1' Text='{Long}'/></Grid>"));
+        Add("ws probe: gap single space", W($"<Grid Width='400' HorizontalAlignment='Left'>{autoCol}<TextBlock><Run Text='Motion fill'/> <Run Text='(experimental)' FontSize='10'/></TextBlock><TextBlock x:Name='probe' Grid.Column='1' Text='{Long}'/></Grid>"));
+        Add("ws probe: gap single space, same size", W($"<Grid Width='400' HorizontalAlignment='Left'>{autoCol}<TextBlock><Run Text='Motion fill'/> <Run Text='(experimental)'/></TextBlock><TextBlock x:Name='probe' Grid.Column='1' Text='{Long}'/></Grid>"));
+        Add("ws probe: no gap", W($"<Grid Width='400' HorizontalAlignment='Left'>{autoCol}<TextBlock><Run Text='Motion fill'/><Run Text='(experimental)' FontSize='10'/></TextBlock><TextBlock x:Name='probe' Grid.Column='1' Text='{Long}'/></Grid>"));
 
         // ── 8. 快顯 ──
         Add("text in Button.ToolTip", W($"<Button Width='80' HorizontalAlignment='Left' Content='x'><Button.ToolTip><TextBlock x:Name='probe' Text='{Long}'/></Button.ToolTip></Button>"), Want.Open);

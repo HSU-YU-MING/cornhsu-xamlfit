@@ -55,6 +55,24 @@ public class ScrollBarTemplateTests
         Assert.Equal(276, w.Px, 3);
     }
 
+    [Theory]
+    [InlineData("Auto", true)]       // 內容比視埠高才出現：那是假設，結果要講出來
+    [InlineData("Visible", false)]   // 一定在：是事實
+    public void An_auto_bar_in_a_project_template_is_reported_as_assumed(string visibility, bool assumed)
+    {
+        var xaml = $"<Window {Ns} Width=\"700\"><Grid Width=\"300\" HorizontalAlignment=\"Left\"><Grid.Resources>{Bar("<Border Width=\"24\"/>", overrides: true)}{Viewer}</Grid.Resources>" +
+                   $"<ScrollViewer VerticalScrollBarVisibility=\"{visibility}\" HorizontalScrollBarVisibility=\"Disabled\"><TextBlock Text=\"Hello\"/></ScrollViewer></Grid></Window>";
+        var dir = TempProject(("Main.xaml", xaml));
+        try
+        {
+            var scan = new XamlScanner(Chrome, new ScanOptions { DefaultFontFamily = MonoFamily, DefaultFontSize = MonoSize }, Fonts()).Scan(dir);
+            var w = scan.Sites.Single().Width;
+            Assert.Equal(276, w.Px, 3);
+            Assert.Equal(assumed, w.AssumedScrollBar);
+        }
+        finally { Cleanup(dir); }
+    }
+
     [Fact]
     public void With_OverridesDefaultStyle_and_no_fixed_root_width_the_bar_is_unknown() =>
         Assert.NotEqual(WidthStatus.Known, Probe(Bar("<Border><Track x:Name=\"PART_Track\"/></Border>", overrides: true)).Status);

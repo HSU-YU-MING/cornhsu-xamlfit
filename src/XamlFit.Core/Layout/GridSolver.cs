@@ -71,12 +71,10 @@ internal sealed class GridSolver
         for (var i = col; i < col + span; i++)
             if (specs[i].Kind == ColumnKind.Auto) probeTouchesAuto = true;
 
+        // 文字（或它的容器）佔了 Auto 欄：跨好幾欄時，被跨的 Auto 欄一起長大，整組能長到 Grid 被佔滿為止
+        //（Playnite 的編輯視窗：跨兩欄的 DockPanel，33 處。LayoutOracle「spans an Auto column」實測）
         if (probeTouchesAuto)
-        {
-            if (span > 1)
-                return new GridSolveResult(null, "the element spans an Auto column");
-            return SolveAutoProbe(grid, specs, col, available, depth);
-        }
+            return SolveAutoProbe(grid, specs, col, span, available, depth);
 
         var widths = new double[specs.Count];
 
@@ -109,13 +107,13 @@ internal sealed class GridSolver
     /// = Grid 可用寬度 − 其他每一欄的最低需求。
     /// </summary>
     private GridSolveResult SolveAutoProbe(
-        XElement grid, List<ColumnSpec> specs, int col, double available, int depth)
+        XElement grid, List<ColumnSpec> specs, int col, int span, double available, int depth)
     {
         double others = 0;
 
         for (var i = 0; i < specs.Count; i++)
         {
-            if (i == col) continue;
+            if (i >= col && i < col + span) continue;
             switch (specs[i].Kind)
             {
                 case ColumnKind.Fixed:
@@ -132,10 +130,16 @@ internal sealed class GridSolver
             }
         }
 
-        var width = Math.Min(specs[col].Max, available - others);
+        // 被跨的欄最多長到各自的 MaxWidth（固定欄就是它的值）
+        double cap = 0;
+        for (var i = col; i < col + span; i++)
+            cap += specs[i].Kind == ColumnKind.Fixed ? Clamp(specs[i], specs[i].Value) : specs[i].Max;
+
+        var which = span > 1 ? $"columns {col}..{col + span - 1}" : $"column {col}";
+        var width = Math.Min(cap, available - others);
         return width > 0
-            ? new GridSolveResult(width, $"column {col} (Auto: it can grow until the grid is full)", Unconstrained: true)
-            : new GridSolveResult(0, $"column {col} (the other columns already take the whole grid)", Unconstrained: true, Squeezed: true);
+            ? new GridSolveResult(width, $"{which} (Auto: it can grow until the grid is full)", Unconstrained: true)
+            : new GridSolveResult(0, $"{which} (the other columns already take the whole grid)", Unconstrained: true, Squeezed: true);
     }
 
     /// <summary>
@@ -196,7 +200,8 @@ internal sealed class GridSolver
     {
         double max = 0;
         var seen = false;
-        var lastColumn = ReadColumns(grid).Count - 1;
+        var specs = ReadColumns(grid);
+        var lastColumn = specs.Count - 1;
 
         foreach (var child in WidthResolver.LayoutChildren(grid))
         {
@@ -208,9 +213,17 @@ internal sealed class GridSolver
             col = Math.Min(col, lastColumn);
 
             // ⚠ 跨欄的子元素會讓 WPF 把超出的寬度分攤到跨到的欄上，規則複雜。
-            //   只要有子元素跨到這一欄就放棄 —— 分攤算錯會連帶弄錯星號分配。
+            //   例外（LayoutOracle「spanning sibling」實測）：跨到星號欄的子元素**不會**撐大 Auto 欄 ——
+            //   放在水平 StackPanel 或外層 Auto 欄裡（用無限寬量）也一樣。Playnite 編輯視窗的區段標題就是這樣，30 處。
+            //   只跨 Auto／固定欄的：照樣放棄 —— 分攤算錯會連帶弄錯星號分配。
             if (span > 1 && column >= col && column < col + span)
+            {
+                var spansStar = false;
+                for (var i = col; i < Math.Min(col + span, specs.Count); i++)
+                    if (specs[i].Kind == ColumnKind.Star) spansStar = true;
+                if (spansStar) continue;
                 return (null, "a spanning child contributes to it");
+            }
 
             if (col != column) continue;
 

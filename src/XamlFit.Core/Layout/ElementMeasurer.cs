@@ -44,6 +44,12 @@ public sealed class ElementMeasurer : IElementMeasurer
     /// </summary>
     public Func<string, string?>? ResourceText { get; set; }
 
+    /// <summary>
+    /// 使用者宣告的「這種控制項最寬多寬」（設定檔的 <c>controlWidths</c>）：寬度要到執行期才知道的控制項
+    /// （數值框、程式碼填項目的下拉選單）。工具自己從不猜這個數字。
+    /// </summary>
+    public IReadOnlyDictionary<string, double> DeclaredWidths { get; set; } = new Dictionary<string, double>();
+
     /// <summary>沒寫 xml:lang 的元素的語言（決定中日韓的字用哪支字型補）。</summary>
     public string DefaultLanguage { get; set; } = FontFallback.DefaultLanguage;
 
@@ -62,9 +68,10 @@ public sealed class ElementMeasurer : IElementMeasurer
         // 屬性元素不參與版面：寬度 0（這是確定的答案）
         if (local.Contains('.', StringComparison.Ordinal)) return 0;
 
-        // Visibility="Collapsed" 不佔空間。綁定的 Visibility 讀不出來 → 不知道佔不佔
+        // Visibility="Collapsed" 不佔空間。
+        // 綁定的 Visibility（Playnite 編輯視窗的「儲存這一欄」勾選框）：當成看得見來量 —— 這個寬度一律是被**扣掉**的
+        //（Auto 欄、同一排的兄弟、標籤列），藏起來時佔 0、看得見時佔全寬，取大的那個只會少給文字空間。
         var visibility = _styles.ResolveEx(element, "Visibility", inheritable: false);
-        if (visibility.IsUnreadable) return null;
         if (visibility.IsValue && visibility.Value!.Equals("Collapsed", StringComparison.OrdinalIgnoreCase)) return 0;
 
         // LayoutTransform 會改變期望尺寸（全是單位變換的不算：Playnite 的標籤列就掛了一組 1 倍、0 度的）
@@ -98,10 +105,16 @@ public sealed class ElementMeasurer : IElementMeasurer
         if (Length(element, "Width") is not { } width) return null;
         if (width.Value is { } explicitWidth) return Finish(explicitWidth);
 
+        // 1b. 使用者宣告的最大寬度（MinWidth／MaxWidth 照樣夾住）
+        if (DeclaredWidths.TryGetValue(local, out var declared)) return Finish(declared);
+
         if (ChromeTable.IsWpf(element))
         {
             // 沒設尺寸的矩形與橢圓不佔空間（捲軸交會處的那塊小方塊就是這樣寫的）
             if (local is "Rectangle" or "Ellipse") return Finish(0);
+
+            // Canvas 不量子元素的寬度：沒寫 Width 就是 0，裡面放多寬的東西都一樣（LayoutOracle 實測；Playnite 的 GridEx 拿它當空格）
+            if (local == "Canvas") return Finish(0);
 
             // 捲軸沒寫 Width：系統捲軸寬度 —— **換了範本也一樣**。
             // ⚠ LayoutOracle --scrollbar 實測：專案的樣式只換範本時（Playnite），範本確實套上了，
@@ -148,10 +161,20 @@ public sealed class ElementMeasurer : IElementMeasurer
 
         if (!ChromeTable.IsWpf(element)) return null;   // 第三方元素沒有明寫 Width：內容怎麼排不知道
 
+        // 2a. TextBlock 裡是一行 Run（外面可以包 Hyperlink／Span／Underline —— 不改字型的那幾種）：
+        //     每個 Run 用自己的字型量，元素之間的空白是一個 TextBlock 字型的空格
+        //    （Playnite 的關於視窗：連結放在 Auto 欄；Kindling：勾選框的「動態補間（實驗性）」兩個字級）
+        if (local == "TextBlock" && element.HasElements)
+            return InlineLine(element, depth) is { } line ? Finish(line + inner) : null;
+
         // 2. 文字元素
         var text = TextOf(element);
         if (text.IsText)
         {
+            // 內容是一個元素（<CheckBox><TextBlock>…</TextBlock></CheckBox>）：那個元素的寬度 + 內距
+            if (text.Value is null && ContentElement(element) is { } contentElement)
+                return DesiredWidth(contentElement, depth + 1) is { } contentWidth ? Finish(contentWidth + inner) : null;
+
             if (text.Value is null) return null;                       // 有文字但值未知（綁定、資源、子元素）
             if (MeasureText(element, text.Value) is not { } textWidth) return null;
             return Finish(textWidth + inner);
@@ -268,10 +291,120 @@ public sealed class ElementMeasurer : IElementMeasurer
             return (true, TextRules.ElementText(element));
         }
 
-        // 內容用子元素給的控制項（<Button><StackPanel>…</StackPanel></Button>）：不是單純的文字
-        return element.Elements().Any() || !string.IsNullOrWhiteSpace(element.Value)
+        // 內容用子元素給的控制項（<Button><StackPanel>…</StackPanel></Button>）：不是單純的文字。
+        // 屬性元素（<CheckBox.Visibility>、<Button.ContextMenu>）不是內容 —— <X.Content> 才是
+        var content = element.Elements().Where(e =>
+            !e.Name.LocalName.Contains('.', StringComparison.Ordinal) || e.Name.LocalName.EndsWith(".Content", StringComparison.Ordinal));
+        var textContent = string.Concat(element.Nodes().OfType<XText>().Select(t => t.Value));
+        return content.Any() || !string.IsNullOrWhiteSpace(textContent)
             ? (true, null)
             : (true, "");
+    }
+
+    /// <summary>
+    /// TextBlock 的行內內容排成一行的寬度：每個 Run 用自己的字型，元素之間的空白算一個（TextBlock 字型的）空格，
+    /// 頭尾的空白不算（XAML 會修掉）。Run 可以包一層只有它的 Hyperlink／Span／Underline。
+    /// 字面文字、LineBreak、Bold／Italic（改字型）、InlineUIContainer、包裝裡不只一個 Run：null。
+    /// </summary>
+    private double? InlineLine(XElement textBlock, int depth)
+    {
+        double total = 0;
+        var any = false;
+        var pendingSpace = false;
+        double? space = null;
+
+        foreach (var node in textBlock.Nodes())
+        {
+            if (node is XComment or XProcessingInstruction) continue;
+            if (node is XText t)
+            {
+                if (!string.IsNullOrWhiteSpace(t.Value)) return null;
+                pendingSpace = true;
+                continue;
+            }
+            if (node is not XElement e) continue;
+            if (e.Name.LocalName.Contains('.', StringComparison.Ordinal)) continue;   // 屬性元素
+
+            if (InlineRun(e) is not { } run) return null;
+            if (DesiredWidth(run, depth + 1) is not { } w) return null;
+
+            if (pendingSpace && any)
+            {
+                space ??= SpaceWidth(textBlock);
+                if (space is not { } sp) return null;
+                total += sp;
+            }
+            total += w;
+            any = true;
+            pendingSpace = false;
+        }
+        return any ? total : null;
+    }
+
+    /// <summary>元素字型的一個空格寬（跟 XamlScanner 量 Run 之間的空白同一個算法）。</summary>
+    private double? SpaceWidth(XElement element)
+    {
+        var font = FontSpec.Read(_styles, element, _defaultFamily, _defaultSize, DefaultLanguage);
+        if (font.Unreadable is not null) return null;
+        var lookup = _fonts.Resolve(font.Family, font.Weight, font.Style, _defaultFamily, font.Language);
+        if (lookup.Chain.Count == 0) return null;
+        var m = TextMeasure.Measure(" ", lookup, font.Size);
+        return m.IsReliable ? m.WidthPx : null;
+    }
+
+    /// <summary>行內元素裡的那個 Run：Run 本身，或一層只裝著一個 Run 的 Hyperlink／Span／Underline。</summary>
+    private static XElement? InlineRun(XElement e)
+    {
+        if (!ChromeTable.IsWpf(e)) return null;
+        var name = e.Name.LocalName;
+        if (name == "Run") return e.HasElements ? null : e;
+        if (name is not ("Hyperlink" or "Span" or "Underline")) return null;
+
+        XElement? only = null;
+        foreach (var node in e.Nodes())
+        {
+            if (node is XComment or XProcessingInstruction) continue;
+            if (node is XText t) { if (!string.IsNullOrWhiteSpace(t.Value)) return null; continue; }
+            if (node is not XElement c || c.Name.LocalName.Contains('.', StringComparison.Ordinal)) continue;
+            if (only is not null) return null;
+            only = c;
+        }
+        return only is { } inner && inner.Name.LocalName == "Run" && ChromeTable.IsWpf(inner) && !inner.HasElements ? inner : null;
+    }
+
+    /// <summary>
+    /// 內容控制項（Button、CheckBox、Label…）的內容如果是**一個**元素、而且沒有內容範本：那個元素。其他情形 null。
+    /// </summary>
+    private XElement? ContentElement(XElement control)
+    {
+        if (control.Name.LocalName is not ("Button" or "ToggleButton" or "RepeatButton" or "CheckBox" or "RadioButton" or "Label" or "ContentControl"))
+            return null;
+        foreach (var property in (ReadOnlySpan<string>)["ContentTemplate", "ContentTemplateSelector", "ContentStringFormat"])
+        {
+            var r = _styles.ResolveEx(control, property, inheritable: false);
+            if (r.IsUnreadable || r.IsValue) return null;
+        }
+        if (control.Attribute("Content") is not null) return null;
+
+        XElement? only = null;
+        foreach (var node in control.Nodes())
+        {
+            if (node is XComment or XProcessingInstruction) continue;
+            if (node is XText t) { if (!string.IsNullOrWhiteSpace(t.Value)) return null; continue; }
+            if (node is not XElement e) continue;
+            var name = e.Name.LocalName;
+            if (name.EndsWith(".Content", StringComparison.Ordinal))
+            {
+                var inside = e.Elements().ToList();
+                if (inside.Count != 1 || only is not null) return null;
+                only = inside[0];
+                continue;
+            }
+            if (name.Contains('.', StringComparison.Ordinal)) continue;
+            if (only is not null) return null;
+            only = e;
+        }
+        return only;
     }
 
     /// <summary>屬性寫的文字：字面值、或查得到這個語言譯文的資源。綁定與查不到的鍵回 null。</summary>
@@ -323,6 +456,16 @@ public sealed class ElementMeasurer : IElementMeasurer
         var placement = _styles.ResolveEx(control, "TabStripPlacement", inheritable: false);
         if (!placement.IsValue || !WidthResolver.IsOneOf(placement.Value, "Left", "Right")) return null;
 
+        return SideTabItems(control, depth);
+    }
+
+    /// <summary>
+    /// 側邊標籤列裡最寬的標籤（**不含它的 Margin**：TabPanel 排左右兩側時用 GetDesiredSizeWithoutMargin，
+    /// 選取的標籤靠負邊距放大也不會撐寬標籤列 —— LayoutOracle「default tabs」「side tabs」實測）。
+    /// 項目來自 ItemsSource、或有項目樣式／範本：不知道。
+    /// </summary>
+    internal double? SideTabItems(XElement control, int depth)
+    {
         foreach (var property in (ReadOnlySpan<string>)["ItemsSource", "ItemContainerStyle", "ItemContainerStyleSelector", "ItemTemplate", "ItemTemplateSelector"])
         {
             var r = _styles.ResolveEx(control, property, inheritable: false);
@@ -340,7 +483,8 @@ public sealed class ElementMeasurer : IElementMeasurer
             }
             if (!ChromeTable.IsWpf(child, "TabItem")) return null;
             if (DesiredWidth(child, depth + 1) is not { } w) return null;
-            widest = Math.Max(widest, w);
+            if (Sum(child, "Margin") is not { } margin) return null;
+            widest = Math.Max(widest, w - margin);
         }
         return widest;
     }

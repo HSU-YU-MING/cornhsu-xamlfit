@@ -129,7 +129,8 @@ internal static class CheckCommand
                 parts.Add(new CheckAnalyzer(prepared.Fonts, font, opts.MarginPercent)
                     .Analyze(localized, budget,
                         [.. neutralTables, .. cultures.Where(c => c.Culture.Equals(culture, StringComparison.OrdinalIgnoreCase))],
-                        pseudo: false, judgeSource: false, measurableInSource));
+                        pseudo: false, judgeSource: false, measurableInSource,
+                        cultureFontDiffers: !string.Equals(font, opts.DefaultFont, StringComparison.OrdinalIgnoreCase)));
             }
         }
 

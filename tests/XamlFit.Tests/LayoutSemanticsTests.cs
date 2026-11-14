@@ -485,9 +485,10 @@ public class HeaderAndContentTests
             In("<TabControl Width=\"400\"><TabItem x:Name=\"probe\" Header=\"A\"/></TabControl>").Status);
 
     [Fact]
-    public void A_side_tab_strip_is_not_guessed() =>
-        Assert.Equal(WidthStatus.Unmeasurable,
-            In("<TabControl Width=\"400\" TabStripPlacement=\"Left\"><TabItem Header=\"A\"><TextBlock x:Name=\"probe\"/></TabItem></TabControl>").Status);
+    public void A_side_tab_strip_takes_the_widest_tab() =>
+        // 預設範本：標題 5 + Padding 12 + 標籤列邊距 2；內容區 6（LayoutOracle「default tabs」實測）。更多見 SideTabStripTests
+        Assert.Equal(400 - 19 - 6,
+            In("<TabControl Width=\"400\" TabStripPlacement=\"Left\"><TabItem Header=\"A\"><TextBlock x:Name=\"probe\"/></TabItem></TabControl>").Px, 3);
 
     [Theory]
     [InlineData("GroupBox", 291, 288)]

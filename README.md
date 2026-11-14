@@ -65,10 +65,10 @@ Measured out of the box, no configuration, on eleven projects:
 | project | localizable sites | measured | blocked | no width bound | resolution |
 |---|---:|---:|---:|---:|---:|
 | Cornea (maintainer app) | 68 | 59 | 0 | 9 | **100%** |
-| QuillNest (maintainer app) | 685 | 533 | 9 | 116 | **98.3%** |
-| Kindling (maintainer app) | 150 | 57 | 18 | 75 | **76.0%** |
-| Playnite | 1,107 | 200 | 214 | 506 | **48.3%** |
-| ScreenToGif | 1,277 | 148 | 222 | 790 | **40.0%** |
+| QuillNest (maintainer app) | 685 | 536 | 6 | 116 | **98.9%** |
+| Kindling (maintainer app) | 150 | 67 | 8 | 75 | **89.3%** |
+| Playnite | 1,107 | 274 | 140 | 506 | **66.2%** |
+| ScreenToGif | 1,277 | 167 | 203 | 790 | **45.1%** |
 | HandyControl | 210 | 11 | 61 | 123 | 15.3% |
 | MahApps.Metro | 1,613 | 56 | 746 | 718 | 7.0% |
 | MaterialDesignInXamlToolkit | 2,339 | 0 | 867 | 1,432 | 0% |
@@ -77,10 +77,10 @@ Measured out of the box, no configuration, on eleven projects:
 
 Read that table as two groups.
 
-**Applications** range from 40% to 100%. What blocks the rest is concrete and printed:
-a custom panel the tool has never heard of (Playnite's `GridEx`), side panels collapsed to
-`Width="0"` and opened by animation (ScreenToGif, 318 sites), a row whose neighbour is
-data-bound, `SharedSizeGroup` columns.
+**Applications** range from 45% to 100%. What blocks the rest is concrete and printed:
+a custom panel the tool has never heard of (Playnite's `GridEx`), controls whose width only
+exists at run time (ScreenToGif's number boxes, colour pickers and drop-downs filled from code —
+declare them with `controlWidths`), a row whose neighbour is data-bound, `SharedSizeGroup` columns.
 
 **Control libraries** are near zero, and that is the correct answer: in those repositories the
 controls *are* the theme. Their demos take fonts from a markup extension and wrap content in
@@ -106,36 +106,40 @@ strings in English, German, French, Chinese, Japanese and Korean): mean error **
 worst under-estimate **0.068%**, worst over-estimate 1.43% (one kerning pair). XamlFit does not
 apply kerning, which makes text measure slightly *wide* — it errs toward reporting.
 
-**Layout, against real WPF windows.** `prototype/LayoutOracle` feeds 172 XAML snippets to an
+**Layout, against real WPF windows.** `prototype/LayoutOracle` feeds 217 XAML snippets to an
 actual off-screen `Window` and to the resolver, and compares what is really visible:
-**143 exact, 29 conservative, 0 over-estimates.** The conservative ones are deliberate — an
-assumed vertical scroll bar, the window frame at its widest display scaling. This harness
+**181 exact, 36 conservative, 0 over-estimates** — and in `check`'s row semantics (only the
+controls before it in a row count) 185 exact, 32 conservative, 0 over-estimates. The conservative ones
+are deliberate — an assumed vertical scroll bar, the window frame at its widest display scaling. This harness
 found most of what the last audit fixed; it needs Windows, so its conclusions are restated as
 portable unit tests.
 
 **Real projects, against real WPF windows.** `prototype/CorpusRender` loads a real project's
 windows into WPF — with the project's own `App.xaml` dictionaries and each language's strings —
 and records how wide every text needs to be and how much of it is actually visible. Playnite,
-10 windows, 4,915 comparisons (with Playnite's GridEx declared, and an equivalent GridEx in the
-harness so WPF lays it out for real): **99 clipped by both, 6 false alarms, 0 missed**, 4,810 fit by
-both. Two of the false alarms are within 0.5 px; the other two are the same button, 0.7 and 7.7 px on the safe side.
+11 windows, 5,765 comparisons (with Playnite's GridEx declared, and an equivalent GridEx in the
+harness so WPF lays it out for real): **130 clipped by both, 3 false alarms, 0 missed**, 5,632 fit by
+both. The false alarms are within 0.7 px, and in two of them WPF cuts only the blank after the last glyph.
 Where both agree, XamlFit's text width is −0.02 to +1.74 px off WPF's, and the width it
 believes is available is never more than 0.02 px too generous. ScreenToGif, 6 windows
-including the editor's side panel and every kind of drop-down, 2,657 comparisons with the same
-font on both sides (this machine's): **12 clipped by both, 0 false alarms**, 2,545 fit by both,
-and the width XamlFit believes is available is never too generous. The remaining 100 are all the
-same thing: Expander headers that WPF draws 0.5–1.2 px short of their text with 200 px to spare,
-because `UseLayoutRounding` shaves a device pixel off the `Auto` column the header sits in. That
-depends on the pixel grid, not on the translation (English happens to round the other way), and
-XamlFit does not model it. These comparisons found the bugs listed in `docs/M6-全面重讀.md`.
+including the editor's side panel and every kind of drop-down, 3,043 comparisons with the same
+font on both sides (this machine's): **122 clipped by both, 28 false alarms, 0 missed**, 2,893 fit by
+both. The false alarms are all in one side panel whose `ScrollViewer` shows its bar only when
+needed; XamlFit assumes the bar is there (and says so), WPF's test window was tall enough that it
+was not. Another 76 are Expander headers that WPF draws 0.5–1.2 px short of their text with 200 px
+to spare, because `UseLayoutRounding` rounds every layer to device pixels. English loses up to
+0.4 px at the same places; the loss does not grow with the text. That is the pixel grid, not a
+translation that does not fit, so XamlFit does not report it and the comparison counts it apart. These comparisons found the bugs listed in `docs/M6-全面重讀.md`.
 
 **False positives, against shipped software.** Hard-coded text in a released app presumably
-fits. So the tool checks the *source* language too: **984 source-language measurements across
-the corpus.** While it was being built this number was not zero three times. Twice the tool was
+fits. So the tool checks the *source* language too: **1,183 source-language measurements across
+the corpus.** While it was being built this number was not zero four times. Twice the tool was
 wrong. The third time — two overflows in the maintainer's own app, which appeared when the tool
 learned to measure Runs and restyled column headers — it was right: drawn by WPF, a note in a
 horizontal `StackPanel` needs 935.7 px and shows 563.5, and a column header needs exactly the
-126.16 px the tool computed in a 114 px slot.
+126.16 px the tool computed in a 114 px slot. The fourth — four drop-down options in ScreenToGif's
+editor, measurable once children spanning an `Auto` column were understood — was right too: WPF
+shows 122.4 px of "Sum evenly with the remaining frames", which needs 214.8.
 
 ## What you have to tell it
 
@@ -157,6 +161,12 @@ them once in `xamlfit.config.json`.
   "gridPanels": { "GridEx": { "columnCount": "ColumnCount", "starColumns": "StarColumns",
                               "autoLayoutColumns": "AutoLayoutColumns" } },
 
+  // The widest a control sized at run time ever gets: a number box showing a value, a drop-down
+  // filled from code. Used only where that control takes room from text next to it; an explicit
+  // Width still wins and MinWidth/MaxWidth still clamp it. Declare the real maximum — too small
+  // and the text is given room it does not have. The tool never guesses this number.
+  "controlWidths": { "IntegerUpDown": 100 },
+
   // A family in a FontFamily fallback list that target machines do not have.
   "absentFonts": ["Segoe UI Variable"],
 
@@ -168,7 +178,7 @@ them once in `xamlfit.config.json`.
 }
 ```
 
-Declaring Playnite's `GridEx` as above takes its resolution from 48.3% to 55.8%.
+Declaring Playnite's `GridEx` as above takes its resolution from 66.2% to 77.5%.
 
 Every run ends with the controls whose chrome it could not determine, ordered by how many
 sites each one blocks — so you know which three lines of config are worth writing.
@@ -303,12 +313,12 @@ Three things that are easy to get wrong and are checked against WPF:
 - **Access keys.** In `_Save` on a `Button`, `Label`, `CheckBox`, `MenuItem`… the underscore is
   not drawn. On a `TextBlock` or `ListBoxItem` it is.
 
-On two public projects with their real translations — Playnite (38 languages, 7,197
-measurements) and ScreenToGif (29 languages, 1,231 measurements) — it reported 105 overflows at
-22 sites and 9 at 6, with none in the source language of either. All 105 in Playnite were
-checked by drawing the windows in WPF: 99 are really clipped, 6 are false alarms. 5 of the 9 in
-ScreenToGif were checked and are really clipped; the other 4 are in drop-down lists and a
-hidden panel that the harness cannot draw.
+On two public projects with their real translations — Playnite (38 languages, 9,400
+measurements) and ScreenToGif (29 languages, 3,067 measurements) — it reported 133 overflows at
+21 sites and 131 at 15. All 133 in Playnite were checked by drawing the windows in WPF: 130 are
+really clipped, 3 are false alarms. ScreenToGif's 4 in English are real (see above). A string
+with no translation is judged too, in each language's own layout: WPF shows the English text
+there, next to translated neighbours that may be wider.
 
 A row of controls shares its width **in document order**: the ones written first get what they
 need, and a long translation pushes the ones after it out of the window. That is how WPF lays

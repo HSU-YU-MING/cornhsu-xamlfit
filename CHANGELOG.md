@@ -60,7 +60,25 @@ that over-estimated the available width.
   `TabControl` template: the template's `TabStripPlacement` triggers are applied, and the strip is
   measured as its widest tab (header text in each language + the `TabItem` template's header chrome).
   Templates that rearrange in ways that cannot be read statically, and WPF's default template, stay
-  unknown. Playnite 34.3% → 48.3% without configuration, 55.8% with `gridPanels`.
+  unknown at first (see below). Playnite 34.3% → 48.3% without configuration, 55.8% with `gridPanels`.
+- WPF's default `TabControl` template with the tab strip beside the content: the strip is the widest
+  tab's header plus its left and right `Padding` (6 + 6 by default), plus 2. A tab's `Margin` never
+  widens a side strip (WPF's `TabPanel` measures side tabs without their margins), in any template.
+- In `check`, a control that overflows a horizontal `StackPanel` keeps its width and is clipped by an
+  outer element, so its own right padding, border and margin are cut off rather than taken from the
+  text (Playnite's Bulgarian button rows: 5 false alarms gone). Only the right-hand amounts the tool
+  can read are forgiven; budgets still keep the whole control on screen.
+- Neighbours that used to block a site: a `Canvas` without `Width` (0), a neighbour whose
+  `Visibility` is bound (counted as visible — the larger case), a `TextBlock` of `Run`s on one line
+  (each in its own font, a space between elements), a control whose content is one element, and a
+  child spanning an `Auto` and a star column (WPF never widens the `Auto` column for it).
+  Text spanning an `Auto` column can grow until the grid is full.
+- `controlWidths` in `xamlfit.config.json`: the widest a control sized at run time ever gets.
+- A string with no translation in a language is judged in that language's layout (translated
+  neighbours, that language's default font): WPF shows the source text there.
+- Findings under a project `ScrollViewer` template whose bar is `Auto` say that they assume the bar.
+- Playnite 48.3% → 66.2% without configuration (77.5% with `gridPanels`), ScreenToGif 40.0% → 45.1%,
+  Kindling 76.0% → 89.3%, QuillNest 98.3% → 98.9%.
 - Runs report the files that turn on `UseLayoutRounding`: WPF can shave about one pixel off text
   sized to its content, which XamlFit does not model.
 - `check` and `budget` reject each other's options (`check --sites` used to be accepted and
@@ -83,14 +101,14 @@ that over-estimated the available width.
 
 - **Text width** against WPF `FormattedText`, 1,400 comparisons: mean error 0.039%, worst
   under-estimate 0.068%, worst over-estimate 1.43% (a single kerning pair).
-- **Layout** against real off-screen WPF windows, 172 cases: 143 exact, 29 conservative,
-  0 over-estimates (`prototype/LayoutOracle`).
+- **Layout** against real off-screen WPF windows, 217 cases: 181 exact, 36 conservative,
+  0 over-estimates; with `check`'s row semantics 185 / 32 / 0 (`prototype/LayoutOracle --check`).
 - **Real project windows** drawn by WPF with their own themes and translations
-  (`prototype/CorpusRender`): Playnite, 4,915 comparisons — 99 clipped by both, 6 false
-  alarms, **0 missed**; ScreenToGif, 2,657 comparisons including the editor's side panel and
-  drop-downs, same font on both sides — 12 clipped by both, 0 false alarms, and 100 headers that
-  WPF draws 0.5–1.2 px short because of `UseLayoutRounding` (not modelled; not a translation
-  length issue). Eleven bugs found this way are fixed (see `docs/M6-全面重讀.md` §2.6), among
+  (`prototype/CorpusRender`): Playnite, 5,765 comparisons — 130 clipped by both, 3 false
+  alarms, **0 missed**; ScreenToGif, 3,043 comparisons including the editor's side panel and
+  drop-downs, same font on both sides — 122 clipped by both, 28 false alarms (an assumed scroll
+  bar), **0 missed**, and 76 headers that WPF draws 0.5–1.2 px short because of `UseLayoutRounding`
+  (English loses up to 0.4 px at the same places; not a translation length issue, not reported). Eleven bugs found this way are fixed (see `docs/M6-全面重讀.md` §2.6), among
   them: rows now share width in document order; side tab strips and project `Window`
   subclasses are no longer over-estimated; characters a font lacks are drawn as WPF draws
   them (other faces of the same family first, then WPF's composite fallback table, chosen by
@@ -101,7 +119,7 @@ that over-estimated the available width.
   runs give identical results.
 - **Shipped software**: 984 source-language measurements over ten projects. The only two
   overflows are in the maintainer's app and are real (drawn by WPF).
-- 555 unit tests.
+- 589 unit tests.
 
 ### Not verified
 

@@ -63,6 +63,13 @@ public sealed class FitConfig
         [JsonPropertyName("autoLayoutColumns")] public string? AutoLayoutColumns { get; set; }
     }
 
+    /// <summary>
+    /// 寬度要到執行期才知道的控制項（數值框、程式碼填項目的下拉選單），它**最寬**會到多寬：<c>{ "IntegerUpDown": 100 }</c>。
+    /// 只在它當鄰居、佔掉文字的空間時用；明寫的 Width 優先，MinWidth／MaxWidth 照樣夾住。宣告小了就是把文字的空間算大 ——
+    /// 寫實際會出現的最大值。鍵是區域名稱（不含命名空間前綴）。
+    /// </summary>
+    [JsonPropertyName("controlWidths")] public Dictionary<string, double>? ControlWidths { get; set; }
+
     /// <summary>目標機器上沒有的字型家族。出現在 FontFamily 的後備清單裡時直接跳過，用下一個。</summary>
     [JsonPropertyName("absentFonts")] public List<string>? AbsentFonts { get; set; }
 
@@ -158,6 +165,15 @@ public sealed class FitConfig
                     problems.Add(new Problem($"gridPanels[\"{name}\"]", "name at least columnCount or autoLayoutColumns"));
                 else if (props.Any(p => p is not null && (p.Trim().Length == 0 || p.Contains(':') || p.Contains('.'))))
                     problems.Add(new Problem($"gridPanels[\"{name}\"]", "each value is the property name the class uses, such as \"ColumnCount\""));
+            }
+
+        if (config.ControlWidths is not null)
+            foreach (var (name, value) in config.ControlWidths)
+            {
+                if (string.IsNullOrWhiteSpace(name) || name.Contains(':') || name.Contains('.'))
+                    problems.Add(new Problem($"controlWidths[\"{name}\"]", "the key is an element's local name, without a namespace prefix"));
+                if (!double.IsFinite(value) || value <= 0 || value > 4000)
+                    problems.Add(new Problem($"controlWidths[\"{name}\"]", "must be a width in DIP between 0 and 4000"));
             }
 
         if (config.Chrome is not null)

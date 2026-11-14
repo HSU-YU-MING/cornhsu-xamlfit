@@ -38,6 +38,7 @@ internal static class Pipeline
             TrustDefaultChrome = opts.AssumeDefaultTheme,
             TreatAs = opts.TreatAs,
             GridPanels = opts.GridPanels,
+            ControlWidths = opts.ControlWidths,
             DefaultFontPinned = opts.DefaultFontPinned,
             ElementLanguage = opts.SourceElementLanguage,
             Sharing = sharing,

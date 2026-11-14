@@ -153,6 +153,14 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 69 | **複製出來的範本要接回原本的資源範圍** | 算範本內距時把範本複製到新文件，複本裡只看得到全域樣式 —— Grid／視窗自己資源裡的捲軸樣式被漏掉，多算 6.5 px。用 LexicalContinuation 從控制項的位置往上找；快取鍵要含資源範圍 | LayoutOracle |
 | 70 | **CorpusRender 拿掉 GridEx 的子元素會讓後面的全部錯格** | 自動排列依順序填格。換成空的佔位元素；換命名空間時要宣告前綴，不然預設命名空間被改掉、DockPanel.Dock 解析不到 | CorpusRender（Playnite） |
 | 71 | **算範本內距時，內容路徑上的樣式也會設字型** | Playnite 的 TabItem 範本把標題放在 `TextBlock Style="{DynamicResource BaseTextBlockStyle}"` 裡。文字是用控制項的字型量的，所以樣式設的值要跟控制項的一樣（同一個資源也算），不一樣就不知道 | Playnite |
+| 72 | **水平 StackPanel 裡太長的控制項保持原寬、被外層裁掉** | 它右邊的 Padding、邊框、Margin 在裁切線外，不會擋到文字（LayoutOracle「trailing:」：WPF 184、工具原本 133）。DockPanel／Grid／Border 會把內容縮窄，右邊照算。只在 check 原諒，而且只原諒讀得出來、確定在右邊的那幾段 | LayoutOracle、CorpusRender（Playnite 保加利亞文） |
+| 73 | **跨到星號欄的子元素不會撐大 Auto 欄** | 就算 Grid 放在水平 StackPanel 或外層 Auto 欄裡也一樣；只跨 Auto／固定欄的才會（維持不知道） | LayoutOracle「spanning sibling」 |
+| 74 | **側邊的 TabPanel 不算標籤的 Margin** | GetDesiredSizeWithoutMargin：負的不讓標籤列變窄、正的也不讓它變寬。預設範本：最寬的「標題 + 左右 Padding」+ 2，BorderThickness 與選取都不影響 | LayoutOracle「default tabs」 |
+| 75 | **對照程式與測試要跟掃描器一樣保留空白** | XDocument.Parse 預設丟掉只有空白的文字節點，Run 之間的空格就不見了 —— 對照程式看起來高估 2.99 px，其實是對照程式自己讀錯 | LayoutOracle |
+| 76 | **沒翻譯的字串要在那個語言的版面裡判** | WPF 顯示來源語言的字，但旁邊的譯文比較寬、預設字型也可能不同。ScreenToGif 義大利文：英文選項只剩 101.6 px（英文版面 122.4），先前只判來源語言一次 → 12 筆漏報 | CorpusRender |
+| 77 | **UseLayoutRounding 的差距不是「裝不下」** | 每一層捨入到裝置像素，內容大小的文字少畫 0.5～1.2 px；英文在同一位置也少 0.4 px，跟字串長短無關。對照時另外算（drive.js 的 rounding），工具不報 | CorpusRender（ScreenToGif） |
+| 78 | **CorpusRender 的「被裁」要看字形** | 字幅比字形寬：只裁到最後一個字右邊的空白時字其實完整（標成 2）。用 FormattedText.BuildGeometry 的右緣判斷 | CorpusRender |
+| 79 | **綁定的 Visibility 當成看得見** | 鄰居的寬度一律是被扣掉的（Auto 欄、同一排、標籤列），取大的只會少給文字空間。Canvas 沒寫 Width 時寬度 0（不量子元素） | LayoutOracle |
 
 ### 環境層級的坑
 
@@ -169,11 +177,11 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 555 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 589 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 42 條 CLI 路徑的退出碼
-dotnet run -c Release --project prototype/LayoutOracle   # 172 案 vs 真的 WPF 視窗（Windows）；有高估就回 1
+dotnet run -c Release --project prototype/LayoutOracle   # 217 案 vs 真的 WPF 視窗（--check 用檢查模式的排法再跑一次）（Windows）；有高估就回 1
 ```
 
 **來源語言自我檢驗**（沒有腳本，手動跑）：對一個已經出貨的 App 跑

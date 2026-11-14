@@ -131,6 +131,15 @@ public sealed class WidthResolver
         //   所以：上界在元素 E 身上時，只扣 E 的內距／chrome，不扣 E 的 Margin；
         //        經過元素 E 往上走時，E 的 Margin 與內距／chrome 都要扣。
         private double _deductions;
+
+        /// <summary>
+        /// _deductions 裡確定落在文字右邊的部分（右邊的 Margin、Padding、BorderThickness…）。
+        /// 水平 StackPanel 用無限寬量子元素：太長的子元素保持原寬、被外層裁掉，右邊這段在裁切線外，
+        /// 不會擋到文字（LayoutOracle「trailing:」實測；DockPanel、Grid、Border 會把內容縮窄，右邊這段照算）。
+        /// 只在檢查模式（Preceding）原諒；預算要讓整個控制項留在畫面裡。
+        /// </summary>
+        private double _trailing;
+        private bool _trailingAllowed = true;
         private bool _usedChrome;
         private bool _assumedScrollBar;
         private bool _wrapDefeated;
@@ -216,6 +225,10 @@ public sealed class WidthResolver
         public AvailableWidth Run(XElement site, int depth)
         {
             _resourceLookupsAtStart = owner.ResourceLookups;
+
+            // 由右到左的版面：「右邊」在文字前面，不能原諒
+            var flow = owner._styles.ResolveEx(site, "FlowDirection", inheritable: true);
+            if (flow.IsUnreadable || (flow.IsValue && !IsOneOf(flow.Value, "LeftToRight"))) _trailingAllowed = false;
             var theme = ThemeOf(site);
             XElement? headerOwner = null;   // 下一個元素是「標題內容」的擁有者 → 用標題區的內距
             var siteHasHeaderText = site.Attribute("Header") is not null
@@ -275,6 +288,8 @@ public sealed class WidthResolver
                 var margin = owner.Thickness(cur, "Margin");
                 if (margin.Blocked is { } marginWhy) Block(WidthStatus.Unmeasurable, marginWhy);
                 _deductions += inner.Inset + margin.Sum;
+                if (inner.Blocked is null && margin.Blocked is null) _trailing += Math.Min(inner.Trailing, inner.Inset) + margin.Right;
+                else _trailingAllowed = false;
 
                 var parent = LayoutParent(cur, ref headerOwner, out var exit);
                 if (exit is not null) return exit;
@@ -415,6 +430,9 @@ public sealed class WidthResolver
                         // 預算 = 面板寬 − 其他**所有**兄弟（讓後面的兄弟也留在畫面裡）。
                         _wrapDefeated = true;
                         Share(parent, child, $"a horizontal <{pLocal}>", _ => true, depth);
+                        if (owner.Sharing == RowSharing.Preceding && _trailingAllowed && _trailing > 0)
+                            _deductions -= _trailing;
+                        _trailing = 0;
                     }
                     return null;
                 }
@@ -965,7 +983,15 @@ public sealed class WidthResolver
 
     // ───────────────────────── 內距與 chrome ─────────────────────────
 
-    private readonly record struct InsetResult(double Inset, bool UsedChrome, bool AssumedScrollBar, string? Blocked);
+    private readonly record struct InsetResult(double Inset, bool UsedChrome, bool AssumedScrollBar, string? Blocked)
+    {
+        /// <summary>
+        /// Inset 裡**確定在內容右邊**的那一部分（右邊的 Padding、BorderThickness、範本裡內容右側的邊距）。
+        /// 只在元素被外層裁掉、自己沒被縮窄時有意義（水平 StackPanel 用無限寬量子元素）：那時右邊這段在裁切線外，
+        /// 不會擋到文字。讀不出來的部分一律當 0 —— 少原諒是保守的方向。
+        /// </summary>
+        public double Trailing { get; init; }
+    }
 
     /// <summary>
     /// 元素「內部」吃掉的寬度：Padding、BorderThickness，加上控制項範本的 chrome。
@@ -982,14 +1008,15 @@ public sealed class WidthResolver
         // 沒有範本的元素（面板、Border、TextBlock）：只有它自己明寫的 Padding／BorderThickness
         if (info.Kind == ChromeKind.NoTemplate)
         {
-            double plain = 0;
+            double plain = 0, right = 0;
             foreach (var attr in (ReadOnlySpan<string>)["Padding", "BorderThickness"])
             {
                 var t = Thickness(el, attr);
                 if (t.Blocked is { } blocked) return new(0, false, false, blocked);
                 plain += t.Sum;
+                right += t.Right;
             }
-            return new(plain, false, false, null);
+            return new(plain, false, false, null) { Trailing = Math.Max(0, right) };
         }
 
         // ⚠ ComboBoxItem 的 chrome 只存在於**展開的下拉清單**裡。關起來的選取框是把項目的內容
@@ -1012,7 +1039,8 @@ public sealed class WidthResolver
         //   （CorpusRender 實測 Playnite 的 DatabaseFieldsManagerWindow：工具算 463、實際 294）。
         //   專案自己的範本：TemplateChrome 先套上 TabStripPlacement 的觸發器，標籤列變成 Auto 欄，
         //   由 ElementMeasurer 量（每個 TabItem 的標題 + 標題 chrome，取最寬）。LayoutOracle「side tabs」實測。
-        //   預設範本：選取的標籤用負邊距放大，那套沒有實測過 —— 維持不知道。
+        //   WPF 的預設範本（Aero2，LayoutOracle「default tabs」實測）：標籤列 = 最寬的「標題 + 標籤的左右 Padding（預設 6+6）」+ 2
+        //   （標籤列左邊或右邊的 2 px 邊距）；選取與否、標籤的 BorderThickness、標籤的 Margin 都不影響。內容區的內距照上方的排法。
         if (EndsWithAny(local, "TabControl"))
         {
             var placement = _styles.ResolveEx(el, "TabStripPlacement", inheritable: false);
@@ -1021,8 +1049,17 @@ public sealed class WidthResolver
             if (placement.IsValue && IsOneOf(placement.Value, "Left", "Right"))
             {
                 var tpl = _styles.TemplateOf(el);
-                if (tpl.Kind != TemplateKind.Custom || (tpl.Alternatives?.Any(a => a is null) ?? false))
-                    return new(0, false, false, "the tab strip of <TabControl> is placed beside the content, in a template XamlFit cannot rearrange");
+                var custom = tpl.Kind == TemplateKind.Custom && !(tpl.Alternatives?.Any(a => a is null) ?? false);
+                if (!custom)
+                {
+                    if (tpl.Kind != TemplateKind.Default || theme is not null || !ChromeTable.IsWpf(el))
+                        return new(0, false, false, "the tab strip of <TabControl> is placed beside the content, in a template XamlFit cannot rearrange");
+                    if ((_measurer as ElementMeasurer)?.SideTabItems(el, 0) is not { } items)
+                        return new(0, false, false, "the tab strip of <TabControl> is placed beside the content, and a tab's width is not statically knowable");
+                    var content = DefaultChrome(el, info, theme);
+                    if (content.Blocked is not null) return content;
+                    return new(content.Inset + items + DefaultSideStripMargin + frame, true, false, null);
+                }
             }
         }
 
@@ -1042,9 +1079,11 @@ public sealed class WidthResolver
 
             case TemplateKind.Custom:
             {
-                var (custom, why) = AgreedTemplateChrome(el, template, header: false, () => DefaultChrome(el, info, theme));
+                var (custom, why, trailing) = AgreedTemplateChrome(el, template, header: false, () => DefaultChrome(el, info, theme));
+                // 換了範本的 ScrollViewer：範本算內距時把垂直捲軸當成在（Auto 時那是假設，要在結果裡講出來）
+                var assumedBar = EndsWithAny(local, "ScrollViewer") && VerticalBarIsAssumed(el);
                 return custom is { } c
-                    ? new(c + frame, frame > 0, false, null)
+                    ? new(c + frame, frame > 0, assumedBar, null) { Trailing = trailing }
                     : new(0, false, false,
                         $"chrome of <{DisplayName(el)}> is unknown: {template.Why} replaces the ControlTemplate, and {why}");
             }
@@ -1053,18 +1092,19 @@ public sealed class WidthResolver
         var byTable = DefaultChrome(el, info, theme);
         return byTable.Blocked is not null
             ? byTable
-            : new(byTable.Inset + frame, byTable.UsedChrome || frame > 0, byTable.AssumedScrollBar, null);
+            : new(byTable.Inset + frame, byTable.UsedChrome || frame > 0, byTable.AssumedScrollBar, null) { Trailing = byTable.Trailing };
     }
 
     /// <summary>
     /// 同一個樣式有好幾份定義時：每一份的範本都算一次內距，**全部一致才採用**。
     /// 候選裡的 null 代表「那一份沒換範本」，用預設範本的表值去比。
     /// </summary>
-    private (double? Chrome, string Why) AgreedTemplateChrome(
+    private (double? Chrome, string Why, double Trailing) AgreedTemplateChrome(
         XElement control, TemplateInfo template, bool header, Func<InsetResult> byDefaultTemplate)
     {
         var alternatives = template.Alternatives ?? [template.Template];
         double? agreed = null;
+        var trailing = double.PositiveInfinity;   // 右側的內距：取每一份定義裡最小的（只會少原諒、不會多原諒）
 
         foreach (var alternative in alternatives)
         {
@@ -1072,23 +1112,25 @@ public sealed class WidthResolver
             if (alternative is null)
             {
                 var fallback = byDefaultTemplate();
-                if (fallback.Blocked is { } blocked) return (null, $"one definition keeps the default template, whose {blocked}");
+                if (fallback.Blocked is { } blocked) return (null, $"one definition keeps the default template, whose {blocked}", 0);
                 value = fallback.Inset;
+                trailing = Math.Min(trailing, fallback.Trailing);
             }
             else
             {
-                var (chrome, why) = TemplateChrome(control, alternative, header);
-                if (chrome is not { } c) return (null, why);
+                var (chrome, why, right) = TemplateChrome(control, alternative, header);
+                if (chrome is not { } c) return (null, why, 0);
                 value = c;
+                trailing = Math.Min(trailing, right);
             }
 
             if (agreed is { } a && Math.Abs(a - value) > 0.01)
                 return (null, string.Create(CultureInfo.InvariantCulture,
-                    $"its {alternatives.Count} definitions give different chrome ({a:F1} and {value:F1} DIP)"));
+                    $"its {alternatives.Count} definitions give different chrome ({a:F1} and {value:F1} DIP)"), 0);
             agreed = value;
         }
 
-        return (agreed, "");
+        return (agreed, "", double.IsFinite(trailing) ? Math.Max(0, trailing) : 0);
     }
 
     /// <summary>預設範本的內距：查表，再依明寫的 Padding／BorderThickness 調整。</summary>
@@ -1124,7 +1166,13 @@ public sealed class WidthResolver
         }
 
         sum = Math.Max(0, sum);
-        return new(sum, sum > 0, false, null);
+
+        // 預設範本是「Border（BorderThickness）裡放 ContentPresenter（Margin=Padding）」的控制項：
+        // 明寫的右邊 Padding／BorderThickness 在內容右邊。沒寫的不算（少原諒）
+        var trailing = theme is null && ChromeTable.IsWpf(el) && local is "Button" or "ToggleButton" or "RepeatButton" or "Label"
+            ? Math.Max(0, (padding.IsSet ? padding.Right : 0) + (border.IsSet ? border.Right : 0))
+            : 0;
+        return new(sum, sum > 0, false, null) { Trailing = Math.Min(trailing, sum) };
     }
 
     /// <summary>給 <see cref="ElementMeasurer"/> 用：元素內部吃掉的寬度；不知道回 null。</summary>
@@ -1147,7 +1195,7 @@ public sealed class WidthResolver
 
             case TemplateKind.Custom:
             {
-                var (custom, why) = AgreedTemplateChrome(el, template, header: true, () => DefaultHeader(el, theme));
+                var (custom, why, _) = AgreedTemplateChrome(el, template, header: true, () => DefaultHeader(el, theme));
                 return custom is { } c
                     ? new(c, false, false, null)
                     : new(0, false, false,
@@ -1177,7 +1225,7 @@ public sealed class WidthResolver
 
     private const string WpfNamespace = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
-    private readonly Dictionary<(XElement Template, string Signature), (double? Chrome, string Why)> _templateChrome = [];
+    private readonly Dictionary<(XElement Template, string Signature), (double? Chrome, string Why, double Trailing)> _templateChrome = [];
     private int _templateDepth;
 
     /// <summary>
@@ -1193,17 +1241,17 @@ public sealed class WidthResolver
     ///   第一版照樣套 Aero2 的數字（錯）；改成「不知道」之後可解析率從 96% 掉到 35%（對，但沒用）。
     ///   這個函式是第三條路：算出真的數字。
     /// </summary>
-    private (double? Chrome, string Why) TemplateChrome(XElement control, XElement template, bool header)
+    private (double? Chrome, string Why, double Trailing) TemplateChrome(XElement control, XElement template, bool header)
     {
-        if (_templateDepth >= 3) return (null, "that template nests other templated controls too deeply");
+        if (_templateDepth >= 3) return (null, "that template nests other templated controls too deeply", 0);
 
         var roots = template.Elements().Where(e => !e.Name.LocalName.Contains('.', StringComparison.Ordinal)).ToList();
-        if (roots.Count != 1) return (null, "that template does not have exactly one root element");
+        if (roots.Count != 1) return (null, "that template does not have exactly one root element", 0);
 
         // 會把項目排進捲動區的控制項：範本裡的捲動行為不是一個「內距」說得完的
         var controlName = control.Name.LocalName;
         if (EndsWithAny(controlName, "ListBox", "ListView", "TreeView", "DataGrid", "ItemsControl"))
-            return (null, "the control lays out items, which a single chrome figure cannot describe");
+            return (null, "the control lays out items, which a single chrome figure cannot describe", 0);
 
         // ScrollViewer 的內容宿主是 ScrollContentPresenter。換了捲軸樣式的 App 幾乎都會重寫它的範本
         //（實查 ScreenToGif：296 個位置卡在這裡）。垂直捲軸照舊假設它在。
@@ -1226,7 +1274,7 @@ public sealed class WidthResolver
         if (presenters.Count != 1)
             return (null, presenters.Count == 0
                 ? $"that template has no element that hosts the {contentSource}"
-                : $"that template has {presenters.Count} elements that host the {contentSource}");
+                : $"that template has {presenters.Count} elements that host the {contentSource}", 0);
 
         var clone = new XElement(roots[0]);
         var presenter = clone;
@@ -1239,7 +1287,7 @@ public sealed class WidthResolver
         var itemsDependent = false;
         if (placement is not null)
         {
-            if (ApplyPlacementTriggers(template, clone, placement) is { } triggerWhy) return (null, triggerWhy);
+            if (ApplyPlacementTriggers(template, clone, placement) is { } triggerWhy) return (null, triggerWhy, 0);
             itemsDependent = controlName.EndsWith("TabControl", StringComparison.Ordinal);
         }
 
@@ -1251,7 +1299,7 @@ public sealed class WidthResolver
                 var property = name[(name.LastIndexOf('.') + 1)..];
                 if (property is "FontSize" or "FontFamily" or "FontWeight" or "FontStretch"
                     && TemplateBindingProperty(a.Value) != property)
-                    return (null, $"that template sets {property} on the content");
+                    return (null, $"that template sets {property} on the content", 0);
             }
 
         // {TemplateBinding X} → 控制項實際生效的 X
@@ -1309,7 +1357,7 @@ public sealed class WidthResolver
         var key = (template, signature.Append(header ? "H" : "C").Append(placement).ToString());
         if (!itemsDependent && _templateChrome.TryGetValue(key, out var cached)) return cached;
 
-        (double?, string) result;
+        (double?, string, double) result;
         _templateDepth++;
         try
         {
@@ -1332,17 +1380,49 @@ public sealed class WidthResolver
             if (first.Status != WidthStatus.Known || second.Status != WidthStatus.Known)
             {
                 var failed = first.Status != WidthStatus.Known ? first : second;
-                result = (null, $"the content width inside that template could not be resolved ({failed.Reason})");
+                result = (null, $"the content width inside that template could not be resolved ({failed.Reason})", 0);
             }
             else if (Math.Abs((10000 - first.Px) - (20000 - second.Px)) > 0.01)
-                result = (null, "that template does not give the content a fixed share of the width");
+                result = (null, "that template does not give the content a fixed share of the width", 0);
             else
-                result = (Math.Max(0, 10000 - first.Px), "");
+                result = (Math.Max(0, 10000 - first.Px), "", TemplateTrailing(presenter, clone));
         }
         finally { _templateDepth--; }
 
         if (!itemsDependent) _templateChrome[key] = result;
         return result;
+    }
+
+    /// <summary>
+    /// 範本裡內容（presenter）右邊確定有多少空間：presenter 與它每一層祖先的右邊 Margin，
+    /// 加上 Border 的右邊 Padding／BorderThickness。替換過 TemplateBinding 的複本上算。
+    /// 路上有多個子元素的面板（內容可能被置中、旁邊可能有更寬的兄弟）、或 Border／Grid／ContentPresenter 以外的元素：0。
+    /// 讀不出來的 Margin（可能是負的）：0。讀不出來的 Padding／BorderThickness（不會是負的）：那一項算 0。
+    /// </summary>
+    private static double TemplateTrailing(XElement presenter, XElement root)
+    {
+        double total = 0;
+        for (var e = presenter; e is not null; e = e.Parent)
+        {
+            var local = e.Name.LocalName;
+            if (local is not ("Border" or "Grid" or "ContentPresenter" or "ScrollContentPresenter")) return 0;
+            if (!ReferenceEquals(e, presenter) && LayoutChildren(e).Count > 1) return 0;
+            if (e.Attribute("FlowDirection") is not null || e.Attribute("LayoutTransform") is not null) return 0;
+
+            var (_, marginRight, marginOk) = ParseThickness(e.Attribute("Margin")?.Value);
+            if (!marginOk) return 0;
+            total += marginRight;
+
+            if (local == "Border")
+                foreach (var property in (ReadOnlySpan<string>)["Padding", "BorderThickness"])
+                {
+                    var (_, right, ok) = ParseThickness(e.Attribute(property)?.Value);
+                    if (ok && right > 0) total += right;
+                }
+
+            if (ReferenceEquals(e, root)) break;
+        }
+        return Math.Max(0, total);
     }
 
     private static readonly string[] FontProperties = ["FontFamily", "FontSize", "FontWeight", "FontStyle", "FontStretch"];
@@ -1439,9 +1519,31 @@ public sealed class WidthResolver
             foreach (var alternative in template.Alternatives ?? [template.Template])
                 if (alternative is not null && FixesAWidth(alternative)) return null;
 
+        // WPF 預設的 TabItem 範本（Aero2）放在側邊：標題 + 左右 Padding（預設 6,2,6,2）；
+        // BorderThickness 不影響寬度（LayoutOracle「default tabs」實測）
+        if (template.Kind == TemplateKind.Default && ThemeOf(item) is null && ChromeTable.IsWpf(item, "TabItem"))
+        {
+            var padding = Thickness(item, "Padding");
+            if (padding.Blocked is not null) return null;
+            return padding.IsSet ? padding.Sum : DefaultTabItemPadding;
+        }
+
         var inset = HeaderInset(item, ThemeOf(item));
         return inset.Blocked is null ? inset.Inset : null;
     }
+
+    /// <summary>垂直捲軸是不是「假設在」：Auto（內容比視埠高才出現）、或讀不出來。Visible 是事實，Disabled／Hidden 不佔寬度。</summary>
+    private bool VerticalBarIsAssumed(XElement scrollViewer)
+    {
+        var v = _styles.ResolveEx(scrollViewer, "VerticalScrollBarVisibility", inheritable: false);
+        return v.IsUnreadable || (v.IsValue && IsOneOf(v.Value, "Auto"));
+    }
+
+    /// <summary>WPF 預設 TabItem 的 Padding（6,2,6,2）左右合計。</summary>
+    private const double DefaultTabItemPadding = 12;
+
+    /// <summary>WPF 預設 TabControl 範本裡，側邊標籤列靠內容那一側以外的邊距（Left 時 2,2,0,2；Right 時 0,2,2,2）。</summary>
+    private const double DefaultSideStripMargin = 2;
 
     private static bool FixesAWidth(XElement template) =>
         template.Descendants().Any(e =>
@@ -1578,7 +1680,10 @@ public sealed class WidthResolver
         return string.IsNullOrEmpty(prefix) ? el.Name.LocalName : $"{prefix}:{el.Name.LocalName}";
     }
 
-    private readonly record struct ThicknessResult(double Sum, string? Blocked, bool IsSet = false);
+    private readonly record struct ThicknessResult(double Sum, string? Blocked, bool IsSet = false)
+    {
+        public double Right { get; init; }
+    }
 
     /// <summary>
     /// 左右兩邊加起來。
@@ -1594,7 +1699,7 @@ public sealed class WidthResolver
 
         var (l, rr, ok) = ParseThickness(r.Value);
         return ok
-            ? new(l + rr, null, IsSet: true)
+            ? new(l + rr, null, IsSet: true) { Right = rr }
             : new(0, $"{property}=\"{r.Value}\" on <{el.Name.LocalName}> is not a thickness this tool can read");
     }
 

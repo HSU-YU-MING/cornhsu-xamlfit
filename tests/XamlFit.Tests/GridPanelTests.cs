@@ -63,8 +63,8 @@ public class GridPanelTests
     [Fact]
     public void A_column_span_takes_several_cells()
     {
-        // 第一個子元素跨兩欄，第二、三個從下一列開始。跨過 Auto 欄的子元素讓那一欄的寬度要一起解 ——
-        // 工具對手寫的同一個 Grid 也是回「跨欄的子元素影響 Auto 欄」；改寫後的結果要跟它一模一樣
+        // 第一個子元素跨兩欄，第二、三個從下一列開始。跨到星號欄的子元素不會撐大 Auto 欄
+        //（LayoutOracle「spanning sibling」實測）：Auto 欄 = AAAA 的 20，BB 在星號欄拿 300 − 20
         var scan = Scan("""
             <c:GridEx ColumnCount="2" StarColumns="1" AutoLayoutColumns="2">
               <TextBlock Text="CCCCCC" Grid.ColumnSpan="2"/>
@@ -73,8 +73,8 @@ public class GridPanelTests
             </c:GridEx>
             """);
         var bb = Site(scan, "BB").Width;
-        Assert.Equal(WidthStatus.NeedsGrid, bb.Status);
-        Assert.Contains("column 0 is Auto and a spanning child contributes", bb.Reason);
+        Assert.Equal(WidthStatus.Known, bb.Status);
+        Assert.Equal(300 - 20, bb.Px, 3);
     }
 
     [Theory]

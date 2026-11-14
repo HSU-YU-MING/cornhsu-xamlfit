@@ -270,6 +270,44 @@ public class CheckSemanticsTests
         finally { Cleanup(dir); }
     }
 
+    [Theory]
+    [InlineData(true, true)]     // 旁邊的譯文比較寬：沒翻的字在這個語言裡被擠出去
+    [InlineData(false, false)]   // 版面跟來源語言一樣：不重複判
+    public void An_untranslated_string_is_judged_in_this_languages_layout(bool neighbourTranslated, bool expectFinding)
+    {
+        // 寬 100 的水平 StackPanel：A 在前、B 在後。來源語言 A=10、B=70 → B 有 90，裝得下。
+        // 德文只翻了 A（40）→ 執行期 B 顯示英文，只剩 60 —— CorpusRender 在 ScreenToGif 實測到的情形
+        var dir = TempProject(("Main.xaml", Window("""
+            <StackPanel Orientation="Horizontal" Width="100">
+              <TextBlock Text="{x:Static p:Strings.A}"/><TextBlock Text="{x:Static p:Strings.B}"/>
+            </StackPanel>
+            """)));
+        try
+        {
+            var fonts = Fonts();
+            var neutral = new Dictionary<string, string> { ["A"] = "AA", ["B"] = new string('B', 14) };
+            var de = neighbourTranslated ? new Dictionary<string, string> { ["A"] = new string('A', 8) } : new Dictionary<string, string>();
+            var scanner = new XamlScanner(Chrome, new ScanOptions { DefaultFontFamily = MonoFamily, DefaultFontSize = MonoSize, Sharing = RowSharing.Preceding }, fonts);
+            scanner.Scan(dir);
+            var overlay = new Dictionary<string, string>(neutral);
+            foreach (var (k, v) in de) overlay[k] = v;
+            var localized = scanner.Rescan(MonoFamily, overlay);
+            var budget = new BudgetAnalyzer(fonts, MonoFamily).Analyze(localized, "test", neutral);
+
+            var result = new CheckAnalyzer(fonts, MonoFamily, 5).Analyze(localized, budget,
+                [new CultureStrings(ResxReader.NeutralCulture, neutral, "Strings.resx"), Table("de", [.. de.Select(kv => (kv.Key, kv.Value))])],
+                pseudo: false, judgeSource: false);
+
+            var b = result.Findings.Where(f => f.Key == "B").ToList();
+            if (!expectFinding) { Assert.Empty(b); return; }
+            var finding = Assert.Single(b);
+            Assert.Equal("de", finding.Culture);
+            Assert.Equal(60, finding.LimitPx);
+            Assert.Contains("no translation", finding.Warning);
+        }
+        finally { Cleanup(dir); }
+    }
+
     [Fact]
     public void Results_from_several_passes_merge_into_one()
     {

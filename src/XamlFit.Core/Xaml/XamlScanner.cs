@@ -25,6 +25,9 @@ public sealed record ScanOptions
     /// <summary>使用者宣告的「用屬性產生欄的 Grid 子類別」（見 <see cref="GridPanel"/>）。</summary>
     public IReadOnlyDictionary<string, GridPanel> GridPanels { get; init; } = new Dictionary<string, GridPanel>();
 
+    /// <summary>使用者宣告的「執行期才知道寬度的控制項最寬多寬」（見 <see cref="ElementMeasurer.DeclaredWidths"/>）。</summary>
+    public IReadOnlyDictionary<string, double> ControlWidths { get; init; } = new Dictionary<string, double>();
+
     /// <summary>使用者明確指定了預設字型（設定檔或旗標）。視窗之間對字型的設定不一致時，
     /// 以使用者指定的為準，不再把 UserControl 裡的文字判成「不知道繼承到什麼」。</summary>
     public bool DefaultFontPinned { get; init; }
@@ -242,6 +245,7 @@ public sealed partial class XamlScanner
             : new ElementMeasurer(_fonts, _styles, _chrome, defaultFontFamily, _options.DefaultFontSize)
             {
                 DefaultLanguage = _language,
+                DeclaredWidths = _options.ControlWidths,
                 ResourceText = key =>
                     strings is not null && strings.TryGetValue(key, out var localized) ? localized
                     : _sourceStrings.TryGetValue(key, out var source) ? source

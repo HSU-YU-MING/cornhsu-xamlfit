@@ -64,7 +64,7 @@ internal static class Kit
         (string File, string Xaml)[]? dictionaries = null,
         string file = "Page.xaml")
     {
-        var doc = XDocument.Parse(xaml, LoadOptions.SetLineInfo);
+        var doc = XDocument.Parse(xaml, LoadOptions.SetLineInfo | LoadOptions.PreserveWhitespace);   // 跟 XamlScanner 讀檔一樣保留空白
         doc.AddAnnotation(new SourceFile(file));
         if (theme is not null) doc.AddAnnotation(new ExternalTheme(theme));
 

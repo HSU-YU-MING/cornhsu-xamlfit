@@ -275,6 +275,9 @@ internal static partial class Program
                 var needed = NeededWidth(text);
                 var visible = VisibleWidth(text, window);
                 var clipped = needed > visible + 0.5;
+                // 裁掉的只是最後一個字右邊的空白（字幅比字形寬；像素捨入常常只吃掉這一段）：字形本身沒有被切到。
+                // 標成 2，跟真的被切到字（1）分開算
+                var inkOnly = clipped && InkRight(text) is { } ink && ink <= visible + 0.01;
                 if (Environment.GetEnvironmentVariable("XF_DEBUG") is { } dbg && culture == dbg)
                     Console.WriteLine($"  [{culture}] line {line}: <{el.GetType().Name}> outer {el.ActualWidth + el.Margin.Left + el.Margin.Right:F2} (actual {el.ActualWidth:F2}, margin {el.Margin}, min {el.MinWidth}) text {TextOf(text)} font {TextElement.GetFontFamily(text)} {TextElement.GetFontSize(text)}  needed {needed:F2} visible {visible:F2}; parent {(VisualTreeHelper.GetParent(el) as FrameworkElement)?.ActualWidth:F2}");
                 if (Environment.GetEnvironmentVariable("XF_CHAIN") is { } chainC && culture == chainC)
@@ -284,7 +287,7 @@ internal static partial class Program
                         if (c is FrameworkElement fe) parts.Add($"{fe.GetType().Name}{(fe.Name.Length > 0 ? "#" + fe.Name : "")}:{fe.ActualWidth:F1}{(fe.HorizontalAlignment != HorizontalAlignment.Stretch ? "/HA=" + fe.HorizontalAlignment + "(" + DependencyPropertyHelper.GetValueSource(fe, FrameworkElement.HorizontalAlignmentProperty).BaseValueSource + ")" : "")}{(fe is DockPanel dp ? "/LCF=" + dp.LastChildFill + ",n=" + dp.Children.Count : "")}");
                     Console.WriteLine($"  chain line {line}: " + string.Join(" < ", parts));
                 }
-                rows.Add($"{culture},{line},{el.GetType().Name},\"{TextOf(text).Replace("\"", "'")}\",{needed:F2},{visible:F2},{(clipped ? 1 : 0)}");
+                rows.Add($"{culture},{line},{el.GetType().Name},\"{TextOf(text).Replace("\"", "'")}\",{needed:F2},{visible:F2},{(inkOnly ? 2 : clipped ? 1 : 0)}");
             }
         }
 
@@ -650,6 +653,22 @@ internal static partial class Program
         AccessText at => at.Text,
         _ => "",
     };
+
+    /// <summary>
+    /// 單行文字的字形（墨水）右緣，從文字起點算。只處理左對齊、沒有 Padding、不換行的 TextBlock 與 AccessText；其他回 null。
+    /// </summary>
+    private static double? InkRight(FrameworkElement t)
+    {
+        if (t is TextBlock tb && (tb.TextWrapping != TextWrapping.NoWrap || tb.Padding.Left != 0 || tb.TextAlignment != TextAlignment.Left)) return null;
+        if (t is not (TextBlock or AccessText)) return null;
+        var text = TextOf(t).Replace("_", t is AccessText ? "" : "_");
+        if (text.Length == 0) return null;
+        var ft = new FormattedText(text, t.Language.GetSpecificCulture(), FlowDirection.LeftToRight,
+            new Typeface(TextElement.GetFontFamily(t), TextElement.GetFontStyle(t), TextElement.GetFontWeight(t), TextElement.GetFontStretch(t)),
+            TextElement.GetFontSize(t), Brushes.Black, null, TextOptions.GetTextFormattingMode(t), 1.0);
+        var bounds = ft.BuildGeometry(new Point(0, 0)).Bounds;
+        return bounds.IsEmpty ? null : bounds.Right;
+    }
 
     /// <summary>文字不受限制時要多寬（單行、不換行）。</summary>
     private static double NeededWidth(FrameworkElement t)
