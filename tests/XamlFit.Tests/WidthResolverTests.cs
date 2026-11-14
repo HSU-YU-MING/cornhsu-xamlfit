@@ -240,15 +240,54 @@ public class WidthResolverTests
     [Fact]
     public void Unknown_chrome_makes_the_site_unmeasurable_rather_than_guessing()
     {
-        // ComboBox 的 chrome 量不到（內容寬度不往外傳）。
         // 退回「只算 padding+border」會低估 chrome → 高估可用寬度 → 漏報溢出。
+        // ⚠ 內建的表裡現在每個控制項都量到了，所以用一張刻意含 null 的表測這條原則。
+        var table = ChromeTable.Parse("""
+            { "schemaVersion": 1, "theme": "test",
+              "controls": { "MysteryBox": { "chromeWidth": null, "minWidth": 0 } } }
+            """);
+
+        var doc = XDocument.Parse($"""
+            <Root {Ns}>
+              <MysteryBox Width="200">
+                <TextBlock x:Name="probe" Text="hi"/>
+              </MysteryBox>
+            </Root>
+            """, LoadOptions.SetLineInfo);
+        var probe = doc.Descendants().First(e => e.Attribute(XName.Get("Name",
+            "http://schemas.microsoft.com/winfx/2006/xaml"))?.Value == "probe");
+
+        var w = new WidthResolver(table).Resolve(probe);
+        Assert.Equal(WidthStatus.Unmeasurable, w.Status);
+        Assert.Contains("chrome", w.Reason);
+    }
+
+    [Fact]
+    public void ComboBoxItem_chrome_is_not_double_counted_inside_a_ComboBox()
+    {
+        // ComboBoxItem 的內距只存在於展開的下拉清單；關起來的選取框沒有它。
+        // 「會不會被裁」問的是關起來那個框，所以只扣 ComboBox 的 chrome（27.8），
+        // 不扣 ComboBoxItem 的（10）。兩個都扣會多扣約 6%。
         var w = Resolve("""
             <ComboBox Width="200">
               <ComboBoxItem x:Name="probe" Content="Option"/>
             </ComboBox>
             """);
-        Assert.Equal(WidthStatus.Unmeasurable, w.Status);
-        Assert.Contains("chrome", w.Reason);
+        Assert.Equal(WidthStatus.Known, w.Status);
+        Assert.Equal(200 - 27.8, w.Px, 1);
+    }
+
+    [Fact]
+    public void A_standalone_ComboBoxItem_still_gets_its_own_chrome()
+    {
+        // 不在 ComboBox 底下（例如在 ItemTemplate 之外的 ListBox 裡）就照常算
+        var w = Resolve("""
+            <StackPanel Width="200">
+              <ComboBoxItem x:Name="probe" Content="Option"/>
+            </StackPanel>
+            """);
+        Assert.Equal(WidthStatus.Known, w.Status);
+        Assert.Equal(190, w.Px, 1);
     }
 
     [Fact]

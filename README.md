@@ -55,18 +55,20 @@ resolves, per project — of the sites that *should* yield a number:
 
 | project | resolution |
 |---|---|
+| Playnite | 100.0% |
+| WinUI-Gallery | 99.2% |
 | HandyControl | 97.3% |
-| QuillNest (maintainer) | 87.2% |
-| MahApps.Metro | 77.0% |
-| WinUI-Gallery | 67.4% |
-| Playnite | 51.8% |
-| ScreenToGif | 39.0% |
+| QuillNest (maintainer) | 96.4% |
+| MahApps.Metro | 81.9% |
+| ScreenToGif | 77.5% |
 
-Every run prints a breakdown of **why** the remaining sites are blocked, so you can see what
-would have to change. Across the public corpus the answer is overwhelmingly one thing:
-text inside a `ComboBox`, whose chrome this tool cannot measure and refuses to guess
-(101 sites in WinUI-Gallery, 72 in ScreenToGif, 27 in Playnite). `Auto`/`*` Grid columns are
-solved and verified against WPF's own layout; they now account for only 2–12 sites per project.
+Every run prints a breakdown of **why** the remaining sites are blocked, so coverage is an
+actionable list rather than just a number. What is left is genuinely hard: items inside an
+`ItemsControl` (116 sites in MahApps), `SharedSizeGroup` columns whose width is decided across
+grids (26), `Auto` columns a spanning child contributes to (11), and `Auto` columns holding a
+data-bound or custom child (14 in ScreenToGif).
+
+`Auto`/`*` Grid columns are solved and verified against WPF's own layout, 14 cases exact.
 
 Every run prints its own `resolution` figure, and `check` exits **3** when it falls below
 `--min-coverage`. The tool never says "looks fine" while only seeing a third of your UI.
@@ -181,7 +183,8 @@ a guess should not block someone's pull request.
 
 | | effect | handling |
 |---|---|---|
-| `ComboBox` chrome | **the single biggest remaining gap** — 200 sites across three public projects | `unmeasurable`, counted and named in the blocked breakdown; roadmap item 1 |
+| items inside an `ItemsControl` | **the biggest remaining gap** — 116 sites in MahApps | `blocked`, counted; roadmap item 1 |
+| `SharedSizeGroup` columns | width is decided across several grids, which the analysis cannot see | `blocked`, counted |
 | `Auto` / `*` Grid columns | solved, verified against WPF layout (14/14 exact). 2–12 sites per project still blocked because an Auto column holds data-bound text or a custom control | `blocked`, counted |
 | `ControlTemplate` / `DataTemplate` contents | width comes from the consumer | `not-analysed` |
 | no kerning or shaping | ≤ 1.43% over-estimate | safety margin; never under-estimates |

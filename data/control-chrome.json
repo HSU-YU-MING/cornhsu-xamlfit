@@ -12,7 +12,7 @@
     "RadioButton": { "chromeWidth": 19, "paddingBorder": 0, "minWidth": 0 },
     "Label": { "chromeWidth": 10, "paddingBorder": 0, "minWidth": 0 },
     "ContentControl": { "chromeWidth": 0, "paddingBorder": 0, "minWidth": 0 },
-    "ComboBox": { "chromeWidth": null, "paddingBorder": 0, "minWidth": 0, "note": "content width does not propagate (slope=0.000); chrome unknown — sites inside are unmeasurable" },
+    "ComboBox": { "chromeWidth": 27.8, "paddingBorder": 0, "minWidth": 0, "note": "measured via the templated content host (content width does not propagate)" },
     "ComboBoxItem": { "chromeWidth": 10, "paddingBorder": 0, "minWidth": 0 },
     "ListBoxItem": { "chromeWidth": 10, "paddingBorder": 0, "minWidth": 0 },
     "ListViewItem": { "chromeWidth": 10, "paddingBorder": 0, "minWidth": 0 },

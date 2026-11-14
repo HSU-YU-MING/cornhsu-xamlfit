@@ -15,25 +15,24 @@
 
 ## 0.x（介面凍結前）
 
-**第一順位：ComboBox 的 chrome。** 實測跨三個公開專案共 **200 筆**文字位置卡在這
-（WinUI-Gallery 101、ScreenToGif 72、Playnite 27）。三種量法都失敗，細節見
-`docs/M2b-Grid求解驗收.md` 第 4 節。
-⚠ 不准退回「只算 padding + border」：下拉按鈕（實測 16.8px）不在 padding 裡，
-少算會讓可用寬度偏大 → 漏報溢出。
+**第一順位：ItemsControl 裡的項目。** 實測 MahApps 有 **116 筆**卡在這，HandyControl 8 筆。
+固定寬的 ListBox 裡的項目理論上算得出來（扣掉項目容器內距與捲軸寬），只是還沒做。
 
-**第二順位：Auto 欄裡綁資料或自訂控制項的子元素**（實測 14 筆，比上一項小一個數量級）。
+**第二順位：Auto 欄裡綁資料或自訂控制項的子元素**（ScreenToGif 14 筆、MahApps 2 筆）。
 
-~~解 Grid 的 Auto/星號欄~~ —— **已完成**，14/14 與 WPF 真實版面完全吻合。
-⚠ M0 預測「解掉會推到 97.5%」是錯的：實測兩個專案完全沒改善，
-因為多數 Auto 欄裝的是綁資料的文字。實際前後對照見 `docs/M2b-Grid求解驗收.md`。
+**不打算做的**：`SharedSizeGroup`（26 筆，欄寬由整個 scope 的其他 Grid 共同決定，
+靜態看不到那些）、Auto 欄裡的跨欄子元素（11 筆，WPF 的分攤規則複雜，算錯會連帶弄錯星號分配）。
+
+~~解 Grid 的 Auto/星號欄~~ 與 ~~ComboBox/TextBox 的 chrome~~ —— **都已完成**。
+⚠ M0 預測「解掉 Grid 會推到 97.5%」是錯的，而且錯在歸因：真正的瓶頸是 ComboBox。
+前後對照見 `docs/M2b-Grid求解驗收.md`。
 
 其他：
 
 - `xamlfit.config.json` 實際載入（目前只有 CLI 旗標）
 - SARIF 輸出與 `--msbuild` 診斷格式（跟家族其他兩支對齊）
 - `action.yml` 的實測
-- ~~TextBox / PasswordBox 的 chrome~~ —— **已完成**（走範本的內容宿主量到 6.0 DIP）。
-  ComboBox 仍量不到，見上面第一順位
+- ~~TextBox / PasswordBox / ComboBox 的 chrome~~ —— **已完成**（6.0 / 6.0 / 27.8 DIP）
 
 ## 1.x+
 

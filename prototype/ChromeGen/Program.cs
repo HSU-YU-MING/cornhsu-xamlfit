@@ -184,10 +184,15 @@ internal static class Program
         var inner = controlName switch
         {
             // ComboBox 要有一個「會拉伸」的選取項目，contentPresenter 才會被排到實際可用寬度
-            // ⚠ ComboBox 的 ContentPresenter 在內容為空時會排成 0 寬，量不到可用區域。
-            //   給它一個「超寬」的內容，presenter 就會被裁到實際可用寬度。
-            "ComboBox" => $"<ComboBox {Ns} Width=\"{Fixed}\" Height=\"40\" SelectedIndex=\"0\">" +
-                          "<ComboBoxItem><Border Width=\"10000\"/></ComboBoxItem></ComboBox>",
+            // ⚠ ComboBox 的 ContentPresenter 預設靠左、不拉伸，所以它的 ActualWidth 是
+            //   「內容本身的寬」而不是「可用區域的寬」。
+            //   HorizontalContentAlignment="Stretch" 讓它撐滿可用區域 ——
+            //   那只改變內容在區域裡的對齊，不改變區域大小，所以量出來的就是可用寬度。
+            //   （試過的無效做法：空內容 → presenter 排成 0 寬；
+            //     塞 10000 寬的內容 → ComboBox 不排它，presenter 仍是 0。）
+            "ComboBox" => $"<ComboBox {Ns} Width=\"{Fixed}\" Height=\"40\" SelectedIndex=\"0\" " +
+                          "HorizontalContentAlignment=\"Stretch\">" +
+                          "<ComboBoxItem><Border/></ComboBoxItem></ComboBox>",
             _ => $"<{controlName} {Ns} Width=\"{Fixed}\" Height=\"40\"/>",
         };
 

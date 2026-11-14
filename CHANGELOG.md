@@ -24,7 +24,9 @@ Everything below is the initial implementation; nothing has been released yet.
   Nested grids, star weights, `MinWidth`/`MaxWidth`, `ColumnSpan` and Auto columns fed by
   fixed-width children or horizontal stack panels all resolve. Anything it cannot compute
   exactly is abandoned rather than guessed.
-- `TextBox` / `PasswordBox` chrome, measured through the templated content host.
+- `TextBox`, `PasswordBox` and `ComboBox` chrome, measured through the templated content host
+  (6.0, 6.0 and 27.8 DIP). The `ComboBox` figure is confirmed twice over: by stretching its
+  content presenter, and geometrically from the dropdown button's position.
 - A breakdown of **why** sites are blocked, so coverage is actionable rather than just a number.
 - A deliberately broken demo project with CI count assertions.
 

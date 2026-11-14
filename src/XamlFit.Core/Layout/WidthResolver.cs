@@ -269,6 +269,14 @@ public sealed class WidthResolver
             sum += l + r;
         }
 
+        // ⚠ ComboBoxItem 的 chrome 只存在於**展開的下拉清單**裡。
+        //   關起來的選取框是把項目的內容直接畫在 ComboBox 的 ContentPresenter 上，
+        //   那個容器的內距不在場。而「會不會被裁」問的正是關起來那個框，
+        //   所以這裡不扣它 —— 兩個都扣會重複計算約 10 DIP（約 6% 的誤差）。
+        if (el.Name.LocalName.EndsWith("ComboBoxItem", StringComparison.Ordinal)
+            && el.Parent?.Name.LocalName.EndsWith("ComboBox", StringComparison.Ordinal) == true)
+            return (sum, false, false);
+
         var (known, chrome) = _chrome.Lookup(el.Name.LocalName);
         if (known && chrome is null) return (0, false, true);
         if (known && chrome!.Value > 0) return (sum + chrome.Value, true, false);
