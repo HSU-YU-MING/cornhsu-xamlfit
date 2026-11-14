@@ -91,6 +91,9 @@ public sealed class WidthResolver
     /// <summary>會把項目排進面板的控制項（換了 ItemsPanel 就不知道怎麼排）。</summary>
     private static readonly string[] ItemsHosts = ["ItemsControl", "ListBox", "ListView", "ComboBox", "TreeView", "StatusBar"];
 
+    /// <summary>本身就是容器的項目：清單不會再包一層，ItemTemplate 也不套在它們身上。</summary>
+    private static readonly string[] ItemContainers = ["ComboBoxItem", "ListBoxItem", "ListViewItem", "TreeViewItem", "StatusBarItem"];
+
     /// <summary>子元素放在這些屬性裡是一般的內容位置。其他屬性元素（Icon、Footer、Tag…）不知道會被排在哪。</summary>
     private static readonly HashSet<string> ContentProperties = new(StringComparer.Ordinal)
     {
@@ -364,6 +367,19 @@ public sealed class WidthResolver
             if (EndsWithAny(pLocal, ItemsHosts) && HasCustomItemsPanel(parent))
             {
                 Block(WidthStatus.NeedsItems, $"<{pLocal}> has a custom ItemsPanel");
+                return null;
+            }
+
+            // ⚠ 項目不是容器（ComboBoxItem…）而清單有 ItemTemplate：WPF 把項目包進容器，**透過範本畫出來**，
+            //   畫在畫面上的是範本裡的文字（字級、字重都是範本的），不是項目元素自己。
+            //   CorpusRender 實測 ScreenToGif 編輯器的字重下拉選單：範本 FontSize="14"，工具照項目的 12 去量，21 筆誤報。
+            if (EndsWithAny(pLocal, ItemsHosts) && child.Parent == parent && !child.Name.LocalName.Contains('.', StringComparison.Ordinal)
+                && !EndsWithAny(child.Name.LocalName, ItemContainers)
+                && (HasProperty(parent, "ItemTemplate") || HasProperty(parent, "ItemTemplateSelector")
+                    || owner._styles.ResolveEx(parent, "ItemTemplate", inheritable: false).Kind != ResolveKind.NotSet
+                    || owner._styles.ResolveEx(parent, "ItemTemplateSelector", inheritable: false).Kind != ResolveKind.NotSet))
+            {
+                Block(WidthStatus.InTemplate, $"<{pLocal}> draws its items through its ItemTemplate");
                 return null;
             }
 
@@ -723,7 +739,9 @@ public sealed class WidthResolver
     private static (double? Px, string? Why) OpenedWidth(XElement el)
     {
         var name = (string?)el.Attribute(XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml") + "Name") ?? (string?)el.Attribute("Name");
-        if (name is null || el.Document?.Root is not { } root) return (null, null);
+        if (name is null) return (null, null);
+        // ⚠ 不用 el.Document：check 每個語言重新排版時的元素不一定掛在文件上，第一版因此在 check 裡默默量不到
+        var root = el.AncestorsAndSelf().Last();
 
         double? smallest = null;
         foreach (var anim in root.Descendants())

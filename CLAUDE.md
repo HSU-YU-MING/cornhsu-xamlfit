@@ -144,6 +144,11 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 60 | **報告輸出要 UTF-8** | .NET 被導向時用系統字碼頁；繁中 Windows 是 Big5，實跑 QuillNest 每句中文都是亂碼 | 自家 App 實際使用 |
 | 61 | **CorpusRender 的下拉選單** | 可編輯的看 TextBox 的捲動範圍（字元位置與視埠直接相減固定差 2 px）；放畫面元素的選項，框裡是 VisualBrush，下拉清單沒打開過就沒排版、寬度 0 | CorpusRender（ScreenToGif） |
 | 62 | **CorpusRender 量換行文字：中日韓每個字都是斷行點** | 用空格切「最長的字」會把一整句中文當成一個字，換行後明明全部顯示也報成被切掉 | 修 QuillNest 之後實測 |
+| 63 | **ItemTemplate 畫的是範本，不是項目** | 項目不是容器（ComboBoxItem…）而清單有 ItemTemplate 時，畫面上的字是範本的（ScreenToGif 範本 FontSize=14、項目 12）。照項目量是 21 筆誤報 | CorpusRender（ScreenToGif 編輯器） |
+| 64 | **兩個子指令共用一份旗標解析** | `check --sites` 照收、什麼都沒寫，對照腳本讀到一份 20:05 的舊檔案、整個編輯器的比對被默默略過。各自拒絕對方的旗標 | 對照數字不動才發現 |
+| 65 | **`UseLayoutRounding` 讓 Auto 欄少一個裝置像素** | ScreenToGif 編輯器的 Expander 標題，旁邊空 200 px，WPF 畫出來仍比文字短 0.5～1.2 px。跟譯文長度無關，工具不模擬；對照報告裡單獨列出，不調容差 | CorpusRender |
+| 66 | **收起面板的展開寬度在動畫裡** | Width="0" ＋ 同檔 Storyboard 的 DoubleAnimation To。取最小的非 0 字面值；To 不是字面就不知道。CorpusRender 也要照動畫打開它 —— ⚠ `(Grid.Width)` 的 PropertyPath.Path 是 `(0)`，屬性在 PathParameters | ScreenToGif 編輯器 |
+| 67 | **第三方 Grid 子類別不內建** | GridEx 的語意照 Playnite 原始碼寫，但只認設定檔宣告的 —— 別的專案同名類別可能完全不同 | Playnite |
 
 ### 環境層級的坑
 
@@ -160,7 +165,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 513 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 532 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 42 條 CLI 路徑的退出碼

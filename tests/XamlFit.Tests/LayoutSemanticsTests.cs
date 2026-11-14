@@ -577,6 +577,20 @@ public class HeaderAndContentTests
             In("<Button Width=\"80\" Content=\"x\"><Button.ToolTip><TextBlock x:Name=\"probe\"/></Button.ToolTip></Button>").Status);
 
     [Fact]
+    public void Items_drawn_through_an_ItemTemplate_are_not_measured_as_written()
+    {
+        // ⚠ CorpusRender 實測 ScreenToGif：範本 FontSize="14"，項目元素自己是 12 —— 照項目去量，21 筆誤報
+        const string template = "<ComboBox.ItemTemplate><DataTemplate><TextBlock FontSize=\"14\" Text=\"{Binding Text}\"/></DataTemplate></ComboBox.ItemTemplate>";
+        Assert.Equal(WidthStatus.InTemplate,
+            In($"<ComboBox Width=\"200\">{template}<TextBlock x:Name=\"probe\" Text=\"A\"/></ComboBox>").Status);
+        // 項目本身就是容器時，ItemTemplate 不套在它身上
+        Assert.Equal(WidthStatus.Known,
+            In($"<ComboBox Width=\"200\">{template}<ComboBoxItem x:Name=\"probe\" Content=\"A\"/></ComboBox>").Status);
+        Assert.Equal(WidthStatus.Known,
+            In("<ComboBox Width=\"200\"><TextBlock x:Name=\"probe\" Text=\"A\"/></ComboBox>").Status);
+    }
+
+    [Fact]
     public void Text_in_Resources_is_placed_wherever_it_is_used() =>
         Assert.Equal(WidthStatus.InTemplate,
             In("<Border Width=\"300\"><Border.Resources><TextBlock x:Key=\"k\" x:Name=\"probe\"/></Border.Resources></Border>").Status);

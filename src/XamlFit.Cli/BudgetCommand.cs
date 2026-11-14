@@ -9,6 +9,7 @@ internal static class BudgetCommand
     {
         var opts = CommonOptions.Parse(args, out var error);
         if (error is not null) { Console.Error.WriteLine(error); return 2; }
+        if (opts.ForeignFlag("budget", CommonOptions.CheckOnly) is { } foreign) { Console.Error.WriteLine(foreign); return 2; }
         if (opts.Root is null) { Console.Error.WriteLine("budget needs a root directory"); return 2; }
         if (!Directory.Exists(opts.Root)) { Console.Error.WriteLine($"not a directory: {opts.Root}"); return 2; }
 

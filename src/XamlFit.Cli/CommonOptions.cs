@@ -60,6 +60,20 @@ internal sealed class CommonOptions
 
     public bool WasGiven(string flag) => _explicitFlags.Contains(flag);
 
+    /// <summary>只屬於 budget 的旗標。</summary>
+    public static readonly string[] BudgetOnly = ["--csv", "--csv-raw", "--sites"];
+
+    /// <summary>只屬於 check 的旗標。</summary>
+    public static readonly string[] CheckOnly = ["--baseline", "--write-baseline", "--pseudo", "--source-only", "--sarif", "--msbuild", "--fail-on"];
+
+    /// <summary>
+    /// 給了別的子指令才有的旗標：回傳錯誤訊息（exit 2）。
+    /// ⚠ 第一版兩個子指令共用一份解析，<c>check --sites x.csv</c> 照收不誤、什麼都沒寫 ——
+    ///   跟設定檔裡沒作用的鍵是同一種問題：寫了以為有生效。對照腳本因此讀到一份舊的檔案。
+    /// </summary>
+    public string? ForeignFlag(string command, string[] foreign) =>
+        foreign.FirstOrDefault(WasGiven) is { } flag ? $"{flag} is not an option of {command}" : null;
+
     public static CommonOptions Parse(string[] args, out string? error)
     {
         var o = new CommonOptions();

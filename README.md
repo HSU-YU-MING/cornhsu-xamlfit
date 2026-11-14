@@ -68,7 +68,7 @@ Measured out of the box, no configuration, on eleven projects:
 | QuillNest (maintainer app) | 685 | 533 | 9 | 116 | **98.3%** |
 | Kindling (maintainer app) | 150 | 57 | 18 | 75 | **76.0%** |
 | Playnite | 1,107 | 136 | 278 | 506 | **32.9%** |
-| ScreenToGif | 1,277 | 104 | 370 | 790 | **21.9%** |
+| ScreenToGif | 1,277 | 148 | 222 | 790 | **40.0%** |
 | HandyControl | 210 | 11 | 61 | 123 | 15.3% |
 | MahApps.Metro | 1,613 | 56 | 746 | 718 | 7.0% |
 | MaterialDesignInXamlToolkit | 2,339 | 0 | 867 | 1,432 | 0% |
@@ -119,10 +119,14 @@ and records how wide every text needs to be and how much of it is actually visib
 9 windows, 2,025 comparisons: **71 clipped by both, 4 false alarms, 0 missed**, 1,950 fit by
 both. Two of the false alarms are within 0.5 px; the other two are the same button, 0.7 and 7.7 px on the safe side.
 Where both agree, XamlFit's text width is −0.02 to +1.74 px off WPF's, and the width it
-believes is available is never more than 0.02 px too generous. ScreenToGif, 5 windows
-including editable and plain drop-downs, 1,607 comparisons with the same font on both sides
-(this machine's): **11 clipped by both, 0 false alarms, 0 missed**. These comparisons found
-eleven bugs in one round and four more in the next, listed in `docs/M6-全面重讀.md`.
+believes is available is never more than 0.02 px too generous. ScreenToGif, 6 windows
+including the editor's side panel and every kind of drop-down, 2,657 comparisons with the same
+font on both sides (this machine's): **12 clipped by both, 0 false alarms**, 2,545 fit by both,
+and the width XamlFit believes is available is never too generous. The remaining 100 are all the
+same thing: Expander headers that WPF draws 0.5–1.2 px short of their text with 200 px to spare,
+because `UseLayoutRounding` shaves a device pixel off the `Auto` column the header sits in. That
+depends on the pixel grid, not on the translation (English happens to round the other way), and
+XamlFit does not model it. These comparisons found the bugs listed in `docs/M6-全面重讀.md`.
 
 **False positives, against shipped software.** Hard-coded text in a released app presumably
 fits. So the tool checks the *source* language too: **984 source-language measurements across
@@ -145,6 +149,12 @@ them once in `xamlfit.config.json`.
 
   // A subclass that lays out exactly like its base. You are vouching for that.
   "treatAs": { "MyGrid": "Grid" },
+
+  // A Grid subclass that generates its columns from properties (Playnite's GridEx). Each value is
+  // the property name that class uses: a column count (all Auto), a list of star column indexes,
+  // and "place the children in reading order, N per row" (which overrides their Grid.Column).
+  "gridPanels": { "GridEx": { "columnCount": "ColumnCount", "starColumns": "StarColumns",
+                              "autoLayoutColumns": "AutoLayoutColumns" } },
 
   // A family in a FontFamily fallback list that target machines do not have.
   "absentFonts": ["Segoe UI Variable"],

@@ -74,6 +74,9 @@ run 2 "check, culture with no data" check "$DEMO" --resx "$RESX" --culture xx
 run 0 "check --pseudo --culture de" check "$DEMO" --pseudo --resx "$RESX" --culture de
 run 0 "check --source-only"         check "$DEMO" --source-only --resx "$RESX"
 run 2 "check --source-only --pseudo" check "$DEMO" --source-only --pseudo
+# 別的子指令的旗標：寫了以為有生效最糟（check --sites 曾經照收、什麼都沒寫）
+run 2 "check --sites (budget-only flag)" check "$DEMO" --sites "$TMP/x.csv"
+run 2 "budget --pseudo (check-only flag)" budget "$DEMO" --pseudo
 run 2 "check, --resx is not a directory" check "$DEMO" --resx "$TMP/nope"
 run 1 "check --sarif"              check "$DEMO" --resx "$RESX" --sarif "$TMP/c.sarif"
 run 1 "check --msbuild"            check "$DEMO" --resx "$RESX" --msbuild

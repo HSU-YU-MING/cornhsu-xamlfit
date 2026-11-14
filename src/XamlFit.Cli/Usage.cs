@@ -70,6 +70,9 @@ internal static class Usage
             WHAT THE TOOL CANNOT SEE, AND HOW TO TELL IT (xamlfit.config.json)
               "chrome":   { "Card": 16 }        horizontal padding of a control it does not know
               "treatAs":  { "MyGrid": "Grid" }  a subclass that lays out exactly like its base
+              "gridPanels": { "GridEx": { "columnCount": "ColumnCount", "starColumns": "StarColumns",
+                                          "autoLayoutColumns": "AutoLayoutColumns" } }
+                                   a Grid subclass that generates its columns from properties
               "absentFonts": ["Segoe UI Variable"]   skip a family target machines do not have
               "defaultFontByCulture": { "th": "Leelawadee UI" }
               "elementLanguage": "en-US"   the Language WPF uses to pick fallback fonts
