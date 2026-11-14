@@ -202,11 +202,13 @@ internal static partial class Program
                     ownerCombo.SelectedItem = itemElement;
                     ownerCombo.IsDropDownOpen = false;
                     window.UpdateLayout();
-                    var site = ownerCombo.Template.FindName("contentPresenter", ownerCombo) as FrameworkElement;
+                    // 選取框：WPF 預設範本叫 contentPresenter；專案自己的範本（ScreenToGif）沒有名字 —— 找內容是 SelectionBoxItem 的那個
+                    var site = (ownerCombo.Template.FindName("contentPresenter", ownerCombo) as FrameworkElement)
+                               ?? Descendants(ownerCombo).OfType<ContentPresenter>().FirstOrDefault(cp => ReferenceEquals(cp.Content, ownerCombo.SelectionBoxItem));
                     var shownItem = ownerCombo.SelectionBoxItem;
                     if (Environment.GetEnvironmentVariable("XF_DEBUG") is { } dbgC && (culture == dbgC || culture == "(source)" && dbgC == "1"))
                         Console.WriteLine($"  line {line}: SelectionBoxItem {shownItem?.GetType().Name}; box {site?.ActualWidth:F2}; item natural {(el as FrameworkElement)?.DesiredSize.Width:F2}; " +
-                                          string.Join(" ", site is null ? [] : Descendants(site).Select(d => d is FrameworkElement fe ? $"{d.GetType().Name}:{fe.ActualWidth:F2}@{fe.TransformToAncestor(ownerCombo).Transform(new Point()).X:F2} clip={(System.Windows.Controls.Primitives.LayoutInformation.GetLayoutClip(fe)?.Bounds.Width.ToString("F2") ?? "-")}" : d.GetType().Name).Take(6)) + $" presenter@{site?.TransformToAncestor(ownerCombo).Transform(new Point()).X:F2} clip={(site is null ? "-" : System.Windows.Controls.Primitives.LayoutInformation.GetLayoutClip(site)?.Bounds.Width.ToString("F2") ?? "-")} combo {ownerCombo.ActualWidth:F2} padding {ownerCombo.Padding} margin {(site as FrameworkElement)?.Margin} hca {ownerCombo.HorizontalContentAlignment} rounding {ownerCombo.UseLayoutRounding} src {DependencyPropertyHelper.GetValueSource(ownerCombo, Control.PaddingProperty).BaseValueSource} found {(ownerCombo.TryFindResource(typeof(ComboBox)) is Style fs ? $"style with {fs.Setters.Count} setters, sealed {fs.IsSealed}" : "none")} style {(ownerCombo.Style is null ? "null" : "set")}");
+                                          string.Join(" ", site is null ? [] : Descendants(site).Select(d => d is FrameworkElement fe ? $"{d.GetType().Name}:{fe.ActualWidth:F2}@{fe.TransformToAncestor(ownerCombo).Transform(new Point()).X:F2} clip={(System.Windows.Controls.Primitives.LayoutInformation.GetLayoutClip(fe)?.Bounds.Width.ToString("F2") ?? "-")}" : d.GetType().Name).Take(6)) + $" presenter@{site?.TransformToAncestor(ownerCombo).Transform(new Point()).X:F2} clip={(site is null ? "-" : System.Windows.Controls.Primitives.LayoutInformation.GetLayoutClip(site)?.Bounds.Width.ToString("F2") ?? "-")} combo {ownerCombo.ActualWidth:F2} padding {ownerCombo.Padding} margin {(site as FrameworkElement)?.Margin} hca {ownerCombo.HorizontalContentAlignment} rounding {ownerCombo.UseLayoutRounding} src {DependencyPropertyHelper.GetValueSource(ownerCombo, Control.PaddingProperty).BaseValueSource} found {(ownerCombo.TryFindResource(typeof(ComboBox)) is Style fs ? $"style with {fs.Setters.Count} setters, sealed {fs.IsSealed}" : "none")} style {(ownerCombo.Style is null ? "null" : "set")} styleSource {DependencyPropertyHelper.GetValueSource(ownerCombo, FrameworkElement.StyleProperty).BaseValueSource} setters [{(ownerCombo.TryFindResource(typeof(ComboBox)) is Style fs2 ? string.Join(" | ", fs2.Setters.OfType<Setter>().Select(x => x.Property.Name + "=" + x.Value)) : "")}] triggers {(ownerCombo.TryFindResource(typeof(ComboBox)) is Style fs3 ? fs3.Triggers.Count : -1)} basedOn {(ownerCombo.TryFindResource(typeof(ComboBox)) is Style fs4 && fs4.BasedOn is not null)}");
                     var boxText = site is null ? null : FirstText(site);
                     var boxShape = site is null ? null : Descendants(site).OfType<System.Windows.Shapes.Rectangle>().FirstOrDefault();
                     if (boxText is not null)
@@ -303,6 +305,14 @@ internal static partial class Program
                     try { st.Seal(); }
                     catch (Exception ex) { d.Remove(key); log.Add($"{what}: removed style {key} ({First(ex.Message)})"); }
                 }
+                // ⚠ 範本也會封存失敗：TargetType 被修補拿掉的 ControlTemplate，觸發器的屬性變成 null。
+                //   第一版只清樣式，ScreenToGif 的 ComboBox.xaml 因為裡面兩個 DropDownButton 範本整份沒合併，
+                //   連帶 ComboBox 的樣式也沒套上，畫出來的是 WPF 預設的 ComboBox（差 0.3 px 的來源）
+                else if (value is FrameworkTemplate ft)
+                {
+                    try { ft.Seal(); }
+                    catch (Exception ex) { d.Remove(key); log.Add($"{what}: removed template {key} ({First(ex.Message)})"); }
+                }
             }
             foreach (var m in d.MergedDictionaries) Clean(m);
         }
@@ -341,7 +351,41 @@ internal static partial class Program
             if (cur is Expander ex) ex.IsExpanded = true;
             // 程式碼才會打開的面板（ScreenToGif 的設定頁、進度面板）：照 App 用到它時的樣子打開
             if (cur is UIElement ui && ui.Visibility != Visibility.Visible) ui.Visibility = Visibility.Visible;
+            // Width="0" 的收起面板（ScreenToGif 編輯器的右側面板）：照開啟它的動畫，開到最小的非 0 寬度
+            if (cur is FrameworkElement panel && panel.Width == 0 && panel.Name.Length > 0 && OpeningWidth(panel) is { } opened)
+                panel.Width = opened;
         }
+    }
+
+    /// <summary>
+    /// 動畫改的屬性名。⚠ XAML 寫 <c>(Grid.Width)</c> 時 PropertyPath.Path 是 <c>(0)</c>，屬性在 PathParameters 裡 ——
+    /// 第一版看 Path 字串，ScreenToGif 的面板一個都沒打開，3,701 筆全部量成看得見 0 px。
+    /// </summary>
+    private static string? TargetPropertyName(System.Windows.Media.Animation.Timeline anim)
+    {
+        var pp = System.Windows.Media.Animation.Storyboard.GetTargetProperty(anim);
+        if (pp is null) return null;
+        if (pp.PathParameters.Count == 1 && pp.PathParameters[0] is DependencyProperty dp) return dp.Name;
+        var path = pp.Path.Trim('(', ')');
+        return path[(path.LastIndexOf('.') + 1)..];
+    }
+
+    /// <summary>以這個元素為目標、改 Width 的 DoubleAnimation 裡，最小的非 0 To（找所有上層的資源）。</summary>
+    private static double? OpeningWidth(FrameworkElement panel)
+    {
+        double? smallest = null;
+        for (DependencyObject? cur = panel; cur is not null; cur = LogicalTreeHelper.GetParent(cur) ?? VisualTreeHelper.GetParent(cur))
+        {
+            if (cur is not FrameworkElement fe) continue;
+            foreach (var value in fe.Resources.Values)
+                if (value is System.Windows.Media.Animation.Storyboard sb)
+                    foreach (var anim in sb.Children.OfType<System.Windows.Media.Animation.DoubleAnimation>())
+                        if (System.Windows.Media.Animation.Storyboard.GetTargetName(anim) == panel.Name
+                            && TargetPropertyName(anim) is "Width" or "MaxWidth"
+                            && anim.To is > 0 and var to && (smallest is null || to < smallest))
+                            smallest = to;
+        }
+        return smallest;
     }
 
     private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
@@ -417,7 +461,7 @@ internal static partial class Program
     private static T? LoadRepaired<T>(string xaml, string what, List<string> log, HashSet<string>? protectedNames) where T : class
     {
         xaml = EmulateBaml(xaml);
-        for (var attempt = 0; attempt < 400; attempt++)
+        for (var attempt = 0; attempt < 2000; attempt++)   // ScreenToGif 的 Editor.xaml 要修 400 多處
         {
             try
             {

@@ -25,6 +25,7 @@ internal sealed class CommonOptions
     public Dictionary<string, double> Chrome { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> DefaultFontByCulture { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, string> TreatAs { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, XamlFit.Core.Xaml.GridPanel> GridPanels { get; } = new(StringComparer.Ordinal);
     public string? SourceCulture { get; set; }
 
     /// <summary>沒寫 xml:lang 的元素的語言；"culture" = 跟著正在檢查的語言。</summary>
@@ -195,6 +196,9 @@ internal sealed class CommonOptions
             foreach (var (name, value) in chrome) o.Chrome[name] = value;
         if (config.TreatAs is { Count: > 0 } treatAs)
             foreach (var (from, to) in treatAs) o.TreatAs[from] = to;
+        if (config.GridPanels is { Count: > 0 } gridPanels)
+            foreach (var (name, p) in gridPanels)
+                o.GridPanels[name] = new XamlFit.Core.Xaml.GridPanel(p.ColumnCount, p.StarColumns, p.AutoLayoutColumns);
 
         // 清單型的：旗標給了就不從設定檔補（不要混成一個難以預測的聯集）
         if (o.ResxDirs.Count == 0 && config.Resx is { Count: > 0 } resx) o.ResxDirs.AddRange(resx.Select(Resolve));

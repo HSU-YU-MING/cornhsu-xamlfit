@@ -37,6 +37,7 @@ internal static class Pipeline
             ExcludeGlobs = opts.Exclude,
             TrustDefaultChrome = opts.AssumeDefaultTheme,
             TreatAs = opts.TreatAs,
+            GridPanels = opts.GridPanels,
             DefaultFontPinned = opts.DefaultFontPinned,
             ElementLanguage = opts.SourceElementLanguage,
             Sharing = sharing,

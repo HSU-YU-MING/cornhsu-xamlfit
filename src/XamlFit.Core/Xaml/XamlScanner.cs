@@ -22,6 +22,9 @@ public sealed record ScanOptions
     /// </summary>
     public IReadOnlyDictionary<string, string> TreatAs { get; init; } = new Dictionary<string, string>();
 
+    /// <summary>使用者宣告的「用屬性產生欄的 Grid 子類別」（見 <see cref="GridPanel"/>）。</summary>
+    public IReadOnlyDictionary<string, GridPanel> GridPanels { get; init; } = new Dictionary<string, GridPanel>();
+
     /// <summary>使用者明確指定了預設字型（設定檔或旗標）。視窗之間對字型的設定不一致時，
     /// 以使用者指定的為準，不再把 UserControl 裡的文字判成「不知道繼承到什麼」。</summary>
     public bool DefaultFontPinned { get; init; }
@@ -379,6 +382,7 @@ public sealed partial class XamlScanner
     /// </summary>
     private void ApplyAliases(XDocument doc)
     {
+        GridPanel.Rewrite(doc, _options.GridPanels);
         if (_options.TreatAs.Count == 0 || doc.Root is null) return;
 
         foreach (var el in doc.Root.DescendantsAndSelf().ToList())

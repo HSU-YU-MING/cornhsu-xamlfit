@@ -663,6 +663,7 @@ public sealed class WidthResolver
         var sizeToContent = IsSizeToContentWidth(el);
 
         double? w = null, m = null;
+        var widthLabel = "Width";
 
         if (!sizeToContent)
         {
@@ -673,8 +674,14 @@ public sealed class WidthResolver
             {
                 if (TryLength(width.Value, out var wv)) w = wv;
                 else if (width.Value!.Trim() is "0" or "0.0")
-                    // 寬度 0 的容器是收起來的面板，展開後多寬是執行期（動畫或程式碼）決定的
-                    return new(BoundKind.Unreadable, 0, "", false, $"<{local}> has Width=\"0\" (a collapsed panel; its run-time width is set elsewhere)");
+                {
+                    // 寬度 0 的容器是收起來的面板。展開的寬度寫在同一份檔案的動畫裡時，就讀得到
+                    var (opened, why) = OpenedWidth(el);
+                    if (opened is not { } ow)
+                        return new(BoundKind.Unreadable, 0, "", false, why ?? $"<{local}> has Width=\"0\" (a collapsed panel; its run-time width is set elsewhere)");
+                    w = ow;
+                    widthLabel = "Width (opened by a storyboard)";
+                }
                 else if (!IsAutoLength(width.Value!))
                     return new(BoundKind.Unreadable, 0, "", false, $"Width=\"{width.Value}\" on <{local}> is not a length this tool can read");
             }
@@ -696,11 +703,47 @@ public sealed class WidthResolver
         return (w, m) switch
         {
             // Width 會被 MaxWidth 夾住，兩者都在時寬度是確定的
-            ({ } a, { } b) => a <= b ? new(BoundKind.Value, a, "Width", true, "") : new(BoundKind.Value, b, "MaxWidth", true, ""),
-            ({ } a, null) => new(BoundKind.Value, a, "Width", true, ""),
+            ({ } a, { } b) => a <= b ? new(BoundKind.Value, a, widthLabel, true, "") : new(BoundKind.Value, b, "MaxWidth", true, ""),
+            ({ } a, null) => new(BoundKind.Value, a, widthLabel, true, ""),
             (null, { } b) => new(BoundKind.Value, b, "MaxWidth", false, ""),
             _ => default,
         };
+    }
+
+    /// <summary>
+    /// 收起來（Width="0"）的面板展開後有多寬：同一份檔案裡、以這個元素為目標、改 Width 或 MaxWidth 的
+    /// DoubleAnimation，取**最小的非 0 字面 To**。
+    ///
+    /// 實查 ScreenToGif 的編輯器：右側的動作面板寫 Width="0"，ShowPanelStoryboard 把它開到 280、
+    /// ShowExtendedPanelStoryboard 開到更寬；程式碼只負責啟動這兩個動畫，從不自己設寬度。
+    /// 取最小的：用比較寬的那個開的面板，工具只會少算、不會多算。
+    /// 任何一個 To 不是字面數字（綁定、只寫 By、關鍵畫格）→ 不知道。
+    /// ⚠ 程式碼裡直接設寬度的情形看不到 —— 那是靜態分析的極限，報告會註明寬度來自動畫。
+    /// </summary>
+    private static (double? Px, string? Why) OpenedWidth(XElement el)
+    {
+        var name = (string?)el.Attribute(XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml") + "Name") ?? (string?)el.Attribute("Name");
+        if (name is null || el.Document?.Root is not { } root) return (null, null);
+
+        double? smallest = null;
+        foreach (var anim in root.Descendants())
+        {
+            var local = anim.Name.LocalName;
+            if (!local.Contains("Animation", StringComparison.Ordinal)) continue;
+            if ((string?)anim.Attribute("Storyboard.TargetName") != name) continue;
+            var path = ((string?)anim.Attribute("Storyboard.TargetProperty") ?? "").Trim().Trim('(', ')');
+            var prop = path[(path.LastIndexOf('.') + 1)..];
+            if (prop is not ("Width" or "MaxWidth")) continue;
+
+            if (local != "DoubleAnimation")
+                return (null, $"<{el.Name.LocalName}> has Width=\"0\" and is opened by a {local}, whose widths this tool does not read");
+            var to = (string?)anim.Attribute("To");
+            if (to?.Trim() is "0" or "0.0") continue;   // 關起來的動畫
+            if (to is null || !TryLength(to, out var px))
+                return (null, $"<{el.Name.LocalName}> has Width=\"0\" and the storyboard that opens it has no literal To");
+            if (px > 0 && (smallest is null || px < smallest)) smallest = px;
+        }
+        return (smallest, null);
     }
 
     private static bool IsAutoLength(string v) =>

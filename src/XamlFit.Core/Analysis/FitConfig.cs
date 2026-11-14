@@ -53,6 +53,16 @@ public sealed class FitConfig
     /// </summary>
     [JsonPropertyName("treatAs")] public Dictionary<string, string>? TreatAs { get; set; }
 
+    /// <summary>用屬性產生欄的 Grid 子類別：{ "GridEx": { "columnCount": "ColumnCount", "starColumns": "StarColumns", "autoLayoutColumns": "AutoLayoutColumns" } }。</summary>
+    [JsonPropertyName("gridPanels")] public Dictionary<string, GridPanelConfig>? GridPanels { get; set; }
+
+    public sealed class GridPanelConfig
+    {
+        [JsonPropertyName("columnCount")] public string? ColumnCount { get; set; }
+        [JsonPropertyName("starColumns")] public string? StarColumns { get; set; }
+        [JsonPropertyName("autoLayoutColumns")] public string? AutoLayoutColumns { get; set; }
+    }
+
     /// <summary>目標機器上沒有的字型家族。出現在 FontFamily 的後備清單裡時直接跳過，用下一個。</summary>
     [JsonPropertyName("absentFonts")] public List<string>? AbsentFonts { get; set; }
 
@@ -137,6 +147,18 @@ public sealed class FitConfig
             foreach (var (from, to) in config.TreatAs)
                 if (string.IsNullOrWhiteSpace(from) || string.IsNullOrWhiteSpace(to) || from.Contains(':') || to.Contains(':'))
                     problems.Add(new Problem($"treatAs[\"{from}\"]", "both names are local element names, without a namespace prefix"));
+
+        if (config.GridPanels is not null)
+            foreach (var (name, spec) in config.GridPanels)
+            {
+                var props = new[] { spec?.ColumnCount, spec?.StarColumns, spec?.AutoLayoutColumns };
+                if (string.IsNullOrWhiteSpace(name) || name.Contains(':') || name.Contains('.'))
+                    problems.Add(new Problem($"gridPanels[\"{name}\"]", "the key is an element's local name, without a namespace prefix"));
+                else if (spec is null || spec.ColumnCount is null && spec.AutoLayoutColumns is null)
+                    problems.Add(new Problem($"gridPanels[\"{name}\"]", "name at least columnCount or autoLayoutColumns"));
+                else if (props.Any(p => p is not null && (p.Trim().Length == 0 || p.Contains(':') || p.Contains('.'))))
+                    problems.Add(new Problem($"gridPanels[\"{name}\"]", "each value is the property name the class uses, such as \"ColumnCount\""));
+            }
 
         if (config.Chrome is not null)
             foreach (var (name, value) in config.Chrome)
