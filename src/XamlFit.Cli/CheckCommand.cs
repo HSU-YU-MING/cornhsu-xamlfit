@@ -168,10 +168,15 @@ internal static class CheckCommand
             return 3;
         }
 
-        if (!opts.Pseudo && s.StringsChecked == 0)
+        // ⚠ 量到 0 筆就回 exit 0，等於在什麼都沒看的情況下說「沒問題」。
+        //   這條原本把 --pseudo 排除在外，而 --pseudo 剛好是最容易量到 0 的模式
+        //   （資源引用取不到來源字串時）—— 那個排除本身就是一個謊報健康的洞。
+        if (s.StringsChecked == 0)
         {
-            Console.Error.WriteLine(
-                "\nno translated string was actually measured — check --resx and that the keys match");
+            Console.Error.WriteLine(opts.Pseudo
+                ? "\nnothing was measured — --pseudo needs source strings: either literal text in the " +
+                  "XAML, or --resx pointing at the neutral-culture .resx the keys come from"
+                : "\nno translated string was actually measured — check --resx and that the keys match");
             return 3;
         }
 

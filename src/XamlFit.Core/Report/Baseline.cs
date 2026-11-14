@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using XamlFit.Core.Analysis;
 
 namespace XamlFit.Core.Report;
@@ -14,9 +15,11 @@ public sealed class Baseline
 {
     public const int CurrentKeyVersion = 1;
 
-    public int KeyVersion { get; set; } = CurrentKeyVersion;
-    public string GeneratedOn { get; set; } = "";
-    public List<string> Known { get; set; } = [];
+    // ⚠ 欄位名用 camelCase，跟度量檔與報告一致。
+    //   baseline 的格式是 1.0 的凍結面之一，趁 0.x 統一掉。
+    [JsonPropertyName("keyVersion")] public int KeyVersion { get; set; } = CurrentKeyVersion;
+    [JsonPropertyName("generatedOn")] public string GeneratedOn { get; set; } = "";
+    [JsonPropertyName("known")] public List<string> Known { get; set; } = [];
 
     public static Baseline FromFindings(IEnumerable<FitFinding> findings, DateOnly date) => new()
     {

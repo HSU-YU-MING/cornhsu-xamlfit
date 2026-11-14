@@ -137,7 +137,7 @@ public class BaselineTests
     public void Rejects_a_newer_key_version_instead_of_misreading_it()
     {
         var ex = Assert.Throws<InvalidDataException>(() =>
-            Baseline.Parse("""{"KeyVersion":99,"Known":[]}"""));
+            Baseline.Parse("""{"keyVersion":99,"known":[]}"""));
         Assert.Contains("upgrade xamlfit", ex.Message);
     }
 }

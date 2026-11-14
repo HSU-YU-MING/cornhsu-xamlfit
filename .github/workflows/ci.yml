@@ -32,3 +32,8 @@ jobs:
 
       - name: Budget mode on the demo
         run: bash scripts/verify-budget.sh
+
+      # 每一條 CLI 路徑至少跑一次並斷言退出碼。單元測試測得到 Core，
+      # 測不到「旗標有沒有接線」—— 實查到的兩個洞都只有真的跑才看得到。
+      - name: CLI smoke test
+        run: bash scripts/verify-cli.sh

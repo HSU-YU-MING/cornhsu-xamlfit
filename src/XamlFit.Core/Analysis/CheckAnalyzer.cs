@@ -165,7 +165,16 @@ public sealed class CheckAnalyzer
         {
             // 沒有翻譯時的退路：照分段膨脹表把來源字串拉長。
             // ⚠ 這報的是**風險**不是事實，所以嚴重度一律降級（見 Judge）。
-            var source = site.Source == TextSource.Literal ? site.Text : null;
+            //
+            // ⚠ 來源字串不只有字面文字。第一版只接受 TextSource.Literal，
+            //   於是對 `{x:Static p:Strings.Save}` 這種寫法一筆都量不到 ——
+            //   而用 .resx 的專案正是這個模式的主要使用者，等於 --pseudo 對
+            //   目標受眾完全無效（示範專案實跑是 measurements 0）。
+            //   資源引用要去中性語言的 .resx 取它的值。
+            var source = site.Source == TextSource.Literal
+                ? site.Text
+                : NeutralValueOf(b.Key, cultures);
+
             if (source is not null)
                 yield return ("(pseudo)", Pseudoize(source, ExpansionTable.FactorFor(source)), true);
             yield break;
@@ -176,6 +185,15 @@ public sealed class CheckAnalyzer
             if (c.Culture == ResxReader.NeutralCulture) continue;   // 中性語言就是來源，不用比
             yield return (c.Culture, c.Values.GetValueOrDefault(b.Key), false);
         }
+    }
+
+    /// <summary>中性語言（來源語言）的字串值。<c>--pseudo</c> 拿它當膨脹的基底。</summary>
+    private static string? NeutralValueOf(string key, IReadOnlyList<CultureStrings> cultures)
+    {
+        foreach (var c in cultures)
+            if (c.Culture == ResxReader.NeutralCulture && c.Values.TryGetValue(key, out var v))
+                return v;
+        return null;
     }
 
     /// <summary>把字串拉長到目標倍率。用重複最後一個字來補，寬度才有代表性。</summary>

@@ -25,6 +25,7 @@ jobs:
       - run: dotnet test XamlFit.slnx -c Release --no-build
       - run: bash scripts/verify-demo.sh
       - run: bash scripts/verify-budget.sh
+      - run: bash scripts/verify-cli.sh
 
       - run: dotnet pack src/XamlFit.Cli/XamlFit.Cli.csproj -c Release -o ./artifacts -p:Version=${{ steps.version.outputs.version }}
 

@@ -87,6 +87,9 @@ chrome 偏小 → 可用寬度偏大 → **漏報溢出**。
 | 25 | **排除規則比對完整路徑** | 掃描根目錄位在 `.config` 或 `bin` 底下時（`C:\Users\x\.config\app`、`D:\bin\myproject`），**所有檔案都被排除**，然後吐 exit 3 不解釋為什麼。要比對**目錄名**並做目錄剪枝 | 跨平台稽核 |
 | 26 | **`*.xaml` 在 Windows 不分大小寫、在 Linux 分** | 同一專案在 CI 上掃到的檔案比本機少，而且是靜默的。⚠ 語料 1,916 個檔全小寫，這個 bug **測不出來** —— 修它的理由是失敗模式（CI 比本機乾淨＝謊報健康），不是證據 | 跨平台稽核 |
 | 27 | **`action.yml` 把輸入文字替換進 shell** | `${{ inputs.x }}` 是文字替換，帶引號或 `$()` 的輸入會變成可執行程式碼。要全部走 `env:` | action.yml 檢視 |
+| 29 | **`--pseudo` 對資源引用的字串一筆都量不到** | 它只接受字面文字，但用 .resx 的專案正是主要使用者 —— 等於對目標受眾完全無效。要去中性語言的 .resx 取值 | CLI 煙霧測試 |
+| 30 | **「量到 0 筆」回 exit 0** | 那等於在什麼都沒看的情況下說「沒問題」。原本的守衛刻意排除 --pseudo，而那正是最容易量到 0 的模式 | CLI 煙霧測試 |
+| 31 | **設定檔在必填參數檢查之後才套用** | 設定檔裡寫了 `resx` 也永遠不生效，檢查會先把人擋掉 | CLI 煙霧測試 |
 | 28 | ~~`set -e` 會因為 `[ -n ] &&` 條件為假而中止~~ | **這條是錯的，實測推翻。** `set -e` 不會因為 `&&` 清單的**條件部分**失敗而中止。留著免得下次又去修一個不存在的問題 | action.yml 檢視 |
 | 22 | **ComboBoxItem 的 chrome 不該跟 ComboBox 的一起扣** | 項目內距只存在於展開的下拉清單；關起來的選取框沒有它。兩個都扣會多扣約 10 DIP（約 6%） | 語意檢視 |
 | 20 | **M0 的「解 Grid 會推到 97.5%」是錯的** | 實測兩個專案完全沒改善（多數 Auto 欄裝綁資料的文字）；自家專案改善 25 個百分點，公開專案 0~5 —— 又一次取樣偏誤 | Grid 驗收 |
@@ -110,6 +113,7 @@ chrome 偏小 → 可用寬度偏大 → **漏報溢出**。
 dotnet test XamlFit.slnx -c Release          # 100 個單元測試
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
+bash scripts/verify-cli.sh                   # 31 條 CLI 路徑的退出碼
 dotnet run --project prototype/GridOracle    # Grid 欄寬 vs WPF 真實版面（Windows）
 ```
 

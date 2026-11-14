@@ -176,7 +176,10 @@ vertically clipped in another:
 | `Wrap` | — | `Auto` | `reflow` — layout grows | info |
 | any | any | — | `tight` — less than `--margin` slack | warn |
 
-Without translations, `--pseudo` expands the source string using a length-bucketed table
+Without translations, `--pseudo` expands the **source** string using a length-bucketed table.
+It needs a source string to expand: literal text in the XAML, or `--resx` pointing at the
+neutral-culture `.resx` the keys come from. If it can measure nothing it exits **3** rather than
+reporting success. The table is
 (`< 10` chars → 200%, `11–20` → 180%, `21–30` → 160%, `31–50` → 130%, `50+` → 120%). A single
 flat factor is wrong: short strings grow most, and button labels are the shortest and the most
 likely to break. **Pseudo findings are always downgraded one level and never fail a build** —
