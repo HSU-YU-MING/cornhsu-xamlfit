@@ -175,6 +175,7 @@ a guess should not block someone's pull request.
 | `TextFormattingMode="Display"` | slight width difference | measured as `Ideal` (the WPF default), noted in the report |
 | custom `ControlTemplate` | the chrome table no longer applies | detected and marked |
 | automatic font fallback | Windows font linking may pick a different face than the metrics file | measurement is flagged in the report |
+| **`{DynamicResource}`-based localization** | apps that keep UI strings in `ResourceDictionary` files rather than `.resx` (ScreenToGif is one) — those strings are classified as data-bound and skipped | `.resx` only in v1; roadmap item. The M0 coverage survey counted such sites as localizable, so a project using this pattern will report far fewer localizable sites than the survey suggests |
 
 ## Configuration
 

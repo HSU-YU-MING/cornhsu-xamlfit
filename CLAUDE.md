@@ -78,6 +78,7 @@ chrome 偏小 → 可用寬度偏大 → **漏報溢出**。
 | 13 | check 模式**不報解析錯誤** | 一個壞掉的 XAML 靜默消失 | 示範專案（XML 註解裡放了連續兩個減號） |
 | 14 | 度量檔用 `JsonSerializer` 的 `WriteIndented` | Segoe UI 一支字型就 **2.1 MB**；改成手寫序列化後 494 KB。這個檔案要進使用者的 repo | M1 |
 | 15 | 文化標籤只檢查「全是字母」 | `My.App.Strings.resx` 的 `Strings` 被當成文化 | 單元測試 |
+| 16 | **`{DynamicResource}` 式在地化沒支援** | ScreenToGif 把 UI 字串放在 ResourceDictionary 裡，整批被當成「綁資料」跳過：M0 算 1,052 個位置，引擎只認 192 個 | 公開語料穩定性實跑 |
 
 ### 環境層級的坑
 
