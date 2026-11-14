@@ -1,0 +1,41 @@
+name: Bug — the tool itself misbehaves
+description: A crash, a wrong exit code, a broken report or CSV, a flag that doesn't do what --help says.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If a verdict is wrong or missing, the forms above get it fixed faster.
+        For anything that looks like a security problem, use the private report link instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `xamlfit --version`
+    validations:
+      required: true
+
+  - type: input
+    id: command
+    attributes:
+      label: The command you ran
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Where it ran
+      options: ["Windows", "Linux", "Linux (globalization-invariant)", "macOS", "GitHub Actions (action.yml)", "Other CI"]
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead
+      description: Include the exit code and any stack trace.
+      render: text
+    validations:
+      required: true

@@ -1,0 +1,82 @@
+name: False alarm — it says text doesn't fit, but it does
+description: XamlFit reported overflow, vertical-clip or trimmed, but the running app shows the text fully.
+labels: ["false-alarm"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most valuable report this project receives. A tool that cries overflow on text that
+        fits is a tool people turn off.
+
+        **Mask what you would not post publicly.** Renaming keys and files is fine; the translated string,
+        the font and the layout around it are what matter.
+
+        Write in English or 中文, whichever is easier.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you file
+      options:
+        - label: I searched the [existing issues](https://github.com/HSU-YU-MING/cornhsu-xamlfit/issues?q=is%3Aissue) and this hasn't been reported.
+          required: true
+        - label: I checked [Known limitations](https://github.com/HSU-YU-MING/cornhsu-xamlfit#known-limitations) (if it's one of them, say so below — it's still useful to know it hurts).
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `xamlfit --version`
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: finding
+    attributes:
+      label: The finding, exactly as printed
+      description: All three lines — the verdict, the text and the measurement. They carry the culture, the site and both widths.
+      render: text
+      placeholder: |
+        fail overflow      [de] MainWindow.xaml:34
+             Speichern unter
+             needs 83.6 px, has 70.0 px — over by 13.6 px
+    validations:
+      required: true
+
+  - type: textarea
+    id: header
+    attributes:
+      label: The first lines of the run
+      description: From `config:` down to `resolution`. They name the metrics file, the default font and what could not be resolved — many problems are really font or width-resolution problems.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: reality
+    attributes:
+      label: What the running app shows
+      description: >
+        A screenshot of that control in that language at 100% display scaling is the best evidence there is.
+        Also say which font it is really drawn with, if you know.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: The smallest XAML that reproduces it
+      description: The element and its containers up to the first one with a known width. Include the Style if one sets FontFamily or FontSize.
+      render: xml
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: participation
+    attributes:
+      label: Optional
+      options:
+        - label: I can run a build with a fix on my project to confirm it.
+        - label: AI helped write this report, and I've checked it against what I actually ran.

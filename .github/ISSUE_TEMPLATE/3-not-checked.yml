@@ -1,0 +1,42 @@
+name: Couldn't measure my project — exit 3, or most sites unresolved
+description: XamlFit stopped with "result not trustworthy", or resolved so little of the project that the result says nothing.
+labels: ["coverage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Sometimes this is one config line or one `fonts export` away from fixed; sometimes it is a real boundary
+        of static analysis. Either way it is worth knowing which.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `xamlfit --version`
+    validations:
+      required: true
+
+  - type: input
+    id: command
+    attributes:
+      label: The command you ran
+      placeholder: "xamlfit check ./src --resx ./Resources"
+    validations:
+      required: true
+
+  - type: textarea
+    id: header
+    attributes:
+      label: The output, from the first line to the end of the summary
+      description: The `resolution` line and the notes about what could not be measured are the important part.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: shape
+    attributes:
+      label: What the project looks like
+      description: Third-party themes (MahApps, MaterialDesign, HandyControl…), how translations are stored, the fonts you use, anything set from code.
+    validations:
+      required: false
