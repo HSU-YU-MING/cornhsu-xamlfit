@@ -24,7 +24,7 @@ internal static class BudgetCommand
         {
             DefaultFontFamily = opts.DefaultFont,
             DefaultFontSize = opts.DefaultSize,
-        });
+        }, fonts);
 
         var scan = scanner.Scan(opts.Root);
         var result = new BudgetAnalyzer(fonts, opts.DefaultFont).Analyze(scan, chrome.Theme);
@@ -47,6 +47,14 @@ internal static class BudgetCommand
             Console.Error.WriteLine(
                 $"  !! {s.InvalidIgnores} xamlfit-ignore comment(s) have no reason and were NOT applied");
         if (s.ParseErrors > 0) Console.WriteLine($"  parse errors       {s.ParseErrors}");
+        if (s.BlockedReasons.Count > 0)
+        {
+            Console.WriteLine();
+            Console.WriteLine("why sites are blocked (fix these to raise coverage):");
+            foreach (var (reason, n) in s.BlockedReasons.Take(8))
+                Console.WriteLine($"  {n,6}  {reason}");
+        }
+
         if (s.MissingFonts.Count > 0)
             Console.WriteLine($"  !! no metrics for: {string.Join(", ", s.MissingFonts)}  (run 'xamlfit fonts export')");
 

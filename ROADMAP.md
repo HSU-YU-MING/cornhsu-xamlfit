@@ -10,20 +10,30 @@
 - [x] M3 `budget` 模式（CSV / JSON，跨位置取最小值，卡點點名）
 - [x] M4 `check` 模式（`.resx`、判定矩陣、`--pseudo`、baseline、ignore）
 - [x] M5 repo 骨架、CI、示範專案的計數斷言
+- [x] v2 第一項：解 Grid 的 Auto/星號欄（14/14 與 WPF 吻合）＋ TextBox/PasswordBox 的 chrome
 - [ ] GitHub repo 公開、Trusted Publishing 政策、推 tag 發 0.1.0
 
 ## 0.x（介面凍結前）
 
-**第一順位：解 Grid 的 `Auto` / `*` 欄。** 實測它佔「有裁切風險」位置的 **21.6%**，
-是單一最大的缺口 —— 解掉會把有風險覆蓋率從 75.9% 推到約 97.5%。
-ItemsControl 只佔 2.5%，排在後面。
+**第一順位：ComboBox 的 chrome。** 實測跨三個公開專案共 **200 筆**文字位置卡在這
+（WinUI-Gallery 101、ScreenToGif 72、Playnite 27）。三種量法都失敗，細節見
+`docs/M2b-Grid求解驗收.md` 第 4 節。
+⚠ 不准退回「只算 padding + border」：下拉按鈕（實測 16.8px）不在 padding 裡，
+少算會讓可用寬度偏大 → 漏報溢出。
+
+**第二順位：Auto 欄裡綁資料或自訂控制項的子元素**（實測 14 筆，比上一項小一個數量級）。
+
+~~解 Grid 的 Auto/星號欄~~ —— **已完成**，14/14 與 WPF 真實版面完全吻合。
+⚠ M0 預測「解掉會推到 97.5%」是錯的：實測兩個專案完全沒改善，
+因為多數 Auto 欄裝的是綁資料的文字。實際前後對照見 `docs/M2b-Grid求解驗收.md`。
 
 其他：
 
 - `xamlfit.config.json` 實際載入（目前只有 CLI 旗標）
 - SARIF 輸出與 `--msbuild` 診斷格式（跟家族其他兩支對齊）
 - `action.yml` 的實測
-- ComboBox / TextBox 的 chrome：目前量不到，裡面的文字一律 `unmeasurable`
+- ~~TextBox / PasswordBox 的 chrome~~ —— **已完成**（走範本的內容宿主量到 6.0 DIP）。
+  ComboBox 仍量不到，見上面第一順位
 
 ## 1.x+
 

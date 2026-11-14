@@ -20,6 +20,12 @@ Everything below is the initial implementation; nothing has been released yet.
 - Baseline (`--baseline` / `--write-baseline`) and `<!-- xamlfit-ignore: reason -->`.
   The reason is **required**: an ignore without one does not apply and is reported.
 - CSV formula neutralisation by default (`--csv-raw` opts out for API pipelines).
+- **`Auto` / `*` Grid column solving**, verified against WPF's own layout (14/14 exact).
+  Nested grids, star weights, `MinWidth`/`MaxWidth`, `ColumnSpan` and Auto columns fed by
+  fixed-width children or horizontal stack panels all resolve. Anything it cannot compute
+  exactly is abandoned rather than guessed.
+- `TextBox` / `PasswordBox` chrome, measured through the templated content host.
+- A breakdown of **why** sites are blocked, so coverage is actionable rather than just a number.
 - A deliberately broken demo project with CI count assertions.
 
 ### Verified

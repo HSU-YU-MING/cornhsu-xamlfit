@@ -80,6 +80,10 @@ public sealed record BudgetSummary
     /// <summary>有 ignore 註解但沒寫理由 —— 沒有生效，要大聲講。</summary>
     public int InvalidIgnores { get; init; }
 
+    /// <summary>卡住的位置依原因分類。使用者要知道「我改什麼才能提高覆蓋率」，
+    /// 而不是只看到一個 62% 的數字。</summary>
+    public IReadOnlyList<(string Reason, int Count)> BlockedReasons { get; init; } = [];
+
     public int Strings { get; init; }
     public int MeasuredStrings { get; init; }
     public int NoDeclaredLimitStrings { get; init; }
@@ -244,6 +248,12 @@ public sealed class BudgetAnalyzer
             NoDeclaredLimitSites = localizable.Count(s => s.Width.Status == WidthStatus.NoDeclaredLimit),
             SymbolOnlySites = symbolOnly,
             InvalidIgnores = localizable.Count(s => s.InvalidIgnore),
+            BlockedReasons = localizable
+                .Where(s => s.Width.Status is WidthStatus.NeedsGrid or WidthStatus.NeedsItems or WidthStatus.Unmeasurable)
+                .GroupBy(s => NormalizeReason(s.Width.Reason))
+                .Select(g => (g.Key, g.Count()))
+                .OrderByDescending(x => x.Item2)
+                .ToList(),
             Strings = budgets.Count,
             MeasuredStrings = budgets.Count(b => b.Status == BudgetStatus.Measured),
             NoDeclaredLimitStrings = budgets.Count(b => b.Status == BudgetStatus.NoDeclaredLimit),
@@ -263,6 +273,30 @@ public sealed class BudgetAnalyzer
     {
         var m = TextMeasure.Measure(LatinSample, chain, size);
         return m.MissingGlyphs > LatinSample.Length / 2 ? 0 : m.WidthPx / LatinSample.Length;
+    }
+
+    /// <summary>把原因收斂成少數幾類，否則每個位置一條訊息、統計沒有意義。</summary>
+    private static string NormalizeReason(string reason)
+    {
+        if (reason.Contains("not statically knowable", StringComparison.Ordinal)) return "Auto column: a child's width is unknown";
+        if (reason.Contains("spanning child", StringComparison.Ordinal)) return "Auto column: a spanning child contributes";
+        if (reason.Contains("SharedSizeGroup", StringComparison.Ordinal)) return "SharedSizeGroup column";
+        if (reason.Contains("own width is", StringComparison.Ordinal)) return "the grid's own width is not resolvable";
+        if (reason.Contains("cannot read", StringComparison.Ordinal)) return "column width this tool cannot read";
+        if (reason.Contains("too deep", StringComparison.Ordinal)) return "layout nesting too deep";
+        // 保留控制項名稱：使用者要知道卡的是 ComboBox 還是別的，才能判斷值不值得改
+        if (reason.Contains("chrome of", StringComparison.Ordinal))
+        {
+            var lt = reason.IndexOf('<');
+            var gt = reason.IndexOf('>');
+            return lt >= 0 && gt > lt
+                ? $"control chrome is unknown: {reason[(lt + 1)..gt]}"
+                : "control chrome is unknown";
+        }
+        if (reason.Contains("SizeToContent", StringComparison.Ordinal)) return "SizeToContent window";
+        if (reason.Contains("ItemsControl", StringComparison.Ordinal)) return "inside an ItemsControl";
+        if (reason.Contains("insets exceed", StringComparison.Ordinal)) return "insets exceed the bound";
+        return reason;
     }
 
     /// <summary>字串裡有沒有任何「文字」。箭頭、圖示字型的私有區字元、純數字都沒有。

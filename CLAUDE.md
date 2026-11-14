@@ -78,6 +78,10 @@ chrome 偏小 → 可用寬度偏大 → **漏報溢出**。
 | 13 | check 模式**不報解析錯誤** | 一個壞掉的 XAML 靜默消失 | 示範專案（XML 註解裡放了連續兩個減號） |
 | 14 | 度量檔用 `JsonSerializer` 的 `WriteIndented` | Segoe UI 一支字型就 **2.1 MB**；改成手寫序列化後 494 KB。這個檔案要進使用者的 repo | M1 |
 | 15 | 文化標籤只檢查「全是字母」 | `My.App.Strings.resx` 的 `Strings` 被當成文化 | 單元測試 |
+| 17 | **未顯示的 `Window` 的版面不會傳遞** | GridOracle 第一版把案例包在 Window 裡，WPF 側全部回 0。直接量根元素 | Grid 驗收 |
+| 18 | **程式碼 new 出來的控制項沒有視覺樹** | `VisualTreeHelper` 看到 0 個子元素，範本沒展開。要用 `XamlReader` 建樹 | ChromeGen |
+| 19 | **深度優先找「內容宿主」會找錯** | TextBox 的樹是 border(300) → PART_ContentHost(298) → TextBoxView(294)；先撞到 298 算出 chrome=2，正確是 6。要分層找 | ChromeGen |
+| 20 | **M0 的「解 Grid 會推到 97.5%」是錯的** | 實測兩個專案完全沒改善（多數 Auto 欄裝綁資料的文字）；自家專案改善 25 個百分點，公開專案 0~5 —— 又一次取樣偏誤 | Grid 驗收 |
 | 16 | **`{DynamicResource}` 式在地化沒支援** | ScreenToGif 把 UI 字串放在 ResourceDictionary 裡，整批被當成「綁資料」跳過：M0 算 1,052 個位置，引擎只認 192 個 | 公開語料穩定性實跑 |
 
 ### 環境層級的坑
@@ -98,13 +102,15 @@ chrome 偏小 → 可用寬度偏大 → **漏報溢出**。
 dotnet test XamlFit.slnx -c Release          # 100 個單元測試
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
+dotnet run --project prototype/GridOracle    # Grid 欄寬 vs WPF 真實版面（Windows）
 ```
 
-`prototype/` 底下三個是**拋棄式**工具，不要從裡面複製程式碼：
+`prototype/` 底下五個是**拋棄式**工具，不要從裡面複製程式碼：
 
 - `M0Survey` —— 可量測比例調查（已修過五個 bug，結論在 `docs/`）
 - `WpfOracle` —— 拿 WPF 的 `FormattedText` 當真值驗量測（Windows only）
 - `ChromeGen` —— 量控制項內距表（Windows only）
 - `DemoMetrics` —— 產生示範用的合成字型度量（跨平台）
+- `GridOracle` —— 拿 WPF 真實版面驗 Grid 欄寬求解（Windows only，14/14 吻合）
 
 `ChromeGen` 與 `DemoMetrics` 的產出要 commit；另外兩個只產生文件。

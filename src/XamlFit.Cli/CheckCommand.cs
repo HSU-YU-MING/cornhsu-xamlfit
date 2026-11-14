@@ -31,7 +31,7 @@ internal static class CheckCommand
         {
             DefaultFontFamily = opts.DefaultFont,
             DefaultFontSize = opts.DefaultSize,
-        });
+        }, fonts);
 
         var scan = scanner.Scan(opts.Root);
         var budget = new BudgetAnalyzer(fonts, opts.DefaultFont).Analyze(scan, chrome.Theme);

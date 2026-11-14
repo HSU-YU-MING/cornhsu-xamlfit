@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 using XamlFit.Core.Fonts;
+using XamlFit.Core.Fonts;
 using XamlFit.Core.Layout;
 
 namespace XamlFit.Core.Xaml;
@@ -30,10 +31,15 @@ public sealed partial class XamlScanner
     private WidthResolver _width = null!;
     private StyleIndex _styles = new();
 
-    public XamlScanner(ChromeTable chrome, ScanOptions? options = null)
+    private readonly FontResolver? _fonts;
+
+    /// <param name="fonts">給得出字型度量時，Grid 的 Auto 欄就解得開（要量子元素的文字寬度）。
+    /// 傳 null 的話那些位置退回 NeedsGrid。</param>
+    public XamlScanner(ChromeTable chrome, ScanOptions? options = null, FontResolver? fonts = null)
     {
         _chrome = chrome;
         _options = options ?? new ScanOptions();
+        _fonts = fonts;
     }
 
     public StyleIndex Styles => _styles;
@@ -82,7 +88,10 @@ public sealed partial class XamlScanner
             catch (Exception) { /* 第二趟會記成 parse error */ }
         }
 
-        _width = new WidthResolver(_chrome, _styles);
+        var measurer = _fonts is null
+            ? null
+            : new ElementMeasurer(_fonts, _styles, _chrome, _options.DefaultFontFamily, _options.DefaultFontSize);
+        _width = new WidthResolver(_chrome, _styles, measurer);
 
         foreach (var file in EnumerateXaml(root))
         {

@@ -50,9 +50,23 @@ MaterialDesignInXamlToolkit, wpfui, ILSpy, HandyControl, MahApps.Metro and WinUI
 | **of those, XamlFit computes a number for** | **75.9%** | **85.0%** |
 | no declared width bound anywhere | 54.3% | 61.9% |
 
-Per project the number ranges from **34.8%** (ScreenToGif, heavy `Auto`/`*` Grid use) to
-**100%** (wpfui, ILSpy, WinUI-Gallery). Solving `Auto`/`*` Grid columns is the single biggest
-remaining gap and the top item on the roadmap — it would take the figure to about 97%.
+Those figures are from the pre-implementation survey. What the finished engine actually
+resolves, per project — of the sites that *should* yield a number:
+
+| project | resolution |
+|---|---|
+| HandyControl | 97.3% |
+| QuillNest (maintainer) | 87.2% |
+| MahApps.Metro | 77.0% |
+| WinUI-Gallery | 67.4% |
+| Playnite | 51.8% |
+| ScreenToGif | 39.0% |
+
+Every run prints a breakdown of **why** the remaining sites are blocked, so you can see what
+would have to change. Across the public corpus the answer is overwhelmingly one thing:
+text inside a `ComboBox`, whose chrome this tool cannot measure and refuses to guess
+(101 sites in WinUI-Gallery, 72 in ScreenToGif, 27 in Playnite). `Auto`/`*` Grid columns are
+solved and verified against WPF's own layout; they now account for only 2–12 sites per project.
 
 Every run prints its own `resolution` figure, and `check` exits **3** when it falls below
 `--min-coverage`. The tool never says "looks fine" while only seeing a third of your UI.
@@ -167,9 +181,9 @@ a guess should not block someone's pull request.
 
 | | effect | handling |
 |---|---|---|
-| `Auto` / `*` Grid columns | 21.6% of at-risk sites | `blocked`, counted; roadmap item 1 |
+| `ComboBox` chrome | **the single biggest remaining gap** — 200 sites across three public projects | `unmeasurable`, counted and named in the blocked breakdown; roadmap item 1 |
+| `Auto` / `*` Grid columns | solved, verified against WPF layout (14/14 exact). 2–12 sites per project still blocked because an Auto column holds data-bound text or a custom control | `blocked`, counted |
 | `ControlTemplate` / `DataTemplate` contents | width comes from the consumer | `not-analysed` |
-| `ComboBox`, `TextBox` chrome | content width does not propagate, so the chrome is unknown | sites inside are `unmeasurable` — **never** estimated from padding alone, which would under-count chrome and miss overflows |
 | no kerning or shaping | ≤ 1.43% over-estimate | safety margin; never under-estimates |
 | Arabic, Indic, Thai | advance widths do not sum | `unmeasurable`, not guessed |
 | `TextFormattingMode="Display"` | slight width difference | measured as `Ideal` (the WPF default), noted in the report |

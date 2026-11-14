@@ -27,6 +27,7 @@ internal static class Program
     private static int Main(string[] args)
     {
         var outPath = args.Length > 0 ? args[0] : "control-chrome.json";
+        if (args.Contains("--diag")) { Diag.Dump(); return 0; }
 
         // (名稱, 產生器, 內容放在哪個屬性)
         (string Name, Func<FrameworkElement> Make, Action<FrameworkElement, UIElement> SetContent)[] specs =
@@ -74,6 +75,17 @@ internal static class Program
                 if (Math.Abs(slope - 1.0) < 0.001)
                 {
                     chrome = d1 - ProbeWidth;
+                }
+                else if (ContentHostChrome(name) is { } viaTree)
+                {
+                    // 第二種量法：給控制項固定寬度、排版之後走視覺樹找到**內容宿主**
+                    //（ContentPresenter 或 PART_ContentHost），相減就是 chrome。
+                    //
+                    // 為什麼需要它：ComboBox／TextBox 不把內容寬度往外傳，所以兩點量法失敗。
+                    // 而它們是真實專案裡最大的卡點 —— 實測 WinUI-Gallery 有 101 個文字位置
+                    // 因為「chrome 未知」而放棄，Playnite 有 27 個。
+                    chrome = viaTree;
+                    note = "measured via the templated content host (content width does not propagate)";
                 }
                 else
                 {
@@ -152,6 +164,99 @@ internal static class Program
         if (control is Control c) c.ApplyTemplate();
         control.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         return control.DesiredSize.Width;
+    }
+
+    /// <summary>
+    /// 第二種量法：給控制項一個固定寬度、跑完 Measure/Arrange，然後在視覺樹裡找
+    /// 內容宿主（<c>ContentPresenter</c>、<c>PART_ContentHost</c>、<c>TextBoxView</c>），
+    /// 用「控制項寬度 − 內容寬度」當 chrome。
+    ///
+    /// 給 ComboBox／TextBox 這種「內容寬度不往外傳」的控制項用。
+    /// </summary>
+    private static double? ContentHostChrome(string controlName)
+    {
+        const double Fixed = 300.0;
+        const string Ns = "xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"";
+
+        // ⚠ 一定要用 XamlReader 建樹。對程式碼 new 出來的控制項做 Measure/Arrange，
+        //   VisualTreeHelper 看到的子元素數是 0 —— 範本沒有展開，走不到內容宿主。
+        //   （第一版就是這樣，三個控制項全部回 null。）
+        var inner = controlName switch
+        {
+            // ComboBox 要有一個「會拉伸」的選取項目，contentPresenter 才會被排到實際可用寬度
+            // ⚠ ComboBox 的 ContentPresenter 在內容為空時會排成 0 寬，量不到可用區域。
+            //   給它一個「超寬」的內容，presenter 就會被裁到實際可用寬度。
+            "ComboBox" => $"<ComboBox {Ns} Width=\"{Fixed}\" Height=\"40\" SelectedIndex=\"0\">" +
+                          "<ComboBoxItem><Border Width=\"10000\"/></ComboBoxItem></ComboBox>",
+            _ => $"<{controlName} {Ns} Width=\"{Fixed}\" Height=\"40\"/>",
+        };
+
+        try
+        {
+            var root = (FrameworkElement)XamlReader.Parse($"<Grid {Ns}>{inner}</Grid>");
+            root.Measure(new Size(Fixed * 2, 100));
+            root.Arrange(new Rect(0, 0, Fixed * 2, 100));
+            root.UpdateLayout();
+
+            var control = (FrameworkElement)System.Windows.Media.VisualTreeHelper.GetChild(root, 0);
+            var host = FindContentHost(control);
+            if (host is null || host.ActualWidth <= 0) return null;
+
+            var chrome = control.ActualWidth - host.ActualWidth;
+            // 合理範圍的防線：負數或大得離譜都代表找錯元素
+            return chrome is >= 0 and < 200 ? Math.Round(chrome, 3) : null;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// 找內容宿主。⚠ **要分層找，不能一趟深度優先走完。**
+    /// TextBox 的樹是 border(300) → PART_ContentHost(298) → … → TextBoxView(294)；
+    /// 深度優先會先撞到 PART_ContentHost，算出 chrome=2，但真正畫文字的是 TextBoxView，
+    /// 正確答案是 6。
+    /// </summary>
+    private static FrameworkElement? FindContentHost(DependencyObject root)
+    {
+        // 第一層偏好：真正畫文字的那一層
+        if (Search(root, fe => fe.GetType().Name == "TextBoxView") is { } tbv) return tbv;
+        // 第二層：範本宣告的內容宿主
+        if (Search(root, fe => fe.Name is "PART_ContentHost" or "ContentSite") is { } part) return part;
+        // 第三層：一般的 ContentPresenter
+        return Search(root, fe => fe is ContentPresenter && fe.ActualWidth > 0);
+    }
+
+    private static FrameworkElement? Search(DependencyObject root, Func<FrameworkElement, bool> match)
+    {
+        var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is FrameworkElement fe && match(fe)) return fe;
+            if (Search(child, match) is { } found) return found;
+        }
+        return null;
+    }
+
+    private static FrameworkElement? FindContentHostUnused(DependencyObject root)
+    {
+        var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+
+            if (child is FrameworkElement fe)
+            {
+                // TextBox 的內容宿主是 PART_ContentHost；ComboBox 的選取區是 ContentPresenter
+                // TextBoxView 是真正畫文字的那一層，優先；再退到 PART_ContentHost；最後是 ContentPresenter
+                if (fe.GetType().Name == "TextBoxView") return fe;
+                if (fe.Name is "PART_ContentHost" or "ContentSite") return fe;
+                if (fe is ContentPresenter && fe.ActualWidth > 0) return fe;
+            }
+
+            var found = FindContentHost(child);
+            if (found is not null) return found;
+        }
+        return null;
     }
 
     private static string DetectTheme()

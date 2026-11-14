@@ -25,11 +25,15 @@ public sealed class WidthResolver
 {
     private readonly ChromeTable _chrome;
     private readonly StyleIndex _styles;
+    private readonly IElementMeasurer? _measurer;
 
-    public WidthResolver(ChromeTable chrome, StyleIndex? styles = null)
+    /// <param name="measurer">給得出元素期望寬度時，Grid 的 <c>Auto</c>／<c>*</c> 欄就解得開
+    /// （M0 實測那佔「有裁切風險」位置的 21.6%）。傳 null 就退回原本的 <c>NeedsGrid</c>。</param>
+    public WidthResolver(ChromeTable chrome, StyleIndex? styles = null, IElementMeasurer? measurer = null)
     {
         _chrome = chrome;
         _styles = styles ?? new StyleIndex();
+        _measurer = measurer;
     }
 
     /// <summary>屬性的生效值：本地屬性優先，沒有就查樣式。
@@ -57,8 +61,14 @@ public sealed class WidthResolver
         "ItemsControl", "ListBox", "ListView", "DataGrid", "TreeView",
     };
 
-    public AvailableWidth Resolve(XElement site)
+    public AvailableWidth Resolve(XElement site) => Resolve(site, 0);
+
+    /// <param name="depth">解巢狀 Grid 時會再呼叫自己（Grid 裡的 Grid），這是遞迴深度上限。</param>
+    private AvailableWidth Resolve(XElement site, int depth)
     {
+        if (depth > 6)
+            return AvailableWidth.NotKnown(WidthStatus.Unmeasurable, "layout nesting is too deep to resolve");
+
         var siteName = site.Name.LocalName;
 
         // 規則 1：位置自己是樣板化控制項（<Button Content="Save"/>）
@@ -75,6 +85,7 @@ public sealed class WidthResolver
         var deductions = 0.0;
         var usedChrome = siteKnown && siteChrome!.Value > 0;
         var gridFlexible = false;
+        var gridReason = "Auto/* Grid column in the chain";
         var inItems = false;
 
         XElement? cur = site;
@@ -116,7 +127,7 @@ public sealed class WidthResolver
                     return AvailableWidth.NotKnown(WidthStatus.Unmeasurable,
                         $"insets ({total:F1}) exceed the bound ({bound:F1}) on <{local}>");
 
-                if (gridFlexible) return AvailableWidth.NotKnown(WidthStatus.NeedsGrid, "Auto/* Grid column in the chain");
+                if (gridFlexible) return AvailableWidth.NotKnown(WidthStatus.NeedsGrid, gridReason);
                 if (inItems) return AvailableWidth.NotKnown(WidthStatus.NeedsItems, "ItemsControl in the chain");
 
                 return new AvailableWidth(
@@ -163,13 +174,48 @@ public sealed class WidthResolver
                         WidthStatus.Known, px, $"fixed Grid column ({why})", LineOf(parent), usedChrome,
                         $"minus {deductions:F1} DIP of insets{(usedChrome ? " and control chrome" : "")}");
                 }
-                if (state == GridState.Flexible) gridFlexible = true;
+                if (state == GridState.Flexible)
+                {
+                    // Auto／星號欄：試著真的解開它（M0：佔有風險位置的 21.6%）
+                    var solved = TrySolveGrid(parent, cur, depth);
+                    if (solved.Width is { } solvedWidth)
+                    {
+                        var px = solvedWidth - deductions;
+                        if (px <= 0)
+                            return AvailableWidth.NotKnown(WidthStatus.Unmeasurable,
+                                "insets exceed the solved Grid column width");
+                        if (inItems) return AvailableWidth.NotKnown(WidthStatus.NeedsItems, "ItemsControl in the chain");
+
+                        return new AvailableWidth(
+                            WidthStatus.Known, px, $"solved Grid {solved.Reason}", LineOf(parent), usedChrome,
+                            $"minus {deductions:F1} DIP of insets{(usedChrome ? " and control chrome" : "")}");
+                    }
+
+                    gridFlexible = true;
+                    gridReason = solved.Reason;
+                }
             }
 
             cur = parent;
         }
 
         return AvailableWidth.NotKnown(WidthStatus.NoDeclaredLimit, "no width bound found up to the root");
+    }
+
+    /// <summary>試著解開 Grid 的 Auto/星號欄。先把 Grid 自己的可用寬度解出來（可能又是一層 Grid），
+    /// 再跑 WPF 的欄寬演算法。任何一步算不出來就回 null，讓呼叫端退回 NeedsGrid。</summary>
+    private GridSolveResult TrySolveGrid(XElement grid, XElement child, int depth)
+    {
+        if (_measurer is null) return new GridSolveResult(null, "Auto/* Grid column (no measurer available)");
+
+        var own = Resolve(grid, depth + 1);
+        if (own.Status != WidthStatus.Known)
+            return new GridSolveResult(null, $"Auto/* Grid column whose own width is {own.Status}");
+
+        var result = new GridSolver(_measurer, _styles).Solve(grid, child, own.Px, depth);
+        return result.Width is null
+            ? new GridSolveResult(null, $"Auto/* Grid column: {result.Reason}")
+            : result;
     }
 
     private static bool IsGrid(string name) =>
