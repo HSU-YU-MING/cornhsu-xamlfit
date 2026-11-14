@@ -16,7 +16,12 @@ xamlfit check  ./src --resx ./Resources   # after translation: fail CI on real o
 ```
 
 > Requires the **.NET 10 runtime**. The analysis is pure arithmetic over XML and font tables —
-> no WPF, no native dependencies, runs on Linux CI.
+> no WPF and no native dependencies: `dotnet publish -r linux-x64` produces a clean build with
+> zero Windows-only assemblies.
+>
+> ⚠ It has **not yet been executed on Linux** — the CI workflow that would prove it has never
+> run, because the repository is not published. Treat cross-platform support as well-founded
+> but unproven until then. See `docs/M5b-跨平台與CI驗證.md`.
 
 ---
 

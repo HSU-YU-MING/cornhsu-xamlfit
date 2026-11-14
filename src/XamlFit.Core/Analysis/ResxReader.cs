@@ -19,13 +19,10 @@ public static class ResxReader
         var result = new List<CultureStrings>();
         if (!Directory.Exists(dir)) return result;
 
-        foreach (var file in Directory.EnumerateFiles(dir, "*.resx", SearchOption.AllDirectories))
+        // ⚠ 排除規則比對的是「相對於 dir 的路徑」，副檔名不分大小寫 ——
+        //   理由見 XamlScanner.EnumerateFiltered 的檔頭，兩個 bug 這裡原本也有。
+        foreach (var file in Xaml.XamlScanner.EnumerateFiltered(dir, ".resx", []))
         {
-            var p = file.Replace('\\', '/');
-            if (p.Contains("/bin/", StringComparison.OrdinalIgnoreCase)) continue;
-            if (p.Contains("/obj/", StringComparison.OrdinalIgnoreCase)) continue;
-            if (p.Contains("/.", StringComparison.Ordinal)) continue;
-
             var one = ReadFile(file);
             if (one is not null) result.Add(one);
         }

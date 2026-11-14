@@ -37,12 +37,24 @@ runs:
   using: composite
   steps:
     - shell: bash
+      # ⚠ 輸入一律走 env:，不要用 ${{ inputs.x }} 直接插進 run: 的腳本裡。
+      #   那是文字替換 —— 帶引號或 $(…) 的輸入會變成可執行的程式碼（腳本注入）。
+      #   GitHub 自己的文件就是這樣要求的。
+      env:
+        XF_ROOT: ${{ inputs.root }}
+        XF_RESX: ${{ inputs.resx }}
+        XF_PSEUDO: ${{ inputs.pseudo }}
+        XF_METRICS: ${{ inputs.metrics }}
+        XF_BASELINE: ${{ inputs.baseline }}
+        XF_FAIL_ON: ${{ inputs.fail-on }}
+        XF_MIN_COVERAGE: ${{ inputs.min-coverage }}
+        XF_JSON: ${{ inputs.json }}
       run: |
         dotnet tool install -g Cornhsu.XamlFit
-        args=(check "${{ inputs.root }}" --fail-on "${{ inputs.fail-on }}" --min-coverage "${{ inputs.min-coverage }}")
-        [ -n "${{ inputs.resx }}" ]     && args+=(--resx "${{ inputs.resx }}")
-        [ "${{ inputs.pseudo }}" = "true" ] && args+=(--pseudo)
-        [ -n "${{ inputs.metrics }}" ]  && args+=(--metrics "${{ inputs.metrics }}")
-        [ -n "${{ inputs.baseline }}" ] && args+=(--baseline "${{ inputs.baseline }}")
-        [ -n "${{ inputs.json }}" ]     && args+=(--json "${{ inputs.json }}")
+        args=(check "$XF_ROOT" --fail-on "$XF_FAIL_ON" --min-coverage "$XF_MIN_COVERAGE")
+        [ -n "$XF_RESX" ]     && args+=(--resx "$XF_RESX")
+        [ "$XF_PSEUDO" = "true" ] && args+=(--pseudo)
+        [ -n "$XF_METRICS" ]  && args+=(--metrics "$XF_METRICS")
+        [ -n "$XF_BASELINE" ] && args+=(--baseline "$XF_BASELINE")
+        [ -n "$XF_JSON" ]     && args+=(--json "$XF_JSON")
         xamlfit "${args[@]}"

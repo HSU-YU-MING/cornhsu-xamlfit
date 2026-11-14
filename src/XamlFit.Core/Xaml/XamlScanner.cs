@@ -114,22 +114,84 @@ public sealed partial class XamlScanner
     private static string Rel(string root, string file) =>
         Path.GetRelativePath(root, file).Replace('\\', '/');
 
-    /// <summary>預設排除。⚠ 點開頭的目錄一定要排除 ——
-    /// .claude/worktrees 裡是同一個專案的副本，不排除會重複計算好幾倍（M0 實查踩到）。</summary>
-    public IEnumerable<string> EnumerateXaml(string root)
+    /// <summary>
+    /// 預設排除。⚠ 點開頭的目錄一定要排除 ——
+    /// .claude/worktrees 裡是同一個專案的副本，不排除會重複計算好幾倍（M0 實查踩到）。
+    /// </summary>
+    public IEnumerable<string> EnumerateXaml(string root) =>
+        EnumerateFiltered(root, ".xaml", _options.ExcludeGlobs);
+
+    /// <summary>
+    /// 列舉指定副檔名的檔案，套用預設排除。
+    ///
+    /// ⚠ 兩個都是真的踩過才知道的：
+    ///
+    /// 1. **比對的是「相對於 root 的路徑」，不是完整路徑。**
+    ///    用完整路徑比對時，只要掃描根目錄本身位在點開頭的資料夾底下
+    ///    （`C:\Users\x\.config\app`、`/home\/u\/.local\/src`），或路徑裡剛好有個叫
+    ///    `bin` 的目錄（`D:\bin\myproject`），**所有檔案都會被排除** ——
+    ///    然後吐 exit 3 說「找不到任何文字位置」，完全不解釋為什麼。
+    ///
+    /// 2. **副檔名用不分大小寫比對，不用 `*.xaml` 這種萬用字元。**
+    ///    `Directory.EnumerateFiles(root, "*.xaml")` 在 Windows 會配到 `.XAML`，
+    ///    在 Linux 不會（檔案系統區分大小寫）。
+    ///    結果是同一個專案在 CI 上掃到的檔案比本機少，而且是**靜默的** ——
+    ///    CI 看起來比本機乾淨，那正是謊報健康。
+    /// </summary>
+    internal static IEnumerable<string> EnumerateFiltered(
+        string root, string extension, IReadOnlyList<string> excludeGlobs)
     {
-        foreach (var f in Directory.EnumerateFiles(root, "*.xaml", SearchOption.AllDirectories))
+        // ⚠ 目錄剪枝，不要「列舉全部再過濾」。被排除的目錄根本不進去 ——
+        //   一個帶 node_modules 的 repo 可能有十幾萬個檔案，而我們要找的只有幾十個 XAML。
+        var stack = new Stack<string>();
+        stack.Push(root);
+
+        while (stack.Count > 0)
         {
-            var p = f.Replace('\\', '/');
-            if (p.Contains("/bin/", StringComparison.OrdinalIgnoreCase)) continue;
-            if (p.Contains("/obj/", StringComparison.OrdinalIgnoreCase)) continue;
-            if (p.Contains("/.", StringComparison.Ordinal)) continue;
-            if (p.Contains("/node_modules/", StringComparison.OrdinalIgnoreCase)) continue;
-            if (p.Contains("/packages/", StringComparison.OrdinalIgnoreCase)) continue;
-            if (_options.ExcludeGlobs.Any(g => p.Contains(g, StringComparison.OrdinalIgnoreCase))) continue;
-            yield return f;
+            var dir = stack.Pop();
+
+            string[] subdirs;
+            string[] files;
+            try
+            {
+                subdirs = Directory.GetDirectories(dir);
+                files = Directory.GetFiles(dir);
+            }
+            catch (UnauthorizedAccessException) { continue; }   // 權限不足的目錄跳過，不要整個掃描失敗
+            catch (DirectoryNotFoundException) { continue; }
+            catch (PathTooLongException) { continue; }
+
+            foreach (var f in files)
+            {
+                if (!f.EndsWith(extension, StringComparison.OrdinalIgnoreCase)) continue;
+                var rel = "/" + Path.GetRelativePath(root, f).Replace('\\', '/');
+                if (excludeGlobs.Any(g => rel.Contains(g, StringComparison.OrdinalIgnoreCase))) continue;
+                yield return f;
+            }
+
+            foreach (var sub in subdirs)
+            {
+                var name = Path.GetFileName(sub);
+                if (IsExcludedDirectory(name)) continue;
+                stack.Push(sub);
+            }
         }
     }
+
+    /// <summary>
+    /// 要跳過的目錄名。⚠ 比對的是**目錄名**而不是完整路徑 ——
+    /// 用完整路徑比對時，只要掃描根目錄本身位在點開頭的資料夾底下
+    /// （<c>C:\Users\x\.config\app</c>、<c>/home/u/.local/src</c>），或路徑裡剛好有個叫
+    /// <c>bin</c> 的目錄（<c>D:\bin\myproject</c>），**所有檔案都會被排除**，
+    /// 然後吐 exit 3 說「找不到任何文字位置」而不解釋為什麼。
+    /// </summary>
+    private static bool IsExcludedDirectory(string name) =>
+        // .claude/worktrees 裡是同一個專案的副本，不排除會重複計算好幾倍（M0 實查踩到）
+        name.StartsWith('.')
+        || name.Equals("bin", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("obj", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("node_modules", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("packages", StringComparison.OrdinalIgnoreCase);
 
     private TextSite? TrySite(XElement el, string file)
     {
