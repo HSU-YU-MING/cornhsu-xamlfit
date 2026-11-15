@@ -127,7 +127,7 @@ public static class BudgetReport
                 blockedReasons = b.BlockedReasons.Select(r => new { reason = r.Reason, sites = r.Count }),
                 undeclaredChrome = b.UndeclaredChrome.Select(c => new { element = c.Element, sites = c.Sites }),
                 foreignFiles = b.ForeignFiles.GroupBy(f => f.Dialect).Select(g => new { dialect = g.Key, files = g.Count() }),
-                externalThemes = b.ExternalThemes.Select(t => new { theme = t.Theme, declaredIn = t.DeclaredIn, scope = t.Scope.Length == 0 ? "(everything scanned)" : t.Scope }),
+                externalThemes = b.ExternalThemes.Select(t => new { theme = t.Theme, declaredIn = t.DeclaredIn, scope = t.Scope.Length == 0 ? "(everything scanned)" : t.Scope, measured = t.Profile, note = t.Profile is null ? t.ProfileNote : null }),
                 resolution = Math.Round(s.Resolution, 1),
                 coverage = Math.Round(s.Coverage, 1),
                 strings = s.Strings,

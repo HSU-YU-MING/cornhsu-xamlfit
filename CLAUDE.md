@@ -169,6 +169,10 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 85 | **形狀的寬度要用「整串總寬 − 延長線」算，不能照字形歸屬分** | Segoe UI 的 ۓ 在字尾時會換掉**前一個**字的字形，寬度落到別的字頭上 → 少 6 px | WpfOracle --scripts（逐字母） |
 | 86 | **元素語言是阿拉伯文時，0–9 會換成阿拉伯—印度數字** | 連純數字的字串也換；前面最近的字母是拉丁字母的不換（「8x8」只換第一個）。Tahoma 的比較寬（1171 vs 1118）、Segoe UI 的比較窄 → 兩種都量取寬的 | WpfOracle --scripts |
 | 87 | **阿拉伯文的附加符號寬度是 0** | Tahoma 的 U+0654 在 hmtx 有寬度，WPF 量出來是 0 | WpfOracle --scripts |
+| 89 | **佈景樣式的 TargetType 常是基底型別** | MahApps.Styles.Button 是 ButtonBase：只比對 TargetType == 控制項會漏掉主要的樣式。量在第一個適用的具體控制項上，記下量在哪個，只套在同一種控制項 | ThemeChrome |
+| 90 | **量佈景樣式設了什麼要看值的來源** | 沒設的屬性量到的是這台機器的系統字型（Microsoft JhengHei UI）；MaterialDesign 的 PasswordBox 甚至把 FontFamily 設成系統字型。只記 BaseValueSource 是 Style 的，而且等於系統字型的不記 | ThemeChrome |
+| 91 | **捲軸要放進真的視窗才量得到寬度** | 單獨 Measure 一個 ScrollBar 得到 0。MahApps 的捲軸 14（固定）、MaterialDesign 的等於系統寬（跟著縮放 → 用 17.5 上限） | ThemeChrome |
+| 92 | **同一個範圍裡有沒量過的佈景，量過的也不能用** | 不知道另一個佈景改了哪些控制項。NETworkManager 的 Dragablz 其實是 git submodule —— 抓下來之後它是專案自己的 XAML（只有 keyed 樣式與它自己的控制項），佈景就只剩 MahApps | 語料（NETworkManager） |
 | 88 | **成對的表蓋不住跨三個字以上的上下文規則** | Segoe UI 的 ے 依前面兩個字換長度（另存三字改變量）；Segoe UI 的點避讓字距、Calibri 6.27 的大量 calt 跨更遠。匯出時用 2 萬個隨機字自我檢查，拼窄的字母移出驗證清單（Segoe UI 13 個少用字母），剩不到一半整支不寫（Calibri） | 匯出自我檢查 |
 
 ### 環境層級的坑
@@ -186,7 +190,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 631 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 644 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 42 條 CLI 路徑的退出碼
@@ -197,7 +201,7 @@ dotnet run -c Release --project prototype/LayoutOracle   # 228 案 vs 真的 WPF
 `xamlfit check <root> --source-only`。寫死的文字理應都裝得下 —— 報出溢出就先懷疑工具。
 M6 裡它兩次不是零，兩次都是工具錯。
 
-`prototype/` 底下八個是**拋棄式**工具，不要從裡面複製程式碼：
+`prototype/` 底下九個是**拋棄式**工具，不要從裡面複製程式碼：
 
 - `LayoutOracle` —— **版面語意的真值**：同一段 XAML 給真的 WPF 視窗（顯示在螢幕外）與解析器，逐案比對。
   `-- --defaults` 印佈景預設的 Padding／Border，`-- --text` 印快速鍵、模擬粗體、Display 模式的實測，
@@ -206,6 +210,8 @@ M6 裡它兩次不是零，兩次都是工具錯。
 - `CorpusRender` —— **真實專案的真值**：把專案的 XAML 連同它的 `App.xaml` 合併字典、來源與各語言字串載進真的 WPF，
   量每段文字需要多寬、看得見多寬，輸出 CSV。輸入是一份 JSON 規格（`root`、`app`、`source`、`cultures`、`window`、
   `lines`、`replace`、`output`）；跟工具的判斷逐筆比對的腳本不在 repo 裡（它要語料）。畫不出下拉選單的內容與資料範本（Windows only）
+- `ThemeChrome` —— 量控制項函式庫的佈景：`themechrome mahapps|md2|md3 out.json`，再用 `node prototype/ThemeChrome/combine.js <輸出目錄> data/theme-chrome.json`
+  合成（之後複製到 `src/XamlFit.Core/`）。套件版本寫在它的 csproj；換版本要重量。LayoutOracle `-- --theme mahapps|md2|md3`（可加 `--check`）拿真的視窗驗（Windows only）
 - `DpiProbe` —— 各縮放比例下的視窗邊框與捲軸寬度（`AdjustWindowRectExForDpi`、`GetSystemMetricsForDpi`）。
   內距表裡的 16／20／17.5 就是從這裡確認的（Windows only）
 

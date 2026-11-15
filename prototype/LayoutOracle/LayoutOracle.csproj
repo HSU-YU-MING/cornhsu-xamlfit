@@ -11,5 +11,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/XamlFit.Core/XamlFit.Core.csproj" />
+    <!-- theme 模式：跟 prototype/ThemeChrome 量的同一個版本 -->
+    <PackageReference Include="MahApps.Metro" Version="2.4.11" />
+    <PackageReference Include="MaterialDesignThemes" Version="5.3.0" />
   </ItemGroup>
 </Project>

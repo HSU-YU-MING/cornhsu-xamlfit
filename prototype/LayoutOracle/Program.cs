@@ -322,6 +322,14 @@ internal static class Program
         }
 
         var cases = BuildCases();
+        if (args.Length > 1 && args[0] == "--theme")
+        {
+            ThemeInUse = Themes.Load(app, args[1]);
+            cases = [.. Themes.Cases(args[1], Ns, Long).Select(c => new Case($"{args[1]} {c.Name}",
+                $"<Window {Ns} Width='{c.Width}' Height='300' WindowStyle='None' AllowsTransparency='True'>{c.Inner}</Window>",
+                c.Unknown ? Want.Blocked : Want.Bound))];
+            Console.WriteLine($"theme: {ThemeInUse.Id} {ThemeInUse.Version}");
+        }
         var fonts = LoadFonts();
         var chrome = ChromeTable.Builtin();
 
@@ -336,7 +344,7 @@ internal static class Program
         Console.WriteLine(new string('-', 100));
 
         int exact = 0, safe = 0, over = 0, wrong = 0;
-        var only = args.Length > 1 && args[0] == "--only" ? args[1] : null;
+        var only = args.Length > 1 && args[0] == "--only" ? args[1] : args.Length > 3 && args[2] == "--only" ? args[3] : null;
 
         foreach (var c in cases)
         {
@@ -410,15 +418,20 @@ internal static class Program
     /// <summary>--check：用檢查模式的排法（同一排只扣前面的兄弟），對應 WPF 實際看得見的寬度。</summary>
     private static bool CheckMode = Environment.GetCommandLineArgs().Contains("--check");
 
+    /// <summary>--theme：解析器也拿到同一份佈景量測。</summary>
+    private static ThemeProfile? ThemeInUse;
+
     private static string Short(string s) => s.Length <= 70 ? s : s[..69] + "…";
 
     private static AvailableWidth ResolveWithXamlFit(string xaml, ChromeTable chrome, FontResolver fonts)
     {
         var doc = XDocument.Parse(xaml, LoadOptions.PreserveWhitespace);   // 跟 XamlScanner 一樣保留空白（Run 之間的空格）
         doc.AddAnnotation(new SourceFile("oracle.xaml"));
+        if (ThemeInUse is { } theme) doc.AddAnnotation(new ExternalTheme(theme.Id, theme));
 
         var styles = new StyleIndex();
         styles.Add(doc, "oracle.xaml");
+        if (ThemeInUse is { } t) styles.ThemeOfFile = _ => t;
 
         var measurer = new ElementMeasurer(fonts, styles, chrome, DefaultFamily, 12);
         var resolver = new WidthResolver(chrome, styles, measurer) { Sharing = CheckMode ? RowSharing.Preceding : RowSharing.WholeRow };

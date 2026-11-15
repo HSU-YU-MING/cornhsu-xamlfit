@@ -14,6 +14,16 @@ default Aero2 theme's layout behaviour, not a copy of Microsoft's theme files.
 
 No Microsoft source code, theme XAML, or binaries are redistributed.
 
+### `data/theme-chrome.json`
+
+Horizontal chrome, fonts and text casing of standard WPF controls under MahApps.Metro 2.4.11 and
+MaterialDesignThemes 5.3.0, **measured on the maintainer's machine** by loading each theme into a WPF
+application and placing content of known width inside each control (see `prototype/ThemeChrome`).
+It holds numbers and the themes' public style keys (`MahApps.Styles.Button.Square`…), not their XAML.
+Both libraries are MIT licensed (MahApps.Metro: Copyright © .NET Foundation and Contributors;
+MaterialDesignThemes: Copyright James Willock/Mulholland Software Ltd, as stated in their NuGet packages); no part of them is
+redistributed.
+
 ### `data/font-fallback.json`
 
 The fallback table WPF applies to characters the requested font cannot draw, transcribed from

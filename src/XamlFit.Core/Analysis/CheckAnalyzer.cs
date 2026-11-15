@@ -383,7 +383,7 @@ public sealed class CheckAnalyzer
     {
         var limit = site.Width.Px;
         var wraps = Wraps(site);
-        var display = TextRules.Display(site.Element, text);
+        var display = TextRules.Cased(TextRules.Display(site.Element, text), site.Casing);
 
         double widest = 0, widestWord = 0;
         var lines = 0;

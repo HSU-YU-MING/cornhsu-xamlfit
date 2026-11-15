@@ -46,7 +46,19 @@ public sealed record ScanOptions
 public sealed record ForeignFile(string File, string Dialect);
 
 /// <summary>偵測到的外部佈景，以及它影響哪些檔案。</summary>
-public sealed record ThemeUse(string Theme, string DeclaredIn, string Scope);
+/// <param name="Profile">套用的量測資料（data/theme-chrome.json 的 id）；null 時 <paramref name="ProfileNote"/> 說為什麼沒套。</param>
+public sealed record ThemeUse(string Theme, string DeclaredIn, string Scope)
+{
+    /// <summary>pack URI（合併的是 ResourceDictionary 時）。</summary>
+    public string? Source { get; init; }
+    /// <summary>字典型別的 XML 命名空間（&lt;materialDesign:BundledTheme/&gt;）。</summary>
+    public string? Namespace { get; init; }
+    public string? Profile { get; set; }
+    public string? ProfileNote { get; set; }
+}
+
+/// <summary>一個合併進來的專案外字典：名稱（組件名或 前綴:型別）、pack URI、字典型別的命名空間。</summary>
+internal sealed record ThemeRef(string Name, string? Source, string? Namespace);
 
 public sealed record ScanResult(
     IReadOnlyList<TextSite> Sites,
@@ -171,7 +183,7 @@ public sealed partial class XamlScanner
         _styles = new StyleIndex { SystemScrollBarWidth = _chrome.ScrollBarWidth };
         var dialects = new string?[files.Count];           // null = WPF
         var marked = new bool[files.Count];
-        var themeDeclarations = new List<(int File, string Theme, bool AppWide)>();
+        var themeDeclarations = new List<(int File, ThemeRef Theme, bool AppWide)>();
         var appDirs = new List<string>();
         var stringTables = new List<(string Rel, string Culture, Dictionary<string, string> Values)>();
 
@@ -222,6 +234,9 @@ public sealed partial class XamlScanner
         _rels = rels;
         _dialects = dialects;
         _themes = ScopeThemes(themeDeclarations, rels, appDirs);
+        _profiles.Clear();
+        AssignProfiles(_themes, root);
+        _styles.ThemeOfFile = rel => ProfileFor(rel, _themes);
         _strings = strings;
     }
 
@@ -280,7 +295,7 @@ public sealed partial class XamlScanner
             ApplyAliases(doc);
             doc.AddAnnotation(new SourceFile(rels[i]));
             if (!_options.TrustDefaultChrome && ThemeFor(rels[i], themes) is { } themeName)
-                doc.AddAnnotation(new ExternalTheme(themeName));
+                doc.AddAnnotation(new ExternalTheme(themeName, ProfileFor(rels[i], themes)));
 
             foreach (var el in doc.Root.DescendantsAndSelf())
             {
@@ -533,7 +548,7 @@ public sealed partial class XamlScanner
     ///   （MaterialDesign 的 Button 內距是 32 不是 4），而且樣式定義在別的組件裡，我們看不到。
     ///   專案套了它們之後，內建的 Aero2 內距表對標準控制項不再成立。
     /// </summary>
-    private static IEnumerable<string> ExternalThemesIn(XElement root, List<string> scannedRels)
+    private static IEnumerable<ThemeRef> ExternalThemesIn(XElement root, List<string> scannedRels)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -542,10 +557,15 @@ public sealed partial class XamlScanner
             foreach (var entry in merged.Elements())
             {
                 string? name = null;
+                string? packUri = null;
 
                 if (entry.Name.LocalName == "ResourceDictionary" && ChromeTable.IsWpf(entry))
                 {
-                    if (entry.Attribute("Source")?.Value is { } source) name = ExternalAssemblyOf(source, scannedRels);
+                    if (entry.Attribute("Source")?.Value is { } source)
+                    {
+                        name = ExternalAssemblyOf(source, scannedRels);
+                        packUri = source;
+                    }
                 }
                 else
                 {
@@ -565,7 +585,9 @@ public sealed partial class XamlScanner
                     }
                 }
 
-                if (!string.IsNullOrEmpty(name) && seen.Add(name)) yield return name;
+                // 同一個組件合併好幾個字典時，每個都記（MaterialDesign 的 2／3 差在哪一個 Defaults 檔）
+                if (!string.IsNullOrEmpty(name) && seen.Add(name + "|" + packUri))
+                    yield return new ThemeRef(name, packUri, ChromeTable.IsWpfNamespace(entry.Name.NamespaceName) ? null : entry.Name.NamespaceName);
             }
         }
     }
@@ -595,11 +617,12 @@ public sealed partial class XamlScanner
     /// （找不到 App.xaml 就是整個掃描範圍）。寫在單一視窗／控制項自己的 Resources 裡的：只有那個檔案。
     /// </summary>
     private static List<ThemeUse> ScopeThemes(
-        List<(int File, string Theme, bool AppWide)> declarations, List<string> rels, List<string> appDirs)
+        List<(int File, ThemeRef Theme, bool AppWide)> declarations, List<string> rels, List<string> appDirs)
     {
         var result = new List<ThemeUse>();
-        foreach (var (file, theme, appWide) in declarations)
+        foreach (var (file, reference, appWide) in declarations)
         {
+            var theme = reference.Name;
             var declaredIn = rels[file];
             string scope;
 
@@ -611,10 +634,119 @@ public sealed partial class XamlScanner
                     if (declaredIn.StartsWith(dir, StringComparison.Ordinal) && dir.Length > scope.Length) scope = dir;
             }
 
-            if (!result.Any(t => t.Theme == theme && t.Scope == scope))
-                result.Add(new ThemeUse(theme, declaredIn, scope));
+            if (!result.Any(t => t.Theme == theme && t.Scope == scope && t.Source == reference.Source))
+                result.Add(new ThemeUse(theme, declaredIn, scope) { Source = reference.Source, Namespace = reference.Namespace });
         }
         return result;
+    }
+
+    private static bool Applies(ThemeUse t, string rel)
+    {
+        var isFileScope = t.Scope.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase);
+        return isFileScope ? t.Scope == rel : rel.StartsWith(t.Scope, StringComparison.Ordinal);
+    }
+
+    private readonly Dictionary<string, ThemeProfile?> _profiles = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 套在這個檔案上的佈景都屬於同一個量過的佈景、而且版本相符時，回傳那份量測；否則 null（不知道）。
+    /// ⚠ 範圍裡只要有一個沒量過的佈景（NETworkManager 的 Dragablz），就不知道它改了哪些控制項 —— 整個不用。
+    /// </summary>
+    private ThemeProfile? ProfileFor(string rel, List<ThemeUse> themes)
+    {
+        if (_profiles.TryGetValue(rel, out var cached)) return cached;
+        var uses = themes.Where(t => Applies(t, rel)).ToList();
+        ThemeProfile? result = null;
+        if (uses.Count > 0 && uses.All(u => u.Profile is not null) && uses.Select(u => u.Profile).Distinct().Count() == 1)
+            result = ThemeProfiles.Builtin().FirstOrDefault(p => p.Id == uses[0].Profile);
+        _profiles[rel] = result;
+        return result;
+    }
+
+    /// <summary>
+    /// 每個佈景用法對到哪份量測（同一個範圍裡的用法一起看：MaterialDesign 要合併了 2 或 3 的 Defaults 檔才知道是哪一份）。
+    /// 版本從專案檔讀（PackageReference、Directory.Packages.props、packages.config），major.minor 要跟量的一樣。
+    /// </summary>
+    private static void AssignProfiles(List<ThemeUse> themes, string root)
+    {
+        var versions = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> VersionsOf(string package) =>
+            versions.TryGetValue(package, out var v) ? v : versions[package] = PackageVersions(root, package);
+
+        foreach (var scope in themes.GroupBy(t => t.Scope))
+        {
+            foreach (var use in scope)
+            {
+                var candidates = ThemeProfiles.Builtin().Where(p => p.Covers(use.Theme, use.Namespace)).ToList();
+                if (candidates.Count == 0) { use.ProfileNote = "not measured"; continue; }
+
+                // 同一個範圍裡要合併了指定的字典（MaterialDesign2.Defaults.xaml／MaterialDesign3.Defaults.xaml）
+                candidates = candidates.Where(p => p.Requires is null || scope.Any(u =>
+                    u.Source?.EndsWith("/" + p.Requires, StringComparison.OrdinalIgnoreCase) == true)).ToList();
+                if (candidates.Count != 1)
+                {
+                    use.ProfileNote = candidates.Count == 0
+                        ? "measured only with " + string.Join(" or ", ThemeProfiles.Builtin().Where(p => p.Covers(use.Theme, use.Namespace)).Select(p => p.Requires ?? p.Id).Distinct()) + " merged"
+                        : "more than one measured variant could apply";
+                    continue;
+                }
+
+                var profile = candidates[0];
+                var found = VersionsOf(profile.Package);
+                if (found.Count == 0) { use.ProfileNote = $"no reference to the {profile.Package} package found in the project files; measured with {profile.Version}"; continue; }
+                if (found.Any(v => ThemeProfile.MajorMinorOf(v) != profile.MajorMinor))
+                {
+                    use.ProfileNote = $"the project references {profile.Package} {string.Join(", ", found.Order())}; measured with {profile.Version}";
+                    continue;
+                }
+                use.Profile = profile.Id;
+            }
+        }
+
+        // 同一個範圍裡有沒量過的佈景：那個範圍的量測都不用（不知道另一個佈景改了哪些控制項）
+        foreach (var scope in themes.GroupBy(t => t.Scope))
+            if (scope.FirstOrDefault(u => u.Profile is null) is { } other)
+                foreach (var use in scope.Where(u => u.Profile is not null))
+                {
+                    use.ProfileNote = $"measured, but not used: '{other.Theme}' in the same scope is not";
+                    use.Profile = null;
+                }
+    }
+
+    /// <summary>專案檔裡寫的某個套件的版本（PackageReference／PackageVersion 的 Version、packages.config 的 version）。</summary>
+    internal static HashSet<string> PackageVersions(string root, string package)
+    {
+        var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var files = new List<string>();
+        try
+        {
+            // 跟掃 XAML 一樣剪掉 bin、obj、node_modules、點開頭的目錄
+            foreach (var ext in (ReadOnlySpan<string>)[".csproj", ".vbproj", ".props", ".targets", ".config"])
+                files.AddRange(EnumerateFiltered(root, ext, [])
+                    .Where(f => ext != ".config" || Path.GetFileName(f).Equals("packages.config", StringComparison.OrdinalIgnoreCase)));
+            // 中央套件管理的檔案常在上層目錄
+            for (var dir = Directory.GetParent(Path.GetFullPath(root)); dir is not null && files.Count < 10_000; dir = dir.Parent)
+                foreach (var name in (ReadOnlySpan<string>)["Directory.Packages.props", "Directory.Build.props"])
+                    if (File.Exists(Path.Combine(dir.FullName, name))) files.Add(Path.Combine(dir.FullName, name));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+
+        foreach (var file in files.Distinct())
+        {
+            XDocument doc;
+            try { doc = SafeXml.Load(file); }
+            catch (Exception) { continue; }
+            foreach (var el in doc.Descendants())
+            {
+                var id = (string?)el.Attribute("Include") ?? (string?)el.Attribute("Update") ?? (string?)el.Attribute("id");
+                if (!string.Equals(id?.Trim(), package, StringComparison.OrdinalIgnoreCase)) continue;
+                var version = (string?)el.Attribute("Version") ?? (string?)el.Attribute("VersionOverride") ?? (string?)el.Attribute("version")
+                              ?? el.Elements().FirstOrDefault(c => c.Name.LocalName == "Version")?.Value;
+                if (string.IsNullOrWhiteSpace(version)) continue;   // 版本寫在中央套件管理檔：那邊的 PackageVersion 會被讀到
+                found.Add(version.Trim().Trim('[', ']', '(', ')'));
+            }
+        }
+        return found;
     }
 
     private static string? ThemeFor(string rel, List<ThemeUse> themes)
@@ -865,6 +997,8 @@ public sealed partial class XamlScanner
             FontStyle = font.Style,
             Language = font.Language,
             Wrap = textHost is null ? WrapMode.NoWrap : ParseWrap(_styles.Resolve(textHost, "TextWrapping", inheritable: false)),
+            // 控制項的字串內容（Button Content="…"）：樣式可能把它畫成大寫（MahApps）
+            Casing = textHost is null && local != "Run" ? _styles.CasingOf(el) : TextCasing.AsIs,
             Trim = textHost is null ? TrimMode.None : ParseTrim(_styles.Resolve(textHost, "TextTrimming", inheritable: false)),
             Height = HeightOf(textHost ?? el),
             Width = width,

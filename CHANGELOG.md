@@ -117,6 +117,15 @@ that over-estimated the available width.
   narrow, and leaves out the whole font when that would be most of the alphabet (Calibri 6.27).
   Next to an RTL character, kerning against a space or punctuation is only applied when it widens
   (WPF puts them in different runs).
+- **Measured control-library themes**: MahApps.Metro 2.4 and MaterialDesignThemes 5.3
+  (`MaterialDesign2.Defaults` / `MaterialDesign3.Defaults`), in `data/theme-chrome.json`, measured by
+  `prototype/ThemeChrome`. Chrome, explicit-inset behaviour, the font size/weight/family the style
+  sets, string casing (MahApps buttons are uppercase, "Square" ones lowercase; `ContentCharacterCasing`
+  on the element wins), minimum widths, scroll bar width and fonts forced by the template, for implicit
+  and keyed styles; project styles based on theme keys resolve. Applied only when the project's
+  package reference (csproj, `Directory.Packages.props`, `packages.config`) has the same major.minor
+  and no unmeasured theme shares the scope; otherwise the report says why. NETworkManager: 916 blocked
+  sites -> 49.
 
 ### Verified
 
@@ -129,6 +138,9 @@ that over-estimated the available width.
   alone and between two others, in Segoe UI, Arial, Tahoma, Courier New, Microsoft Sans Serif and
   Times New Roman (Leelawadee UI and Tahoma for Thai): worst under-estimate 0.05%, in either
   flow direction. Calibri is reported as not measurable.
+- **Themes** against real WPF windows with the theme merged (`prototype/LayoutOracle --theme
+  mahapps|md2|md3`, 43 cases each, both row semantics): MahApps 42 exact / 1 conservative,
+  MaterialDesign 2 and 3 each 41 / 2, 0 over-estimates, 0 wrong.
 - **Layout** against real off-screen WPF windows, 228 cases: 186 exact, 42 conservative,
   0 over-estimates; with `check`'s row semantics 190 / 38 / 0 (`prototype/LayoutOracle --check`).
 - **Real project windows** drawn by WPF with their own themes and translations
@@ -150,7 +162,7 @@ that over-estimated the available width.
   runs give identical results.
 - **Shipped software**: 984 source-language measurements over ten projects. The only two
   overflows are in the maintainer's app and are real (drawn by WPF).
-- 631 unit tests.
+- 644 unit tests.
 
 ### Not verified
 

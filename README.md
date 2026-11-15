@@ -60,7 +60,7 @@ The table below is `budget`. `check` can resolve more, because it lays a row out
 whose widths it cannot all read no number at all — Kindling is 76.0% under `budget` and 86.7%
 under `check`.
 
-Measured out of the box, no configuration, on eleven projects:
+Measured out of the box, no configuration, on sixteen projects:
 
 | project | localizable sites | measured | blocked | no width bound | resolution |
 |---|---:|---:|---:|---:|---:|
@@ -73,6 +73,11 @@ Measured out of the box, no configuration, on eleven projects:
 | MahApps.Metro | 1,613 | 56 | 746 | 718 | 7.0% |
 | MaterialDesignInXamlToolkit | 2,339 | 0 | 867 | 1,432 | 0% |
 | wpfui | 440 | 0 | 15 | 405 | 0% |
+| NETworkManager (MahApps.Metro 2.4) | 1,862 | 0 | 49 | 1,727 | 0% |
+| HandBrake | 705 | 0 | 165 | 520 | 0% |
+| dnSpy | 1,265 | 27 | 488 | 326 | 5.2% |
+| EarTrumpet | 66 | 0 | 4 | 0 | 0% |
+| PowerToys (WPF parts) | 55 | 6 | 28 | 20 | 17.6% |
 | WinUI-Gallery | — | — | — | — | not WPF |
 
 Read that table as two groups.
@@ -81,6 +86,11 @@ Read that table as two groups.
 a custom panel the tool has never heard of (Playnite's `GridEx`), controls whose width only
 exists at run time (ScreenToGif's number boxes, colour pickers and drop-downs filled from code —
 declare them with `controlWidths`), a row whose neighbour is data-bound, `SharedSizeGroup` columns.
+The five added last mostly have no width to check against: NETworkManager's windows and HandBrake's
+size to their content or to sizes restored at run time (1,727 and 520 sites "no width bound"); dnSpy's
+text is bound to view models; EarTrumpet and HandBrake set `TextFormattingMode="Display"`, which
+snaps glyphs to whole pixels and is reported as not measurable. NETworkManager used to be 916 blocked
+behind MahApps; with the measured profile 49 remain.
 
 **Control libraries** are near zero, and that is the correct answer: in those repositories the
 controls *are* the theme. Their demos take fonts from a markup extension and wrap content in
@@ -207,6 +217,20 @@ If `App.xaml` merges a dictionary from another assembly (`MaterialDesignThemes.W
 `HandyControl`, …), standard controls are restyled by XAML the tool cannot read: a Material
 Design `Button` has 32 px of padding, not 4. The built-in table no longer applies, so sites
 inside those controls become blocked until you declare their chrome.
+
+Two libraries are **measured** and work without configuration: **MahApps.Metro 2.4** and
+**MaterialDesignThemes 5.3** (`MaterialDesign2.Defaults.xaml` or `MaterialDesign3.Defaults.xaml`).
+`prototype/ThemeChrome` loads each theme the way an application does and measures, in WPF, every
+standard control's chrome, what an explicit `Padding`/`BorderThickness` does to it, the font size
+and weight the style sets, whether string content is drawn in capitals (a MahApps `Button` draws
+"Save" as 10 px bold "SAVE"; its "Square" buttons are lowercase), minimum widths and the scroll bar
+width — for the implicit styles and for every keyed style (`MahApps.Styles.Button.Square`,
+`MaterialDesignOutlinedButton`…), so project styles `BasedOn` them resolve too. A profile is used
+only when the project's package reference has the same major.minor version and no unmeasured theme
+shares its scope. Against real WPF windows with each theme merged (`prototype/LayoutOracle --theme`,
+43 cases each, normal and `check` row semantics): MahApps 42 exact / 1 conservative, MaterialDesign
+2 and 3 each 41 / 2, **0 over-estimates**; Material Design's switch-style `ToggleButton` is reported
+as not measurable.
 
 ### Templates in your own project
 

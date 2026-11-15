@@ -86,6 +86,11 @@ public sealed class ElementMeasurer : IElementMeasurer
         var lower = min.Value ?? 0;
         var upper = max.Value ?? double.PositiveInfinity;
 
+        // 量過的佈景的樣式設的 MinWidth（MaterialDesign 的 TabItem 90）。本地或專案樣式設了就用那個
+        if (min.Value is null && ChromeTable.IsWpf(element)
+            && _styles.TemplateOf(element) is { Kind: TemplateKind.Theme, Theme: { } theme } && theme.TargetType == local)
+            lower = theme.MinWidth;
+
         // ⚠ 垂直捲軸：佈景的預設樣式把 MinWidth 設成系統捲軸寬度。
         //   LayoutOracle 實測：<ScrollBar Width="10"/> 實際是 16.8 寬 —— MinWidth 贏過比較窄的 Width。
         //   專案要做細捲軸得自己把 MinWidth 蓋掉；沒蓋就是系統寬度。
@@ -122,6 +127,15 @@ public sealed class ElementMeasurer : IElementMeasurer
             //   只有 OverridesDefaultStyle="True"（丟掉預設樣式）時才由範本決定：根元素寫死寬度就用它，否則不知道。
             if (isScrollBar)
             {
+                // 外部佈景的範圍裡：捲軸由佈景的樣式畫（MahApps 14、MaterialDesign 跟系統）。量過就用量的，沒量過不知道
+                if (element.Document?.Annotation<ExternalTheme>() is { } scrollTheme)
+                {
+                    var barTemplate = _styles.TemplateOf(element);
+                    if (barTemplate.Kind == TemplateKind.Theme && barTemplate.Theme is { TargetType: "ScrollBar", Chrome: { } barWidth } t)
+                        return Finish(t.FollowsSystem ? Math.Max(barWidth, _chrome.ScrollBarWidth) : barWidth);
+                    if (barTemplate.Kind != TemplateKind.Custom || scrollTheme.Profile is null) return null;
+                }
+
                 var overrides = _styles.ResolveEx(element, "OverridesDefaultStyle", inheritable: false);
                 if (overrides.IsUnreadable) return null;
                 if (!(overrides.IsValue && overrides.Value!.Trim().Equals("True", StringComparison.OrdinalIgnoreCase)))
@@ -259,6 +273,9 @@ public sealed class ElementMeasurer : IElementMeasurer
         return ok ? width + l + r : null;
     }
 
+    private static bool IsTextElement(string local) =>
+        local is "TextBlock" or "Run" or "AccessText" or "Span" or "Bold" or "Italic" or "Underline" or "Hyperlink";
+
     private double? MeasureText(XElement element, string text)
     {
         if (text.Length == 0) return 0;
@@ -270,7 +287,8 @@ public sealed class ElementMeasurer : IElementMeasurer
         if (lookup.Chain.Count == 0) return null;
 
         double widest = 0;
-        foreach (var line in TextRules.Lines(TextRules.Display(element.Name.LocalName, text)))
+        var casing = IsTextElement(element.Name.LocalName) ? TextCasing.AsIs : _styles.CasingOf(element);
+        foreach (var line in TextRules.Lines(TextRules.Cased(TextRules.Display(element.Name.LocalName, text), casing)))
         {
             var m = TextMeasure.Measure(line, lookup, font.Size);
             if (!m.IsReliable) return null;

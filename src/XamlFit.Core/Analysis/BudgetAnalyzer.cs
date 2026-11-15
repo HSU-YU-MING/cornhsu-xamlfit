@@ -482,7 +482,7 @@ public static class SiteMeasure
         var usedAuto = false;
         var firstMissing = -1;
 
-        foreach (var line in TextRules.Lines(TextRules.Display(site.Element, text)))
+        foreach (var line in TextRules.Lines(TextRules.Cased(TextRules.Display(site.Element, text), site.Casing)))
         {
             var m = TextMeasure.Measure(line, lookup, site.FontSize);
             widest = Math.Max(widest, m.WidthPx);

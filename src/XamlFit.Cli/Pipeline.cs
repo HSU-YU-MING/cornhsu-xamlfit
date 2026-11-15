@@ -89,15 +89,23 @@ internal static class Pipeline
                 "XamlFit's chrome table, default font and layout rules are WPF's.");
         }
 
-        foreach (var theme in scan.ExternalThemes)
+        foreach (var theme in scan.ExternalThemes.Where(t => t.Profile is not null).DistinctBy(t => (t.Profile, t.Scope)))
+        {
+            Console.Error.WriteLine(
+                $"  external theme '{CheckDiagnostics.ConsoleSafe(theme.Theme)}' (merged in {CheckDiagnostics.ConsoleSafe(theme.DeclaredIn)}): " +
+                $"using the chrome, fonts and casing measured for {theme.Profile}.");
+        }
+        var unmeasured = scan.ExternalThemes.Where(t => t.Profile is null).DistinctBy(t => (t.Theme, t.Scope)).ToList();
+        foreach (var theme in unmeasured)
         {
             var scope = theme.Scope.Length == 0 ? "every scanned file"
                 : theme.Scope.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase) ? theme.Scope
                 : $"files under {theme.Scope}";
+            var note = theme.ProfileNote is { } n && n != "not measured" ? $" ({CheckDiagnostics.ConsoleSafe(n)})" : "";
             Console.Error.WriteLine(
-                $"  !! external theme '{CheckDiagnostics.ConsoleSafe(theme.Theme)}' (merged in {CheckDiagnostics.ConsoleSafe(theme.DeclaredIn)}) restyles standard controls in {scope}.");
+                $"  !! external theme '{CheckDiagnostics.ConsoleSafe(theme.Theme)}' (merged in {CheckDiagnostics.ConsoleSafe(theme.DeclaredIn)}) restyles standard controls in {scope}{note}.");
         }
-        if (scan.ExternalThemes.Count > 0)
+        if (unmeasured.Count > 0)
             Console.Error.WriteLine(
                 "     Their chrome is defined outside this project, so text inside them is reported as blocked.\n" +
                 "     Declare the real chrome under \"chrome\" in xamlfit.config.json, or pass --assume-default-theme\n" +

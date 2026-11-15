@@ -14,5 +14,6 @@
   <ItemGroup>
     <EmbeddedResource Include="control-chrome.json" LogicalName="XamlFit.Core.control-chrome.json" />
     <EmbeddedResource Include="font-fallback.json" LogicalName="XamlFit.Core.font-fallback.json" />
+    <EmbeddedResource Include="theme-chrome.json" LogicalName="XamlFit.Core.theme-chrome.json" />
   </ItemGroup>
 </Project>

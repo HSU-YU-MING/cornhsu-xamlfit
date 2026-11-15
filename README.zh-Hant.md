@@ -59,6 +59,11 @@ XamlFit 讀你的 XAML，算出每段文字實際有幾個像素，拿真實的�
 | MahApps.Metro | 1,613 | 56 | 746 | 718 | 7.0% |
 | MaterialDesignInXamlToolkit | 2,339 | 0 | 867 | 1,432 | 0% |
 | wpfui | 440 | 0 | 15 | 405 | 0% |
+| NETworkManager（MahApps.Metro 2.4） | 1,862 | 0 | 49 | 1,727 | 0% |
+| HandBrake | 705 | 0 | 165 | 520 | 0% |
+| dnSpy | 1,265 | 27 | 488 | 326 | 5.2% |
+| EarTrumpet | 66 | 0 | 4 | 0 | 0% |
+| PowerToys（WPF 的部分） | 55 | 6 | 28 | 20 | 17.6% |
 | WinUI-Gallery | — | — | — | — | 不是 WPF |
 
 這張表要分兩群看。
@@ -66,6 +71,9 @@ XamlFit 讀你的 XAML，算出每段文字實際有幾個像素，拿真實的�
 **應用程式**從 45% 到 100%。卡住的原因都很具體，而且會印出來：工具沒見過的自訂面板
 （Playnite 的 `GridEx`）、寬度要到執行期才知道的控制項（ScreenToGif 的數值框、顏色選擇器、程式碼填項目的下拉選單 ——
 用 `controlWidths` 宣告）、同一排的鄰居是綁資料的、`SharedSizeGroup` 的欄。
+最後加的五個大多沒有寬度可以對：NETworkManager 與 HandBrake 的視窗依內容或執行期還原的大小決定寬度（各 1,727 與 520 個位置「沒有寬度上限」）；
+dnSpy 的文字綁在 ViewModel 上；EarTrumpet 與 HandBrake 用 `TextFormattingMode="Display"`（字寬對齊整數像素，報量不到）。
+NETworkManager 原本 916 個位置卡在 MahApps，用了量過的佈景之後剩 49 個。
 
 **控制項庫**幾乎是零，而那是對的答案：在那些 repo 裡，控制項**就是**佈景。
 用了它們的應用程式也會落在同樣的處境，除非告訴工具那個佈景做了什麼 —— 見下面「要你告訴它的事」。
@@ -159,6 +167,14 @@ ScreenToGif 編輯器裡冒出四個下拉選項——也是對的：「Sum even
 `App.xaml` 合併了別的組件裡的資源字典（MaterialDesign、wpfui、HandyControl…）時，
 標準控制項是被工具看不到的 XAML 重畫的：Material Design 的 `Button` 內距是 32 px，不是 4。
 內建的表不再適用，那些控制項裡的文字會被擋下來，直到你宣告它們的內距。
+
+有兩個函式庫**量過**，不用設定：**MahApps.Metro 2.4** 與 **MaterialDesignThemes 5.3**（合併 `MaterialDesign2.Defaults.xaml`
+或 `MaterialDesign3.Defaults.xaml`）。`prototype/ThemeChrome` 照應用程式的方式載入佈景，在 WPF 裡量每個標準控制項的內距、
+明寫 `Padding`／`BorderThickness` 會怎麼換算、樣式設的字級與粗細、字串會不會被畫成大寫（MahApps 的 `Button` 把「Save」畫成 10 px 粗體的「SAVE」，
+「Square」按鈕是小寫）、最小寬度、捲軸寬度 —— 隱含樣式與每個有 x:Key 的樣式（`MahApps.Styles.Button.Square`、`MaterialDesignOutlinedButton`…）
+都量，所以專案 `BasedOn` 它們的樣式也解得開。只有在專案參照的套件版本 major.minor 相同、而且同一個範圍裡沒有別的沒量過的佈景時才用。
+對照合併了佈景的真 WPF 視窗（`prototype/LayoutOracle --theme`，每種 43 案，一般與 `check` 兩種排法）：
+MahApps 42 一致／1 偏保守，MaterialDesign 2 與 3 各 41／2，**0 高估**；Material Design 開關樣式的 `ToggleButton` 報量不到。
 
 ### 你自己專案裡的範本
 

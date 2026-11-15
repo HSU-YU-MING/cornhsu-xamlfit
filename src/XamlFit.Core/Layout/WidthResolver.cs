@@ -6,7 +6,8 @@ using XamlFit.Core.Xaml;
 namespace XamlFit.Core.Layout;
 
 /// <summary>掛在 XDocument 上：這個檔案受哪個外部佈景影響（MaterialDesign、wpfui…）。</summary>
-public sealed record ExternalTheme(string Name);
+/// <param name="Profile">量過的佈景（版本相符、範圍裡沒有別的沒量過的佈景）；null = 不知道它把控制項改成怎樣。</param>
+public sealed record ExternalTheme(string Name, ThemeProfile? Profile = null);
 
 /// <summary>同一排（水平 StackPanel、DockPanel）的兄弟怎麼算進一個元素的寬度。</summary>
 public enum RowSharing
@@ -1180,6 +1181,25 @@ public sealed class WidthResolver
             case TemplateKind.Unknown:
                 return new(0, false, false, $"chrome of <{DisplayName(el)}> is unknown: it {template.Why}");
 
+            case TemplateKind.Theme:
+            {
+                // 量過的佈景（prototype/ThemeChrome）：只用在量的那種控制項上
+                var t = template.Theme!;
+                if (!ChromeTable.IsWpf(el) || t.TargetType != local)
+                    return new(0, false, false, $"chrome of <{DisplayName(el)}> is unknown: {template.Why} was measured on <{t.TargetType}>");
+                if (t.Chrome is not { } measured)
+                    return new(0, false, false, $"chrome of <{DisplayName(el)}> is unknown: {template.Why} does not pass its content width through");
+                // ScrollViewer 量的是捲軸關掉時；捲軸在的時候再加佈景的捲軸寬（DefaultChrome 依 VerticalScrollBarVisibility 決定扣不扣）
+                if (local == "ScrollViewer")
+                {
+                    if (ThemeScrollBarWidth(el) is not { } bar)
+                        return new(0, false, false, $"chrome of <{DisplayName(el)}> is unknown: the theme's scroll bar width was not measured");
+                    measured += bar;
+                }
+                var themed = DefaultChrome(el, new ChromeInfo(ChromeKind.Control, measured, "", t.PaddingMode, t.Padding, t.BorderMode, t.Border), theme);
+                return themed.Blocked is not null ? themed : new(themed.Inset + frame, true, themed.AssumedScrollBar, null);
+            }
+
             case TemplateKind.Custom:
             {
                 var (custom, why, trailing) = AgreedTemplateChrome(el, template, header: false, () => DefaultChrome(el, info, theme));
@@ -1276,6 +1296,14 @@ public sealed class WidthResolver
             ? Math.Max(0, (padding.IsSet ? padding.Right : 0) + (border.IsSet ? border.Right : 0))
             : 0;
         return new(sum, sum > 0, false, null) { Trailing = Math.Min(trailing, sum) };
+    }
+
+    /// <summary>量過的佈景裡垂直捲軸的寬度；跟著系統的用工具的上限。不知道回 null。</summary>
+    internal double? ThemeScrollBarWidth(XElement inScope)
+    {
+        if (inScope.Document?.Annotation<ExternalTheme>()?.Profile is not { } profile
+            || !profile.Controls.TryGetValue("ScrollBar", out var bar) || bar.Chrome is not { } width) return null;
+        return bar.FollowsSystem ? Math.Max(width, _chrome.ScrollBarWidth) : width;
     }
 
     /// <summary>給 <see cref="ElementMeasurer"/> 用：元素內部吃掉的寬度；不知道回 null。</summary>
@@ -1629,6 +1657,19 @@ public sealed class WidthResolver
             var padding = Thickness(item, "Padding");
             if (padding.Blocked is not null) return null;
             return padding.IsSet ? padding.Sum : DefaultTabItemPadding;
+        }
+
+        // 量過的佈景：TabItem 是把標題當內容量的，那個 chrome 就是標題區的內距（明寫的 Padding 照量到的規則換算）
+        if (template.Kind == TemplateKind.Theme && template.Theme is { } theme && ChromeTable.IsWpf(item, "TabItem") && theme.TargetType == "TabItem")
+        {
+            if (theme.Chrome is not { } measured) return null;
+            var padding = Thickness(item, "Padding");
+            if (padding.Blocked is not null) return null;
+            var info = new ChromeInfo(ChromeKind.Control, measured, "", theme.PaddingMode, theme.Padding, theme.BorderMode, theme.Border);
+            var border = Thickness(item, "BorderThickness");
+            if (border.Blocked is not null) return null;
+            var sum = measured + (padding.IsSet ? info.PaddingDelta(padding.Sum) : 0) + (border.IsSet ? info.BorderDelta(border.Sum) : 0);
+            return Math.Max(0, sum);
         }
 
         var inset = HeaderInset(item, ThemeOf(item));

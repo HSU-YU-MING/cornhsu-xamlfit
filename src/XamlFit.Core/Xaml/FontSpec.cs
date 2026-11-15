@@ -77,6 +77,16 @@ public readonly record struct FontSpec(
 
         // xml:lang 與 Language 是同一個屬性，會繼承。App 在程式碼裡改預設值（常見於在地化的 App）時這裡看不到 ——
         // 設定檔的 elementLanguage 處理那種情形。
+        // 量過的佈景：範本裡畫字的 TextBlock 自己設了字型（MaterialDesign 的 TabItem 標題 14 Medium），
+        // 專案設在控制項上的字型影響不到它
+        if (headerKey is null && Layout.ChromeTable.IsWpf(el)
+            && styles.TemplateOf(el) is { Kind: TemplateKind.Theme, Theme: { } theme } && theme.TargetType == el.Name.LocalName)
+        {
+            if (theme.TextFontFamily is { } f) family = f;
+            if (theme.TextFontSize is { } ts) size = ts;
+            if (theme.TextFontWeight is { } tw) weightText = Layout.ThemeProfiles.WeightName(tw);
+        }
+
         var language = defaultLanguage;
         for (var cur = el; cur is not null; cur = cur.Parent)
         {
@@ -145,6 +155,14 @@ public static class TextRules
     /// <summary>
     /// 畫面上實際顯示的文字。快速鍵元素：第一個單獨的底線不顯示，連續兩個底線顯示成一個。
     /// </summary>
+    /// <summary>樣式把字串內容轉成大寫或小寫時，畫面上的字（MahApps 用的是目前文化的規則；寬度上跟不變文化的轉法一樣）。</summary>
+    public static string Cased(string text, Layout.TextCasing casing) => casing switch
+    {
+        Layout.TextCasing.Upper => text.ToUpperInvariant(),
+        Layout.TextCasing.Lower => text.ToLowerInvariant(),
+        _ => text,
+    };
+
     public static string Display(string elementLocalName, string text)
     {
         if (!UsesAccessKey(elementLocalName) || !text.Contains('_', StringComparison.Ordinal)) return text;

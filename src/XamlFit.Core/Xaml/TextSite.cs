@@ -47,6 +47,9 @@ public sealed class TextSite
     public string Language { get; init; } = FontFallback.DefaultLanguage;
 
     public WrapMode Wrap { get; init; } = WrapMode.NoWrap;
+
+    /// <summary>佈景把字串內容畫成大寫／小寫（MahApps 的 Button）。量譯文之前先轉。</summary>
+    public Layout.TextCasing Casing { get; init; } = Layout.TextCasing.AsIs;
     public TrimMode Trim { get; init; } = TrimMode.None;
 
     /// <summary>宣告的高度（垂直裁切判定要用）。</summary>

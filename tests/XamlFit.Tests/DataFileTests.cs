@@ -20,6 +20,7 @@ public class DataFileTests
     [Theory]
     [InlineData("control-chrome.json")]
     [InlineData("font-fallback.json")]
+    [InlineData("theme-chrome.json")]
     public void The_embedded_copy_matches_data(string name)
     {
         if (RepoRoot() is not { } root) return;

@@ -1,0 +1,4529 @@
+{
+ "schemaVersion": 1,
+ "generatedOn": "2026-11-15",
+ "note": "Horizontal chrome, fonts and text casing of standard WPF controls under control-library themes, measured with WPF by prototype/ThemeChrome: the theme's dictionaries merged into Application.Resources as a project would, then the same probes as ChromeGen. chromeWidth includes the style's Padding and BorderThickness; paddingMode/borderMode say what an explicit value does (absent = not one-for-one, added on top). fontFamily/fontSize/fontWeight are listed only when the style sets them. casing is what the style does to string content. A profile applies only when the project references the same package major.minor. Numbers and style keys only; no theme XAML is copied.",
+ "themes": [
+  {
+   "id": "MahApps.Metro 2.4",
+   "package": "MahApps.Metro",
+   "assemblies": [
+    "MahApps.Metro"
+   ],
+   "namespaces": [
+    "http://metro.mahapps.com/winfx/xaml/controls"
+   ],
+   "requires": null,
+   "version": "2.4.11",
+   "dictionaries": [
+    "pack://application:,,,/MahApps.Metro;component/Styles/Controls.xaml",
+    "pack://application:,,,/MahApps.Metro;component/Styles/Fonts.xaml",
+    "pack://application:,,,/MahApps.Metro;component/Styles/Themes/Light.Blue.xaml"
+   ],
+   "controls": {
+    "Button": {
+     "chromeWidth": 12,
+     "padding": 10,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 10,
+     "fontWeight": 700,
+     "casing": "upper"
+    },
+    "CheckBox": {
+     "chromeWidth": 24,
+     "padding": 6,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12,
+     "casing": "as-is"
+    },
+    "ComboBox": {
+     "chromeWidth": 26,
+     "padding": 8,
+     "border": 2,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12
+    },
+    "ComboBoxItem": {
+     "chromeWidth": 4,
+     "padding": 4,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "Expander": {
+     "padding": 8,
+     "border": 2
+    },
+    "GroupBox": {
+     "chromeWidth": 9.6,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "replace",
+     "casing": "as-is"
+    },
+    "Label": {
+     "chromeWidth": 10,
+     "padding": 10,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "ListBox": {
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "ListBoxItem": {
+     "chromeWidth": 5,
+     "padding": 5,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "ListView": {
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "ListViewItem": {
+     "chromeWidth": 8,
+     "padding": 8,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MenuItem": {
+     "chromeWidth": 59,
+     "padding": 4,
+     "border": 2,
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "PasswordBox": {
+     "chromeWidth": 14,
+     "padding": 8,
+     "border": 2,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12
+    },
+    "RadioButton": {
+     "chromeWidth": 24,
+     "padding": 6,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12,
+     "casing": "as-is"
+    },
+    "RepeatButton": {
+     "chromeWidth": 12,
+     "padding": 10,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 10,
+     "fontWeight": 700,
+     "casing": "upper"
+    },
+    "ScrollBar": {
+     "chromeWidth": 14
+    },
+    "ScrollViewer": {
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "StatusBarItem": {
+     "chromeWidth": 6,
+     "padding": 6,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "TabItem": {
+     "chromeWidth": 12,
+     "padding": 12,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "minWidth": 5,
+     "casing": "as-is"
+    },
+    "TextBox": {
+     "chromeWidth": 14,
+     "padding": 8,
+     "border": 2,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12
+    },
+    "ToggleButton": {
+     "chromeWidth": 12,
+     "padding": 10,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 10,
+     "fontWeight": 700,
+     "casing": "as-is"
+    },
+    "TreeViewItem": {
+     "chromeWidth": 22,
+     "padding": 1,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    }
+   },
+   "styles": {
+    "MahApps.Styles.Button": {
+     "targetType": "Button",
+     "chromeWidth": 12,
+     "padding": 10,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 10,
+     "fontWeight": 700,
+     "casing": "upper"
+    },
+    "MahApps.Styles.Button.Calendar.Header": {
+     "targetType": "Button",
+     "chromeWidth": 2,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "fontWeight": 700,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.Calendar.Next": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2
+    },
+    "MahApps.Styles.Button.Calendar.Previous": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2
+    },
+    "MahApps.Styles.Button.Chromeless": {
+     "targetType": "Button",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.Circle": {
+     "targetType": "Button",
+     "chromeWidth": 2,
+     "padding": 2,
+     "border": 4,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.Dialogs": {
+     "targetType": "Button",
+     "chromeWidth": 10,
+     "padding": 6,
+     "border": 4,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "minWidth": 80,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontWeight": 600,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.Dialogs.Accent": {
+     "targetType": "Button",
+     "chromeWidth": 10,
+     "padding": 6,
+     "border": 4,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "minWidth": 80,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontWeight": 600,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.Dialogs.AccentHighlight": {
+     "targetType": "Button",
+     "chromeWidth": 6,
+     "padding": 6,
+     "border": 4,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "minWidth": 80,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontWeight": 600,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.DropDown": {
+     "targetType": "Button",
+     "chromeWidth": 4,
+     "padding": 4,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.Flat": {
+     "targetType": "Button",
+     "chromeWidth": 20,
+     "padding": 20,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontSize": 14,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.FlipView.Navigation": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.FocusVisualStyle.Circle": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2
+    },
+    "MahApps.Styles.Button.FocusVisualStyle.Flat": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2
+    },
+    "MahApps.Styles.Button.Hamburger": {
+     "targetType": "Button",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.MetroSquare": {
+     "targetType": "Button",
+     "chromeWidth": 28,
+     "padding": 24,
+     "border": 4,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontWeight": 600,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.MetroSquare.Accent": {
+     "targetType": "Button",
+     "chromeWidth": 28,
+     "padding": 24,
+     "border": 4,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontWeight": 600,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.MetroWindow.Base": {
+     "targetType": "Button",
+     "chromeWidth": 2,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.MetroWindow.Close.Dark.Win10": {
+     "targetType": "Button",
+     "padding": 0,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.MetroWindow.Close.Light.Win10": {
+     "targetType": "Button",
+     "padding": 0,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.MetroWindow.Dark": {
+     "targetType": "Button",
+     "padding": 0,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.MetroWindow.Light": {
+     "targetType": "Button",
+     "padding": 0,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.Reveal": {
+     "targetType": "Button",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.Split": {
+     "targetType": "Button",
+     "chromeWidth": 4,
+     "padding": 4,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.Split.Arrow": {
+     "targetType": "Button",
+     "chromeWidth": 4,
+     "padding": 4,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.Square": {
+     "targetType": "Button",
+     "chromeWidth": 10,
+     "padding": 6,
+     "border": 4,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontWeight": 600,
+     "casing": "lower"
+    },
+    "MahApps.Styles.Button.Square.Accent": {
+     "targetType": "Button",
+     "chromeWidth": 10,
+     "padding": 6,
+     "border": 4,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontWeight": 600,
+     "casing": "lower"
+    },
+    "MahApps.Styles.Button.Square.Highlight": {
+     "targetType": "Button",
+     "chromeWidth": 6,
+     "padding": 6,
+     "border": 4,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontWeight": 600,
+     "casing": "lower"
+    },
+    "MahApps.Styles.Button.ToolBar": {
+     "targetType": "Button",
+     "chromeWidth": 22,
+     "padding": 20,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontSize": 14,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Button.WindowCommands": {
+     "targetType": "Button",
+     "chromeWidth": 16,
+     "padding": 16,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.CheckBox": {
+     "targetType": "CheckBox",
+     "chromeWidth": 24,
+     "padding": 6,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.CheckBox.DataGrid": {
+     "targetType": "CheckBox",
+     "chromeWidth": 18,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.CheckBox.DataGrid.Win10": {
+     "targetType": "CheckBox",
+     "chromeWidth": 44,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.CheckBox.Win10": {
+     "targetType": "CheckBox",
+     "chromeWidth": 28,
+     "padding": 8,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "minWidth": 120,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ComboBox": {
+     "targetType": "ComboBox",
+     "chromeWidth": 26,
+     "padding": 8,
+     "border": 2,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12
+    },
+    "MahApps.Styles.ComboBox.DataGrid": {
+     "targetType": "ComboBox",
+     "chromeWidth": 8,
+     "padding": 8,
+     "border": 2,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12
+    },
+    "MahApps.Styles.ComboBox.DataGrid.Editing": {
+     "targetType": "ComboBox",
+     "chromeWidth": 24,
+     "padding": 6,
+     "border": 0,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12
+    },
+    "MahApps.Styles.ComboBox.Virtualized": {
+     "targetType": "ComboBox",
+     "chromeWidth": 26,
+     "padding": 8,
+     "border": 2,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12
+    },
+    "MahApps.Styles.ComboBoxItem": {
+     "targetType": "ComboBoxItem",
+     "chromeWidth": 4,
+     "padding": 4,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ContentControl.FloatingMessageContainer": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2
+    },
+    "MahApps.Styles.ContentControl.PathIcon": {
+     "targetType": "Button",
+     "padding": 0,
+     "border": 2
+    },
+    "MahApps.Styles.Expander": {
+     "targetType": "Expander",
+     "padding": 8,
+     "border": 2
+    },
+    "MahApps.Styles.GridSplitter.Preview": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2
+    },
+    "MahApps.Styles.GroupBox": {
+     "targetType": "GroupBox",
+     "chromeWidth": 9.6,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.Label": {
+     "targetType": "Label",
+     "chromeWidth": 10,
+     "padding": 10,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MahApps.Styles.ListBox.HamburgerMenu": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MahApps.Styles.ListBox.Virtualized": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MahApps.Styles.ListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 5,
+     "padding": 5,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ListBoxItem.ColorPaletteItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 8,
+     "padding": 6,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ListBoxItem.FlipView.Index": {
+     "targetType": "ListBoxItem",
+     "padding": 8,
+     "border": 2
+    },
+    "MahApps.Styles.ListBoxItem.HamburgerBase": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ListBoxItem.HamburgerMenuHeader": {
+     "targetType": "ListBoxItem",
+     "padding": 8,
+     "border": 0
+    },
+    "MahApps.Styles.ListBoxItem.HamburgerMenuItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ListBoxItem.HamburgerMenuItem.CreatorsUpdate": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ListBoxItem.HamburgerMenuSeparator": {
+     "targetType": "ListBoxItem",
+     "padding": 0,
+     "border": 0
+    },
+    "MahApps.Styles.ListView": {
+     "targetType": "ListView",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MahApps.Styles.ListView.Virtualized": {
+     "targetType": "ListView",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MahApps.Styles.ListViewItem": {
+     "targetType": "ListViewItem",
+     "chromeWidth": 8,
+     "padding": 8,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ListViewItem.NonSelectable": {
+     "targetType": "ListViewItem",
+     "padding": 8,
+     "border": 2
+    },
+    "MahApps.Styles.MenuItem": {
+     "targetType": "MenuItem",
+     "chromeWidth": 59,
+     "padding": 4,
+     "border": 2,
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.PasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 14,
+     "padding": 8,
+     "border": 2,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12
+    },
+    "MahApps.Styles.PasswordBox.Button": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 36,
+     "padding": 8,
+     "border": 2,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12
+    },
+    "MahApps.Styles.PasswordBox.Button.Revealed": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 14,
+     "padding": 8,
+     "border": 2,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12
+    },
+    "MahApps.Styles.PasswordBox.Win8": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 14,
+     "padding": 8,
+     "border": 2,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 15
+    },
+    "MahApps.Styles.RadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 24,
+     "padding": 6,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.RadioButton.Win10": {
+     "targetType": "RadioButton",
+     "chromeWidth": 28,
+     "padding": 8,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "minWidth": 120,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.RepeatButton.MenuScroll": {
+     "targetType": "RepeatButton",
+     "chromeWidth": 14,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.RepeatButton.ScrollBar.AnimatedSingleRow": {
+     "targetType": "RepeatButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MahApps.Styles.RepeatButton.ScrollBarLarge": {
+     "targetType": "RepeatButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MahApps.Styles.RepeatButton.ScrollBarSmall": {
+     "targetType": "RepeatButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MahApps.Styles.RepeatButton.Slider.HorizontalTrack": {
+     "targetType": "RepeatButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MahApps.Styles.RepeatButton.Slider.HorizontalTrack.Win10": {
+     "targetType": "RepeatButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MahApps.Styles.RepeatButton.Slider.HorizontalTrackValue": {
+     "targetType": "RepeatButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MahApps.Styles.RepeatButton.Slider.VerticalTrack": {
+     "targetType": "RepeatButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MahApps.Styles.RepeatButton.Slider.VerticalTrack.Win10": {
+     "targetType": "RepeatButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MahApps.Styles.RepeatButton.Slider.VerticalTrackValue": {
+     "targetType": "RepeatButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MahApps.Styles.RepeatButton.SliderTrack.Flat": {
+     "targetType": "RepeatButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MahApps.Styles.ScrollBar": {
+     "targetType": "ScrollBar",
+     "chromeWidth": 14
+    },
+    "MahApps.Styles.ScrollViewer": {
+     "targetType": "ScrollViewer",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ScrollViewer.GridView": {
+     "targetType": "ScrollViewer",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ScrollViewer.Hamburger": {
+     "targetType": "ScrollViewer",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.StatusBarItem": {
+     "targetType": "StatusBarItem",
+     "chromeWidth": 6,
+     "padding": 6,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.TabItem": {
+     "targetType": "TabItem",
+     "chromeWidth": 12,
+     "padding": 12,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "minWidth": 5,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.TextBox": {
+     "targetType": "TextBox",
+     "chromeWidth": 14,
+     "padding": 8,
+     "border": 2,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12
+    },
+    "MahApps.Styles.TextBox.Button": {
+     "targetType": "TextBox",
+     "chromeWidth": 36,
+     "padding": 8,
+     "border": 2,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12
+    },
+    "MahApps.Styles.TextBox.ComboBox.Editable": {
+     "targetType": "TextBox",
+     "chromeWidth": 12,
+     "padding": 8,
+     "border": 2,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12
+    },
+    "MahApps.Styles.TextBox.DataGrid.Editing": {
+     "targetType": "TextBox",
+     "chromeWidth": 30,
+     "padding": 4,
+     "border": 0,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12
+    },
+    "MahApps.Styles.TextBox.PasswordBox.Revealed": {
+     "targetType": "TextBox",
+     "chromeWidth": 4,
+     "padding": 0,
+     "border": 2
+    },
+    "MahApps.Styles.TextBox.Search": {
+     "targetType": "TextBox",
+     "chromeWidth": 36,
+     "padding": 8,
+     "border": 2,
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 12
+    },
+    "MahApps.Styles.ToggleButton": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 12,
+     "padding": 10,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontFamily": "Segoe UI, Lucida Sans Unicode, Verdana",
+     "fontSize": 10,
+     "fontWeight": 700,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ToggleButton.Circle": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 2,
+     "padding": 2,
+     "border": 4,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ToggleButton.ColorPickerDropDown": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2
+    },
+    "MahApps.Styles.ToggleButton.ComboBoxDropDown": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2
+    },
+    "MahApps.Styles.ToggleButton.ExpanderHeader.Base": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 4,
+     "padding": 4,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ToggleButton.ExpanderHeader.Down": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 28,
+     "padding": 4,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ToggleButton.ExpanderHeader.Down.DataGrid.GroupItem": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 30,
+     "padding": 4,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ToggleButton.ExpanderHeader.Left": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 4,
+     "padding": 4,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ToggleButton.ExpanderHeader.Right": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 4,
+     "padding": 4,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ToggleButton.ExpanderHeader.Up": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 28,
+     "padding": 4,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ToggleButton.Flat": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 20,
+     "padding": 20,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontSize": 14,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ToggleButton.ToolBar": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 22,
+     "padding": 20,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "fontSize": 14,
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ToggleButton.ToolBarOverflow": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.ToggleButton.TreeViewItem.ExpandCollapse": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2,
+     "minWidth": 19
+    },
+    "MahApps.Styles.ToggleButton.WindowCommands": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 16,
+     "padding": 16,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MahApps.Styles.TreeViewItem": {
+     "targetType": "TreeViewItem",
+     "chromeWidth": 22,
+     "padding": 1,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    }
+   }
+  },
+  {
+   "id": "MaterialDesignThemes 5.3 (MaterialDesign2.Defaults)",
+   "package": "MaterialDesignThemes",
+   "assemblies": [
+    "MaterialDesignThemes.Wpf",
+    "MaterialDesignColors"
+   ],
+   "namespaces": [
+    "http://materialdesigninxaml.net/winfx/xaml/themes"
+   ],
+   "requires": "MaterialDesign2.Defaults.xaml",
+   "version": "5.3.0",
+   "dictionaries": [
+    "pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesign2.Defaults.xaml"
+   ],
+   "controls": {
+    "Button": {
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "CheckBox": {
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "ComboBox": {
+     "padding": 0,
+     "border": 0
+    },
+    "ComboBoxItem": {
+     "chromeWidth": 10,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "Expander": {
+     "padding": 0,
+     "border": 0
+    },
+    "GroupBox": {
+     "chromeWidth": 20,
+     "padding": 18,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "Label": {
+     "chromeWidth": 8,
+     "padding": 8,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "ListBox": {
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "ListBoxItem": {
+     "chromeWidth": 16,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "ListView": {
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "fontSize": 13
+    },
+    "ListViewItem": {
+     "chromeWidth": 16,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MenuItem": {
+     "chromeWidth": 48,
+     "padding": 48,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "PasswordBox": {
+     "chromeWidth": 2,
+     "padding": 0,
+     "border": 0
+    },
+    "RadioButton": {
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "RepeatButton": {
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "ScrollBar": {
+     "followsSystem": true,
+     "chromeWidth": 16.8
+    },
+    "ScrollViewer": {
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "StatusBarItem": {
+     "chromeWidth": 6,
+     "padding": 6,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "TabItem": {
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "minWidth": 90,
+     "casing": "as-is",
+     "textFontSize": 14,
+     "textFontWeight": 500
+    },
+    "TextBox": {
+     "chromeWidth": 2,
+     "padding": 0,
+     "border": 0
+    },
+    "ToggleButton": {
+     "padding": 0,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "TreeViewItem": {
+     "chromeWidth": 48,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    }
+   },
+   "styles": {
+    "FocusVisual": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignActionCheckBox": {
+     "targetType": "CheckBox",
+     "padding": 0,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignActionDarkCheckBox": {
+     "targetType": "CheckBox",
+     "padding": 0,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignActionDarkToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignActionLightCheckBox": {
+     "targetType": "CheckBox",
+     "padding": 0,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignActionLightToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignActionSecondaryCheckBox": {
+     "targetType": "CheckBox",
+     "padding": 0,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignActionSecondaryToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignActionToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignCalendarMeridiemRadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignCalendarMeridiemRadioButtonDefault": {
+     "targetType": "RadioButton",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignCalendarMeridiemRadioButtonThemed": {
+     "targetType": "RadioButton",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignCardGroupBox": {
+     "targetType": "GroupBox",
+     "chromeWidth": 18,
+     "padding": 18,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignCardsListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignCardsListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignCheckBox": {
+     "targetType": "CheckBox",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignChoiceChipListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 28,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipOutlineListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignChoiceChipOutlineListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 28,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipOutlineRadioButton": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 28,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipPrimaryListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignChoiceChipPrimaryListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 28,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipPrimaryOutlineListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignChoiceChipPrimaryOutlineListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 28,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipPrimaryOutlineRadioButton": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 28,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipPrimaryRadioButton": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 28,
+     "padding": 2,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipRadioButton": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 28,
+     "padding": 2,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipSecondaryListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignChoiceChipSecondaryListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 28,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipSecondaryOutlineListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignChoiceChipSecondaryOutlineListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 28,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipSecondaryOutlineRadioButton": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 28,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipSecondaryRadioButton": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 28,
+     "padding": 2,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignComboBox": {
+     "targetType": "ComboBox",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignComboBoxEditableTextBox": {
+     "targetType": "TextBox",
+     "chromeWidth": 4,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignComboBoxItemSelectedCollapsedStyle": {
+     "targetType": "ComboBoxItem",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignComboBoxItemStyle": {
+     "targetType": "ComboBoxItem",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignComboBoxToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignDarkCheckBox": {
+     "targetType": "CheckBox",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignDarkRadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignDataGridCheckBoxColumnEditingStyle": {
+     "targetType": "CheckBox",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignDataGridCheckBoxColumnStyle": {
+     "targetType": "CheckBox",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignDataGridComboBox": {
+     "targetType": "ComboBox",
+     "chromeWidth": 16.8,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignDataGridComboBoxEditableTextBox": {
+     "targetType": "TextBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignDataGridComboBoxItemStyle": {
+     "targetType": "ComboBoxItem",
+     "chromeWidth": 16,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MaterialDesignDataGridComboBoxToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignDataGridTextColumnEditingStyle": {
+     "targetType": "TextBox",
+     "chromeWidth": 2,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignDataGridTextColumnPopupEditingStyle": {
+     "targetType": "TextBox",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignExpandCollapseToggleStyle": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignExpander": {
+     "targetType": "Expander",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignExpanderToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignFilledComboBox": {
+     "targetType": "ComboBox",
+     "padding": 28,
+     "border": 0
+    },
+    "MaterialDesignFilledPasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 30,
+     "padding": 28,
+     "border": 0
+    },
+    "MaterialDesignFilledRevealPasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 48,
+     "padding": 28,
+     "border": 0
+    },
+    "MaterialDesignFilledTextBox": {
+     "targetType": "TextBox",
+     "chromeWidth": 30,
+     "padding": 28,
+     "border": 0
+    },
+    "MaterialDesignFilterChipCheckBox": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 18,
+     "padding": 2,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFilterChipListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 18,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipOutlineCheckBox": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 18,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipOutlineListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFilterChipOutlineListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 18,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipPrimaryCheckBox": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 18,
+     "padding": 2,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipPrimaryListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFilterChipPrimaryListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 18,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipPrimaryOutlineCheckBox": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 18,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipPrimaryOutlineListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFilterChipPrimaryOutlineListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 18,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipSecondaryCheckBox": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 18,
+     "padding": 2,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipSecondaryListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFilterChipSecondaryListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 18,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipSecondaryOutlineCheckBox": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 18,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipSecondaryOutlineListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFilterChipSecondaryOutlineListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 18,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatDarkBgButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatDarkButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatLightBgButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatLightButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatMidBgButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatPrimaryToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 0,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatSecondaryButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatSecondaryDarkBgButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatSecondaryDarkButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatSecondaryLightBgButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatSecondaryLightButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatSecondaryMidBgButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 0,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionDarkButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionLightButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionMiniButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionMiniDarkButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionMiniLightButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionMiniSecondaryButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionMiniSecondaryDarkButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionMiniSecondaryLightButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionSecondaryButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionSecondaryDarkButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionSecondaryLightButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingHintComboBox": {
+     "targetType": "ComboBox",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFloatingHintPasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 2,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFloatingHintRevealPasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 20,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFloatingHintTextBox": {
+     "targetType": "TextBox",
+     "chromeWidth": 2,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignGridSplitterPreview": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignGridViewItem": {
+     "targetType": "ListViewItem",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignGroupBox": {
+     "targetType": "GroupBox",
+     "chromeWidth": 20,
+     "padding": 18,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MaterialDesignHamburgerToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignHeaderedContentControl": {
+     "targetType": "TabItem",
+     "chromeWidth": 0,
+     "padding": 12,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignHorizontalHeaderStyle": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 24,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignIconButton": {
+     "targetType": "Button",
+     "padding": 0,
+     "border": 0,
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignIconForegroundButton": {
+     "targetType": "Button",
+     "padding": 0,
+     "border": 0,
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignLabel": {
+     "targetType": "Label",
+     "chromeWidth": 8,
+     "padding": 8,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MaterialDesignLightCheckBox": {
+     "targetType": "CheckBox",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignLightRadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 16,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MaterialDesignListView": {
+     "targetType": "ListView",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "fontSize": 13
+    },
+    "MaterialDesignMenuItem": {
+     "targetType": "MenuItem",
+     "chromeWidth": 48,
+     "padding": 48,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignNavigationListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignNavigationListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 32,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignNavigationPrimaryListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignNavigationPrimaryListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 32,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignNavigationRailTabItem": {
+     "targetType": "TabItem",
+     "padding": 0,
+     "border": 0,
+     "casing": "as-is",
+     "textFontSize": 15,
+     "textFontWeight": 500
+    },
+    "MaterialDesignNavigationSecondaryListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignNavigationSecondaryListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 32,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignNumericUpDownButtonsStyle": {
+     "targetType": "Button",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignOutlinedButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignOutlinedComboBox": {
+     "targetType": "ComboBox",
+     "padding": 28,
+     "border": 2
+    },
+    "MaterialDesignOutlinedDarkButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignOutlinedLightButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignOutlinedPasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 32,
+     "padding": 28,
+     "border": 2
+    },
+    "MaterialDesignOutlinedRevealPasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 50,
+     "padding": 28,
+     "border": 2
+    },
+    "MaterialDesignOutlinedSecondaryButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignOutlinedSecondaryDarkButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignOutlinedSecondaryLightButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignOutlinedTextBox": {
+     "targetType": "TextBox",
+     "chromeWidth": 32,
+     "padding": 28,
+     "border": 2
+    },
+    "MaterialDesignPaperButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignPaperDarkButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignPaperLightButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignPaperSecondaryButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignPaperSecondaryDarkButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignPaperSecondaryLightButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignPasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 2,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignRadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignRaisedButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignRaisedDarkButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignRaisedLightButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignRaisedSecondaryButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignRaisedSecondaryDarkButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignRaisedSecondaryLightButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignRepeatButton": {
+     "targetType": "RepeatButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignRepeatButtonTransparent": {
+     "targetType": "RepeatButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignRevealPasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 20,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignScrollBar": {
+     "targetType": "ScrollBar",
+     "followsSystem": true,
+     "chromeWidth": 16.8
+    },
+    "MaterialDesignScrollBarButton": {
+     "targetType": "RepeatButton",
+     "chromeWidth": 4,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignScrollBarMinimal": {
+     "targetType": "ScrollBar",
+     "followsSystem": true,
+     "chromeWidth": 16.8
+    },
+    "MaterialDesignScrollViewer": {
+     "targetType": "ScrollViewer",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignSecondaryCheckBox": {
+     "targetType": "CheckBox",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignSecondaryRadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignSwitchDarkToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 0,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignSwitchLightToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 0,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignSwitchSecondaryToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 0,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignSwitchToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 0,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignTabItem": {
+     "targetType": "TabItem",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "minWidth": 90,
+     "casing": "as-is",
+     "textFontSize": 14,
+     "textFontWeight": 500
+    },
+    "MaterialDesignTabRadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "minWidth": 80,
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignTabRadioButtonBottom": {
+     "targetType": "RadioButton",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "minWidth": 80,
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignTabRadioButtonLeft": {
+     "targetType": "RadioButton",
+     "chromeWidth": 34,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "minWidth": 80,
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignTabRadioButtonRight": {
+     "targetType": "RadioButton",
+     "chromeWidth": 34,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "minWidth": 80,
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignTabRadioButtonTop": {
+     "targetType": "RadioButton",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "minWidth": 80,
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignTextBox": {
+     "targetType": "TextBox",
+     "chromeWidth": 2,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignToolBarHorizontalOverflowButtonStyle": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignToolBarVerticalOverflowButtonStyle": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignToolButton": {
+     "targetType": "Button",
+     "chromeWidth": 8,
+     "padding": 8,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignToolForegroundButton": {
+     "targetType": "Button",
+     "chromeWidth": 8,
+     "padding": 8,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignToolRadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 28,
+     "padding": 28,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MaterialDesignToolToggleFlatListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 272,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignToolToggleListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 272,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignToolToggleListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 28,
+     "padding": 28,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MaterialDesignToolVerticalToggleListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignTreeListViewItemFocusVisual": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignTreeListViewToggleButtonStyle": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignTreeViewItem": {
+     "targetType": "TreeViewItem",
+     "chromeWidth": 48,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignTreeViewItemFocusVisual": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignUserForegroundCheckBox": {
+     "targetType": "CheckBox",
+     "chromeWidth": 22,
+     "padding": 4,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignUserForegroundRadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 22,
+     "padding": 4,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignVerticalHeaderStyle": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 0,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "OptionMarkFocusVisual": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2
+    }
+   }
+  },
+  {
+   "id": "MaterialDesignThemes 5.3 (MaterialDesign3.Defaults)",
+   "package": "MaterialDesignThemes",
+   "assemblies": [
+    "MaterialDesignThemes.Wpf",
+    "MaterialDesignColors"
+   ],
+   "namespaces": [
+    "http://materialdesigninxaml.net/winfx/xaml/themes"
+   ],
+   "requires": "MaterialDesign3.Defaults.xaml",
+   "version": "5.3.0",
+   "dictionaries": [
+    "pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesign3.Defaults.xaml"
+   ],
+   "controls": {
+    "Button": {
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "CheckBox": {
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "ComboBox": {
+     "padding": 0,
+     "border": 0
+    },
+    "ComboBoxItem": {
+     "chromeWidth": 10,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "Expander": {
+     "padding": 0,
+     "border": 0
+    },
+    "GroupBox": {
+     "chromeWidth": 20,
+     "padding": 18,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "Label": {
+     "chromeWidth": 8,
+     "padding": 8,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "ListBox": {
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "ListBoxItem": {
+     "chromeWidth": 16,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "ListView": {
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "fontSize": 13
+    },
+    "ListViewItem": {
+     "chromeWidth": 16,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MenuItem": {
+     "chromeWidth": 48,
+     "padding": 48,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "PasswordBox": {
+     "chromeWidth": 2,
+     "padding": 0,
+     "border": 0
+    },
+    "RadioButton": {
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "RepeatButton": {
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "ScrollBar": {
+     "followsSystem": true,
+     "chromeWidth": 16.8
+    },
+    "ScrollViewer": {
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "StatusBarItem": {
+     "chromeWidth": 6,
+     "padding": 6,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "TabItem": {
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "minWidth": 90,
+     "casing": "as-is",
+     "textFontSize": 14,
+     "textFontWeight": 500
+    },
+    "TextBox": {
+     "chromeWidth": 2,
+     "padding": 0,
+     "border": 0
+    },
+    "ToggleButton": {
+     "padding": 2,
+     "border": 4,
+     "casing": "as-is"
+    },
+    "TreeViewItem": {
+     "chromeWidth": 48,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    }
+   },
+   "styles": {
+    "FocusVisual": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesign3.MaterialDesignRepeatButton": {
+     "targetType": "RepeatButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesign3.NavigationBarListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesign3.NavigationBarListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 8,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 80,
+     "fontSize": 12,
+     "fontWeight": 400,
+     "casing": "as-is"
+    },
+    "MaterialDesign3.NavigationBarPrimaryListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesign3.NavigationBarPrimaryListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 8,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 80,
+     "fontSize": 12,
+     "fontWeight": 400,
+     "casing": "as-is"
+    },
+    "MaterialDesign3.NavigationDrawerListBoxItem": {
+     "targetType": "ListBoxItem",
+     "padding": 16,
+     "border": 0,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesign3.NavigationDrawerPrimaryListBoxItem": {
+     "targetType": "ListBoxItem",
+     "padding": 16,
+     "border": 0,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesign3.NavigationRailListBoxItem": {
+     "targetType": "ListBoxItem",
+     "padding": 0,
+     "border": 0,
+     "fontSize": 12,
+     "fontWeight": 400,
+     "casing": "as-is"
+    },
+    "MaterialDesign3.NavigationRailPrimaryListBoxItem": {
+     "targetType": "ListBoxItem",
+     "padding": 0,
+     "border": 0,
+     "fontSize": 12,
+     "fontWeight": 400,
+     "casing": "as-is"
+    },
+    "MaterialDesignActionCheckBox": {
+     "targetType": "CheckBox",
+     "padding": 0,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignActionDarkCheckBox": {
+     "targetType": "CheckBox",
+     "padding": 0,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignActionDarkToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignActionLightCheckBox": {
+     "targetType": "CheckBox",
+     "padding": 0,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignActionLightToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignActionSecondaryCheckBox": {
+     "targetType": "CheckBox",
+     "padding": 0,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignActionSecondaryToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignActionToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignCalendarMeridiemRadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignCalendarMeridiemRadioButtonDefault": {
+     "targetType": "RadioButton",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignCalendarMeridiemRadioButtonThemed": {
+     "targetType": "RadioButton",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignCardGroupBox": {
+     "targetType": "GroupBox",
+     "chromeWidth": 18,
+     "padding": 18,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignCardsListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignCardsListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignCheckBox": {
+     "targetType": "CheckBox",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignChoiceChipListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 28,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipOutlineListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignChoiceChipOutlineListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 28,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipOutlineRadioButton": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 28,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipPrimaryListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignChoiceChipPrimaryListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 28,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipPrimaryOutlineListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignChoiceChipPrimaryOutlineListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 28,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipPrimaryOutlineRadioButton": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 28,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipPrimaryRadioButton": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 28,
+     "padding": 2,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipRadioButton": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 28,
+     "padding": 2,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipSecondaryListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignChoiceChipSecondaryListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 28,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipSecondaryOutlineListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignChoiceChipSecondaryOutlineListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 28,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipSecondaryOutlineRadioButton": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 28,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignChoiceChipSecondaryRadioButton": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 28,
+     "padding": 2,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignComboBox": {
+     "targetType": "ComboBox",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignComboBoxEditableTextBox": {
+     "targetType": "TextBox",
+     "chromeWidth": 4,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignComboBoxItemSelectedCollapsedStyle": {
+     "targetType": "ComboBoxItem",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignComboBoxItemStyle": {
+     "targetType": "ComboBoxItem",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignComboBoxToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignDarkCheckBox": {
+     "targetType": "CheckBox",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignDarkRadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignDataGridCheckBoxColumnEditingStyle": {
+     "targetType": "CheckBox",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignDataGridCheckBoxColumnStyle": {
+     "targetType": "CheckBox",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignDataGridComboBox": {
+     "targetType": "ComboBox",
+     "chromeWidth": 16.8,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignDataGridComboBoxEditableTextBox": {
+     "targetType": "TextBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignDataGridComboBoxItemStyle": {
+     "targetType": "ComboBoxItem",
+     "chromeWidth": 16,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MaterialDesignDataGridComboBoxToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignDataGridTextColumnEditingStyle": {
+     "targetType": "TextBox",
+     "chromeWidth": 2,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignDataGridTextColumnPopupEditingStyle": {
+     "targetType": "TextBox",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignExpandCollapseToggleStyle": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignExpander": {
+     "targetType": "Expander",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignExpanderToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignFilledComboBox": {
+     "targetType": "ComboBox",
+     "padding": 28,
+     "border": 0
+    },
+    "MaterialDesignFilledPasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 30,
+     "padding": 28,
+     "border": 0
+    },
+    "MaterialDesignFilledRevealPasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 48,
+     "padding": 28,
+     "border": 0
+    },
+    "MaterialDesignFilledTextBox": {
+     "targetType": "TextBox",
+     "chromeWidth": 30,
+     "padding": 28,
+     "border": 0
+    },
+    "MaterialDesignFilterChipCheckBox": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 18,
+     "padding": 2,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFilterChipListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 18,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipOutlineCheckBox": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 18,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipOutlineListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFilterChipOutlineListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 18,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipPrimaryCheckBox": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 18,
+     "padding": 2,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipPrimaryListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFilterChipPrimaryListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 18,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipPrimaryOutlineCheckBox": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 18,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipPrimaryOutlineListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFilterChipPrimaryOutlineListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 18,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipSecondaryCheckBox": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 18,
+     "padding": 2,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipSecondaryListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFilterChipSecondaryListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 18,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipSecondaryOutlineCheckBox": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 18,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "minWidth": 46,
+     "fontSize": 13,
+     "casing": "as-is"
+    },
+    "MaterialDesignFilterChipSecondaryOutlineListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFilterChipSecondaryOutlineListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 18,
+     "padding": 8,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatDarkBgButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatDarkButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatLightBgButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatLightButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatMidBgButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatPrimaryToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 0,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatSecondaryButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatSecondaryDarkBgButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatSecondaryDarkButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatSecondaryLightBgButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatSecondaryLightButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatSecondaryMidBgButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignFlatToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 0,
+     "border": 2,
+     "fontSize": 18,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionDarkButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionLightButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionMiniButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionMiniDarkButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionMiniLightButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionMiniSecondaryButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionMiniSecondaryDarkButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionMiniSecondaryLightButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionSecondaryButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionSecondaryDarkButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingActionSecondaryLightButton": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignFloatingHintComboBox": {
+     "targetType": "ComboBox",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFloatingHintPasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 2,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFloatingHintRevealPasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 20,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignFloatingHintTextBox": {
+     "targetType": "TextBox",
+     "chromeWidth": 2,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignGridSplitterPreview": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignGridViewItem": {
+     "targetType": "ListViewItem",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignGroupBox": {
+     "targetType": "GroupBox",
+     "chromeWidth": 20,
+     "padding": 18,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MaterialDesignHamburgerToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignHeaderedContentControl": {
+     "targetType": "TabItem",
+     "chromeWidth": 0,
+     "padding": 12,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignHorizontalHeaderStyle": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 24,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignIconButton": {
+     "targetType": "Button",
+     "padding": 0,
+     "border": 0,
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignIconForegroundButton": {
+     "targetType": "Button",
+     "padding": 0,
+     "border": 0,
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignLabel": {
+     "targetType": "Label",
+     "chromeWidth": 8,
+     "padding": 8,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MaterialDesignLightCheckBox": {
+     "targetType": "CheckBox",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignLightRadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 16,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MaterialDesignListView": {
+     "targetType": "ListView",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "fontSize": 13
+    },
+    "MaterialDesignMenuItem": {
+     "targetType": "MenuItem",
+     "chromeWidth": 48,
+     "padding": 48,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignNavigationListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignNavigationListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 32,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignNavigationPrimaryListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignNavigationPrimaryListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 32,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignNavigationRailTabItem": {
+     "targetType": "TabItem",
+     "padding": 0,
+     "border": 0,
+     "casing": "as-is",
+     "textFontSize": 15,
+     "textFontWeight": 500
+    },
+    "MaterialDesignNavigationSecondaryListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignNavigationSecondaryListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 32,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignNumericUpDownButtonsStyle": {
+     "targetType": "Button",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignOutlinedButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignOutlinedComboBox": {
+     "targetType": "ComboBox",
+     "padding": 28,
+     "border": 2
+    },
+    "MaterialDesignOutlinedDarkButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignOutlinedLightButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignOutlinedPasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 32,
+     "padding": 28,
+     "border": 2
+    },
+    "MaterialDesignOutlinedRevealPasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 50,
+     "padding": 28,
+     "border": 2
+    },
+    "MaterialDesignOutlinedSecondaryButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignOutlinedSecondaryDarkButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignOutlinedSecondaryLightButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignOutlinedTextBox": {
+     "targetType": "TextBox",
+     "chromeWidth": 32,
+     "padding": 28,
+     "border": 2
+    },
+    "MaterialDesignPaperButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignPaperDarkButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignPaperLightButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignPaperSecondaryButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignPaperSecondaryDarkButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignPaperSecondaryLightButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignPasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 2,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignRadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignRaisedButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignRaisedDarkButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignRaisedLightButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignRaisedSecondaryButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignRaisedSecondaryDarkButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignRaisedSecondaryLightButton": {
+     "targetType": "Button",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignRepeatButtonTransparent": {
+     "targetType": "RepeatButton",
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignRevealPasswordBox": {
+     "targetType": "PasswordBox",
+     "chromeWidth": 20,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignScrollBar": {
+     "targetType": "ScrollBar",
+     "followsSystem": true,
+     "chromeWidth": 16.8
+    },
+    "MaterialDesignScrollBarButton": {
+     "targetType": "RepeatButton",
+     "chromeWidth": 4,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignScrollBarMinimal": {
+     "targetType": "ScrollBar",
+     "followsSystem": true,
+     "chromeWidth": 16.8
+    },
+    "MaterialDesignScrollViewer": {
+     "targetType": "ScrollViewer",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignSecondaryCheckBox": {
+     "targetType": "CheckBox",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignSecondaryRadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 28.8,
+     "padding": 0,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignSwitchDarkToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 0,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignSwitchLightToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 0,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignSwitchSecondaryToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 0,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignSwitchToggleButton": {
+     "targetType": "ToggleButton",
+     "padding": 0,
+     "border": 2,
+     "casing": "as-is"
+    },
+    "MaterialDesignTabItem": {
+     "targetType": "TabItem",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "minWidth": 90,
+     "casing": "as-is",
+     "textFontSize": 14,
+     "textFontWeight": 500
+    },
+    "MaterialDesignTabRadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "minWidth": 80,
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignTabRadioButtonBottom": {
+     "targetType": "RadioButton",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "minWidth": 80,
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignTabRadioButtonLeft": {
+     "targetType": "RadioButton",
+     "chromeWidth": 34,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "minWidth": 80,
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignTabRadioButtonRight": {
+     "targetType": "RadioButton",
+     "chromeWidth": 34,
+     "padding": 32,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "minWidth": 80,
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignTabRadioButtonTop": {
+     "targetType": "RadioButton",
+     "chromeWidth": 32,
+     "padding": 32,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "minWidth": 80,
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignTextBox": {
+     "targetType": "TextBox",
+     "chromeWidth": 2,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignToolBarHorizontalOverflowButtonStyle": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignToolBarVerticalOverflowButtonStyle": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignToolButton": {
+     "targetType": "Button",
+     "chromeWidth": 8,
+     "padding": 8,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignToolForegroundButton": {
+     "targetType": "Button",
+     "chromeWidth": 8,
+     "padding": 8,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "fontSize": 14,
+     "fontWeight": 500,
+     "casing": "as-is"
+    },
+    "MaterialDesignToolRadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 28,
+     "padding": 28,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MaterialDesignToolToggleFlatListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 272,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignToolToggleListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 272,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignToolToggleListBoxItem": {
+     "targetType": "ListBoxItem",
+     "chromeWidth": 28,
+     "padding": 28,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "replace",
+     "casing": "as-is"
+    },
+    "MaterialDesignToolVerticalToggleListBox": {
+     "targetType": "ListBox",
+     "chromeWidth": 0,
+     "padding": 0,
+     "border": 0
+    },
+    "MaterialDesignTreeListViewItemFocusVisual": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignTreeListViewToggleButtonStyle": {
+     "targetType": "ToggleButton",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignTreeViewItem": {
+     "targetType": "TreeViewItem",
+     "chromeWidth": 48,
+     "padding": 16,
+     "border": 0,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignTreeViewItemFocusVisual": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2
+    },
+    "MaterialDesignUserForegroundCheckBox": {
+     "targetType": "CheckBox",
+     "chromeWidth": 22,
+     "padding": 4,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignUserForegroundRadioButton": {
+     "targetType": "RadioButton",
+     "chromeWidth": 22,
+     "padding": 4,
+     "border": 2,
+     "paddingMode": "replace",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "MaterialDesignVerticalHeaderStyle": {
+     "targetType": "ToggleButton",
+     "chromeWidth": 0,
+     "padding": 2,
+     "border": 2,
+     "paddingMode": "ignore",
+     "borderMode": "ignore",
+     "casing": "as-is"
+    },
+    "OptionMarkFocusVisual": {
+     "targetType": "Button",
+     "padding": 2,
+     "border": 2
+    }
+   }
+  }
+ ]
+}

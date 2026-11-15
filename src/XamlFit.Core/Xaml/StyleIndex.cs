@@ -38,6 +38,8 @@ public enum TemplateKind
     Custom,
     /// <summary>範本被換掉了、或可能被換掉了，但我們看不到換成什麼。</summary>
     Unknown,
+    /// <summary>範本來自控制項函式庫的佈景（MahApps、MaterialDesign），而且那個佈景量過（<see cref="TemplateInfo.Theme"/>）。</summary>
+    Theme,
 }
 
 /// <param name="Template">Kind 是 Custom 時的 ControlTemplate 元素。</param>
@@ -50,7 +52,11 @@ public readonly record struct TemplateInfo(TemplateKind Kind, XElement? Template
     /// </summary>
     public IReadOnlyList<XElement?>? Alternatives { get; init; }
 
+    /// <summary>Kind 是 Theme 時：佈景裡那個樣式量到的 chrome、字型與大小寫。</summary>
+    public Layout.ThemeControl? Theme { get; init; }
+
     public static TemplateInfo Default => new(TemplateKind.Default, null, "");
+    public static TemplateInfo FromTheme(Layout.ThemeControl theme, string from) => new(TemplateKind.Theme, null, from) { Theme = theme };
     public static TemplateInfo Custom(XElement template, string from) => new(TemplateKind.Custom, template, from);
     public static TemplateInfo Unknown(string why) => new(TemplateKind.Unknown, null, why);
 }
@@ -81,7 +87,11 @@ public sealed class StyleIndex
         string? BasedOnKey, string? BasedOnType, bool BasedOnUnreadable,
         Dictionary<string, string> Setters,
         bool SetsTemplate, XElement? Template, string? TemplateKey,
-        XElement? Origin);
+        XElement? Origin)
+    {
+        /// <summary>不是專案裡的樣式，是量過的佈景裡的（<see cref="ThemeOfFile"/>）。</summary>
+        public Layout.ThemeControl? Theme { get; init; }
+    }
 
     private readonly Dictionary<string, List<StyleRecord>> _byKey = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<StyleRecord>> _implicit = new(StringComparer.Ordinal);
@@ -103,6 +113,63 @@ public sealed class StyleIndex
     /// 由掃描器提供；沒設定就當成沒人設定。
     /// </summary>
     public Func<XElement, string, Resolved>? InheritedFromHost { get; set; }
+
+    /// <summary>
+    /// 檔案 → 套在它身上、而且量過的控制項函式庫佈景（掃描器設定）。
+    /// 專案裡找不到的樣式鍵、沒有專案隱含樣式的控制項，就去佈景裡找：它的樣式設了哪些字型屬性、範本吃掉多寬、
+    /// 文字會不會被轉成大寫，都是 prototype/ThemeChrome 量過的。沒量過的佈景（或版本不同）維持「不知道」。
+    /// </summary>
+    public Func<string, Layout.ThemeProfile?>? ThemeOfFile { get; set; }
+
+    /// <summary>佈景樣式的大小寫設定在虛擬樣式裡用的 setter 名（MahApps 的附加屬性 ControlsHelper.ContentCharacterCasing）。</summary>
+    public const string CasingSetter = "ContentCharacterCasing";
+
+    private readonly Dictionary<(Layout.ThemeProfile, string, bool), StyleRecord> _themeRecords = [];
+
+    /// <summary>
+    /// 控制項的樣式把字串內容畫成大寫／小寫嗎（MahApps 的 ControlsHelper.ContentCharacterCasing，
+    /// 本地寫的、專案樣式設的、佈景樣式量到的）。讀不出來（綁定）時當成大寫 —— 大寫通常比較寬。
+    /// </summary>
+    public Layout.TextCasing CasingOf(XElement element)
+    {
+        string? raw = element.Attributes().FirstOrDefault(a => a.Name.LocalName == "ControlsHelper." + CasingSetter)?.Value;
+        if (raw is null)
+        {
+            var r = ResolveEx(element, CasingSetter, inheritable: false);
+            if (r.IsUnreadable) return Layout.TextCasing.Upper;
+            raw = r.IsValue ? r.Value : null;
+        }
+        return raw?.Trim() switch
+        {
+            null => Layout.TextCasing.AsIs,
+            var v when v.Equals("Upper", StringComparison.OrdinalIgnoreCase) => Layout.TextCasing.Upper,
+            var v when v.Equals("Lower", StringComparison.OrdinalIgnoreCase) => Layout.TextCasing.Lower,
+            var v when v.Equals("Normal", StringComparison.OrdinalIgnoreCase) => Layout.TextCasing.AsIs,
+            _ => Layout.TextCasing.Upper,
+        };
+    }
+
+    private StyleRecord? ThemeRecord(string file, string name, bool keyed)
+    {
+        if (ThemeOfFile?.Invoke(file) is not { } theme) return null;
+        if (!(keyed ? theme.Styles : theme.Controls).TryGetValue(name, out var control)) return null;
+        if (_themeRecords.TryGetValue((theme, name, keyed), out var cached)) return cached;
+
+        var setters = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (control.FontFamily is { } family) setters["FontFamily"] = family;
+        if (control.FontSize is { } size) setters["FontSize"] = Layout.ThemeProfiles.Number(size);
+        if (control.FontWeight is { } weight) setters["FontWeight"] = Layout.ThemeProfiles.WeightName(weight);
+        setters[CasingSetter] = control.Casing switch
+        {
+            Layout.TextCasing.Upper => "Upper",
+            Layout.TextCasing.Lower => "Lower",
+            _ => "Normal",
+        };
+        var record = new StyleRecord($"({theme.Id})", keyed ? name : null, control.TargetType, null, null, false, setters,
+            false, null, null, null) { Theme = control };
+        _themeRecords[(theme, name, keyed)] = record;
+        return record;
+    }
 
     private static readonly XName XClass = XName.Get("Class", "http://schemas.microsoft.com/winfx/2006/xaml");
 
@@ -385,7 +452,8 @@ public sealed class StyleIndex
         if (from is not null && FindLexical(from, key) is { } lexical)
             return lexical.Name.LocalName == "Style" ? [Lexical(lexical, file)] : null;
 
-        return _byKey.TryGetValue(key, out var all) ? SameFileFirst(all, s => s.File, file) : null;
+        if (_byKey.TryGetValue(key, out var all)) return SameFileFirst(all, s => s.File, file);
+        return ThemeRecord(file, key, keyed: true) is { } theme ? [theme] : null;
     }
 
     /// <param name="self">找「同型別的外層隱含樣式」時（BasedOn="{StaticResource {x:Type Button}}"）
@@ -395,7 +463,10 @@ public sealed class StyleIndex
         if (from is not null && FindLexicalImplicit(from, type, self?.Origin) is { } lexical)
             return [Lexical(lexical, file)];
 
-        if (!_implicit.TryGetValue(type, out var all)) return [];
+        // 專案裡沒有：佈景的隱含樣式（以型別為基底的專案樣式，基底也是它）
+        List<StyleRecord> Theme() => ThemeRecord(file, type, keyed: false) is { } t ? [t] : [];
+
+        if (!_implicit.TryGetValue(type, out var all)) return Theme();
 
         var others = self is null ? all : all.Where(s => !ReferenceEquals(s, self)).ToList();
 
@@ -403,7 +474,7 @@ public sealed class StyleIndex
         if (self is not null && BasesItselfOnItsType(self))
             others = others.Where(s => !BasesItselfOnItsType(s)).ToList();
 
-        return others.Count == 0 ? [] : SameFileFirst(others, s => s.File, file);
+        return others.Count == 0 ? Theme() : SameFileFirst(others, s => s.File, file);
     }
 
     /// <summary>文件裡的樣式元素 → 紀錄。掛在元素上當快取：同一個樣式會被每個用到它的元素、每個屬性各問一次。</summary>
@@ -705,6 +776,10 @@ public sealed class StyleIndex
     {
         if (results.Count == 1) return results[0];
         if (results.FirstOrDefault(r => r.Kind == TemplateKind.Unknown) is { Kind: TemplateKind.Unknown } unknown) return unknown;
+        if (results.Any(r => r.Kind == TemplateKind.Theme))
+            return results.All(r => r.Kind == TemplateKind.Theme && r.Theme == results[0].Theme)
+                ? results[0]
+                : TemplateInfo.Unknown($"{what} is defined in {results.Count} places, not all on the same theme style");
         if (results.All(r => r.Kind == TemplateKind.Default)) return TemplateInfo.Default;
 
         // 展開巢狀的候選（基底樣式自己也有好幾份時）
@@ -729,6 +804,8 @@ public sealed class StyleIndex
     {
         if (depth > 16) return TemplateInfo.Unknown($"{what} has a BasedOn chain that is too deep");
         if (!seen.Add(r.Origin ?? (object)r)) return TemplateInfo.Default;   // 繞回來了：這條路上沒有人換範本
+
+        if (r.Theme is { } theme) return TemplateInfo.FromTheme(theme, r.Key is { } k ? $"the theme's style '{k}'" : $"the theme's {theme.TargetType} style");
 
         if (r.SetsTemplate)
         {
