@@ -133,6 +133,13 @@ that over-estimated the available width.
   punctuation. Text is measured as the sum of clusters (errs wide). A modifier after a virama, or any
   sequence that is not a cluster, is not measurable. Playnite's Marathi and ScreenToGif's Tamil are now
   judged (not-judged strings 304 -> 4 and 117 -> 1).
+- **More Indic scripts**: Bengali, Gurmukhi, Odia, Kannada, Malayalam and Sinhala join Devanagari
+  and Tamil (Gujarati and Telugu stay not measurable). Joined consonants are now adjusted per pair
+  (the least narrowing over every form of the second consonant), only for the first virama of a chain
+  and only for plain consonants; a lone consonant + virama is shaped with halant forms; Sinhala's
+  always-visible virama uses every feature. Marathi text measures 1.0% wide on average (was 2.1%).
+- **HandyControl 3.5 and WPF-UI 4.3** are measured themes. Controls whose templates round widths to
+  device pixels (found by measuring fractional content) get one extra pixel as neighbours.
 - **`TextFormattingMode="Display"`** is measured from the font's `hdmx` hinted widths at each pixel size,
   with kerning rounded to whole pixels, at every scaling in the new `displayScales` setting (default
   1, 1.25, 1.5, 1.75, 2), keeping the widest. A pixel size the font does not list is not measurable;
@@ -150,15 +157,16 @@ that over-estimated the available width.
   alone and between two others, in Segoe UI, Arial, Tahoma, Courier New, Microsoft Sans Serif and
   Times New Roman (Leelawadee UI and Tahoma for Thai): worst under-estimate 0.05%, in either
   flow direction. Calibri is reported as not measurable.
-- **Devanagari and Tamil** against `FormattedText` (Nirmala UI; 290 Marathi and 300 Tamil strings,
-  every cluster alone, random cluster sequences): worst under-estimate 0.02% and 0.11%; on average
-  2.1% and 1.6% wide.
+- **Indic scripts** against `FormattedText` (Nirmala UI; 290 Marathi and 300 Tamil strings, and per
+  script every cluster alone, random cluster sequences and conjunct-heavy random words, 4,000–15,000
+  per script from `prototype/WpfOracle --indic-gen`): worst under-estimate 0.03%, Tamil 0.22%.
 - **Display mode** against `FormattedText` (`prototype/WpfOracle --display` / `--display-check`; 13,200
   widths over ten fonts, eleven sizes, five scalings): 2,781 measurable cases, all exact or wider (only
   at half-pixel sizes such as 12.5 px), none narrower; the rest are reported as not measurable.
 - **Themes** against real WPF windows with the theme merged (`prototype/LayoutOracle --theme
-  mahapps|md2|md3`, 43 cases each, both row semantics): MahApps 42 exact / 1 conservative,
-  MaterialDesign 2 and 3 each 41 / 2, 0 over-estimates, 0 wrong.
+  mahapps|md2|md3|handycontrol|wpfui`, 43 cases each, both row semantics): MahApps 42 exact /
+  1 conservative, MaterialDesign 2 and 3 41 / 2, HandyControl and WPF-UI 26 / 17, 0 over-estimates,
+  0 wrong.
 - **Layout** against real off-screen WPF windows, 228 cases: 186 exact, 42 conservative,
   0 over-estimates; with `check`'s row semantics 190 / 38 / 0 (`prototype/LayoutOracle --check`).
 - **Real project windows** drawn by WPF with their own themes and translations
@@ -180,7 +188,7 @@ that over-estimated the available width.
   runs give identical results.
 - **Shipped software**: 984 source-language measurements over ten projects. The only two
   overflows are in the maintainer's app and are real (drawn by WPF).
-- 659 unit tests.
+- 661 unit tests.
 
 ### Not verified
 

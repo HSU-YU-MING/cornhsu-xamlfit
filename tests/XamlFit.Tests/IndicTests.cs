@@ -50,7 +50,7 @@ public class IndicTests
     [Fact]
     public void A_consonant_with_virama_before_a_consonant_takes_the_conjunct_change()
     {
-        var data = new Dictionary<string, int> { [IndicClusters.ConjunctPrefix + Ka] = -300 };
+        var data = new Dictionary<string, int> { [IndicClusters.ConjunctKey(Ka, Ssa)] = -300 };
         var face = Face(new() { ["deva"] = data });
         Assert.Equal((400 + 400 - 300 + 400) / 100.0, M(face, S(Ka, Virama, Ssa)).WidthPx, 3);   // क्ष：連寫
         Assert.Equal((400 + 400) / 100.0, M(face, S(Ka, Virama)).WidthPx, 3);                    // 字尾的 क्：看得見的 virama
@@ -84,7 +84,9 @@ public class IndicTests
         var face = Face(new() { ["deva"] = new Dictionary<string, int>() });
         Assert.False(M(face, S(AaSign)).IsReliable);
         Assert.True(M(face, S(Ka, 0x0964)).IsReliable);   // danda 照 advance
-        Assert.False(M(face, S(0x0995)).IsReliable);      // 孟加拉文：還沒做
+        Assert.False(M(face, S(0x0995)).IsReliable);      // 孟加拉文：這支假字型沒有它的資料
+        Assert.Null(IndicClusters.Of(0x0A95));            // 古吉拉特文、泰盧固文沒有量（叢集之間的影響處理不了）
+        Assert.Null(IndicClusters.Of(0x0C15));
     }
 
     [Fact]
@@ -92,13 +94,13 @@ public class IndicTests
     {
         var face = Face(new()
         {
-            ["deva"] = new Dictionary<string, int> { [IndicClusters.Key([Ka, ISign])] = -100, [IndicClusters.ConjunctPrefix + Ka] = -300, [IndicClusters.TrailingKey] = 20 },
+            ["deva"] = new Dictionary<string, int> { [IndicClusters.Key([Ka, ISign])] = -100, [IndicClusters.ConjunctKey(Ka, Ssa)] = -300, [IndicClusters.TrailingKey] = 20 },
             ["deva/MAR"] = new Dictionary<string, int>(),
         });
         var json = MetricsFile.FromMetrics([face], "test", new DateOnly(2026, 11, 15)).ToJson();
         var back = MetricsFile.Parse(json).ToMetrics().Single().Indic!;
         Assert.Equal(-100, back["deva"][IndicClusters.Key([Ka, ISign])]);
-        Assert.Equal(-300, back["deva"][IndicClusters.ConjunctPrefix + Ka]);
+        Assert.Equal(-300, back["deva"][IndicClusters.ConjunctKey(Ka, Ssa)]);
         Assert.Equal(20, back["deva"][IndicClusters.TrailingKey]);
         Assert.Empty(back["deva/MAR"]);
     }

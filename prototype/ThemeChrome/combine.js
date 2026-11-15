@@ -4,19 +4,23 @@ const [, , dir, out] = process.argv;
 const meta = {
   mahapps: { id: 'MahApps.Metro 2.4', package: 'MahApps.Metro', assemblies: ['MahApps.Metro'], namespaces: ['http://metro.mahapps.com/winfx/xaml/controls'], requires: null },
   md2: { id: 'MaterialDesignThemes 5.3 (MaterialDesign2.Defaults)', package: 'MaterialDesignThemes', assemblies: ['MaterialDesignThemes.Wpf', 'MaterialDesignColors'], namespaces: ['http://materialdesigninxaml.net/winfx/xaml/themes'], requires: 'MaterialDesign2.Defaults.xaml' },
+  handycontrol: { id: 'HandyControl 3.5', package: 'HandyControl', assemblies: ['HandyControl'], namespaces: ['https://handyorg.github.io/handycontrol'], requires: null },
+  wpfui: { id: 'WPF-UI 4.3', package: 'WPF-UI', assemblies: ['Wpf.Ui'], namespaces: ['http://schemas.lepo.co/wpfui/2022/xaml'], requires: null },
   md3: { id: 'MaterialDesignThemes 5.3 (MaterialDesign3.Defaults)', package: 'MaterialDesignThemes', assemblies: ['MaterialDesignThemes.Wpf', 'MaterialDesignColors'], namespaces: ['http://materialdesigninxaml.net/winfx/xaml/themes'], requires: 'MaterialDesign3.Defaults.xaml' },
 };
-const keep = ['targetType', 'followsSystem', 'chromeWidth', 'padding', 'border', 'paddingMode', 'borderMode', 'minWidth', 'fontFamily', 'fontSize', 'fontWeight', 'casing', 'textFontFamily', 'textFontSize', 'textFontWeight'];
+const keep = ['targetType', 'followsSystem', 'layoutRounding', 'chromeWidth', 'padding', 'border', 'paddingMode', 'borderMode', 'minWidth', 'fontFamily', 'fontSize', 'fontWeight', 'casing', 'textFontFamily', 'textFontSize', 'textFontWeight'];
 function clean(v) {
   const o = {};
   for (const k of keep) if (v[k] !== undefined) o[k] = v[k];
+  // 內容宿主找錯元素時會量出離譜的數字（HandyControl 的 ComboBox 277.6）：當成量不到
+  if (o.chromeWidth !== undefined && (o.chromeWidth < 0 || o.chromeWidth > 100)) delete o.chromeWidth;
   if (o.paddingMode && !['replace', 'ignore'].includes(o.paddingMode)) delete o.paddingMode;   // 量出來不是一比一：工具保守地加上去
   if (o.borderMode && !['replace', 'ignore'].includes(o.borderMode)) delete o.borderMode;
   if (o.casing && !['as-is', 'upper', 'lower'].includes(o.casing)) delete o.casing;
   return o;
 }
 const themes = [];
-for (const name of ['mahapps', 'md2', 'md3']) {
+for (const name of ['mahapps', 'md2', 'md3', 'handycontrol', 'wpfui']) {
   const j = JSON.parse(fs.readFileSync(`${dir}/${name}.json`, 'utf8'));
   const controls = {}, styles = {};
   for (const [k, v] of Object.entries(j.controls)) if (!v.failed) controls[k] = clean(v);

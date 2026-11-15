@@ -21,6 +21,9 @@ public sealed record ThemeControl(
 {
     /// <summary>ScrollBar 的寬度等於系統捲軸寬（MaterialDesign）：跟著顯示縮放變，用工具自己的上限。</summary>
     public bool FollowsSystem { get; init; }
+
+    /// <summary>樣式開了 UseLayoutRounding（HandyControl、WPF-UI 的 CheckBox）：寬度捨入到裝置像素，可能往上多一個像素。</summary>
+    public bool LayoutRounding { get; init; }
 }
 
 /// <summary>
@@ -122,6 +125,7 @@ public static class ThemeProfiles
                 TextFontFamily: Text("textFontFamily"), TextFontSize: Num("textFontSize"), TextFontWeight: (int?)Num("textFontWeight"))
             {
                 FollowsSystem = v.TryGetProperty("followsSystem", out var fs) && fs.ValueKind == JsonValueKind.True,
+                LayoutRounding = v.TryGetProperty("layoutRounding", out var lr) && lr.ValueKind == JsonValueKind.True,
             };
         }
         return map;

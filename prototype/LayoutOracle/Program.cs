@@ -325,7 +325,7 @@ internal static class Program
         if (args.Length > 1 && args[0] == "--theme")
         {
             ThemeInUse = Themes.Load(app, args[1]);
-            cases = [.. Themes.Cases(args[1], Ns, Long).Select(c => new Case($"{args[1]} {c.Name}",
+            cases = [.. Themes.Cases(args[1], Ns, Long, ThemeInUse).Select(c => new Case($"{args[1]} {c.Name}",
                 $"<Window {Ns} Width='{c.Width}' Height='300' WindowStyle='None' AllowsTransparency='True'>{c.Inner}</Window>",
                 c.Unknown ? Want.Blocked : Want.Bound))];
             Console.WriteLine($"theme: {ThemeInUse.Id} {ThemeInUse.Version}");

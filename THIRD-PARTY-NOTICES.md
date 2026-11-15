@@ -16,13 +16,14 @@ No Microsoft source code, theme XAML, or binaries are redistributed.
 
 ### `data/theme-chrome.json`
 
-Horizontal chrome, fonts and text casing of standard WPF controls under MahApps.Metro 2.4.11 and
-MaterialDesignThemes 5.3.0, **measured on the maintainer's machine** by loading each theme into a WPF
+Horizontal chrome, fonts and text casing of standard WPF controls under MahApps.Metro 2.4.11,
+MaterialDesignThemes 5.3.0, HandyControl 3.5.1 and WPF-UI 4.3.0, **measured on the maintainer's machine** by loading each theme into a WPF
 application and placing content of known width inside each control (see `prototype/ThemeChrome`).
 It holds numbers and the themes' public style keys (`MahApps.Styles.Button.Square`…), not their XAML.
-Both libraries are MIT licensed (MahApps.Metro: Copyright © .NET Foundation and Contributors;
-MaterialDesignThemes: Copyright James Willock/Mulholland Software Ltd, as stated in their NuGet packages); no part of them is
-redistributed.
+All four libraries are MIT licensed (MahApps.Metro: Copyright © .NET Foundation and Contributors;
+MaterialDesignThemes: Copyright James Willock/Mulholland Software Ltd; HandyControl: Copyright (c) 2018-2024 HandyOrg;
+WPF-UI: Copyright (C) 2021-2026 Leszek Pomianowski and WPF UI Contributors — as stated in their NuGet packages); no part of
+them is redistributed.
 
 ### `data/font-fallback.json`
 

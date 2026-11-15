@@ -45,6 +45,8 @@ public class ThemeProfileTests
         var profiles = ThemeProfiles.Builtin();
         Assert.Contains(profiles, p => p.Id == "MahApps.Metro 2.4" && p.MajorMinor == "2.4" && p.Controls.ContainsKey("Button"));
         Assert.Equal(2, profiles.Count(p => p.Package == "MaterialDesignThemes"));
+        Assert.Contains(profiles, p => p.Id == "HandyControl 3.5" && p.Controls["CheckBox"].LayoutRounding);
+        Assert.Contains(profiles, p => p.Id == "WPF-UI 4.3");
     }
 
     [Fact]
@@ -150,6 +152,32 @@ public class ThemeProfileTests
             ("App.xaml", App(MahApps)),
             ("Main.xaml", Window("<Button Width=\"100\" Content=\"Save\"/>")));
         Assert.Equal("MahApps.Metro 2.4", scan.ExternalThemes.First().Profile);
+    }
+
+    [Fact]
+    public void WPF_UI_is_recognised_by_its_dictionary_elements()
+    {
+        var scan = Scan(
+            ("App.csproj", Project("WPF-UI", "4.3.0")),
+            ("App.xaml", $"<Application {Ns} xmlns:ui=\"http://schemas.lepo.co/wpfui/2022/xaml\"><Application.Resources><ResourceDictionary>" +
+                         "<ResourceDictionary.MergedDictionaries><ui:ThemesDictionary Theme=\"Dark\"/><ui:ControlsDictionary/></ResourceDictionary.MergedDictionaries>" +
+                         "</ResourceDictionary></Application.Resources></Application>"),
+            ("Main.xaml", Window("<Button Width=\"100\" Content=\"Save\"/>")));
+        Assert.All(scan.ExternalThemes, t => Assert.Equal("WPF-UI 4.3", t.Profile));
+        Assert.Equal(100 - 24, Site(scan, "Save").Width.Px, 3);   // WPF-UI 的 Button：chrome 24
+        Assert.Equal(14, Site(scan, "Save").FontSize, 3);
+    }
+
+    [Fact]
+    public void HandyControl_is_recognised_by_its_pack_uris()
+    {
+        var scan = Scan(
+            ("App.csproj", Project("HandyControl", "3.5.1")),
+            ("App.xaml", App("<ResourceDictionary Source=\"pack://application:,,,/HandyControl;component/Themes/SkinDefault.xaml\"/>" +
+                             "<ResourceDictionary Source=\"pack://application:,,,/HandyControl;component/Themes/Theme.xaml\"/>")),
+            ("Main.xaml", Window("<Button Width=\"100\" Content=\"Save\"/>")));
+        Assert.All(scan.ExternalThemes, t => Assert.Equal("HandyControl 3.5", t.Profile));
+        Assert.Equal(100 - 22, Site(scan, "Save").Width.Px, 3);
     }
 
     [Fact]

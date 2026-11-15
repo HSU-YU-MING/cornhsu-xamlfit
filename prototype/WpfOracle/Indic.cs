@@ -42,3 +42,44 @@ internal static class Indic
         return 0;
     }
 }
+
+/// <summary>--indic-gen &lt;out.json&gt;：從 IndicClusters 的定義產生測試字串（每個叢集單獨、隨機的叢集序列、多子音連寫的字）。</summary>
+internal static class IndicGen
+{
+    public static readonly Dictionary<string, string> Languages = new()
+    {
+        ["deva"] = "mr", ["beng"] = "bn", ["guru"] = "pa", ["gujr"] = "gu", ["orya"] = "or",
+        ["taml"] = "ta", ["telu"] = "te", ["knda"] = "kn", ["mlym"] = "ml", ["sinh"] = "si",
+    };
+
+    public static int Run(string outPath)
+    {
+        var rng = new Random(31);
+        var result = new Dictionary<string, List<string>>();
+        foreach (var script in XamlFit.Core.Fonts.IndicClusters.All)
+        {
+            string S(IEnumerable<int> cps) => string.Concat(cps.Select(char.ConvertFromUtf32));
+            var clusters = XamlFit.Core.Fonts.IndicClusters.Enumerate(script, _ => true).ToList();
+            var list = clusters.Select(c => S(c)).ToList();
+            for (var n = 0; n < 600; n++)
+                list.Add(string.Concat(Enumerable.Range(0, rng.Next(2, 6)).Select(_ => S(clusters[rng.Next(clusters.Count)]))));
+            var cons = script.Consonants.Order().ToList();
+            var signs = script.Signs.Order().ToList();
+            for (var n = 0; n < 800; n++)
+            {
+                var word = "";
+                for (var syl = rng.Next(1, 4); syl > 0; syl--)
+                {
+                    for (var k = rng.Next(0, 3); k > 0; k--) word += char.ConvertFromUtf32(cons[rng.Next(cons.Count)]) + char.ConvertFromUtf32(script.Virama);
+                    word += char.ConvertFromUtf32(cons[rng.Next(cons.Count)]);
+                    if (rng.Next(2) == 0) word += char.ConvertFromUtf32(signs[rng.Next(signs.Count)]);
+                }
+                list.Add(word);
+            }
+            result[Languages[script.Tag]] = list;
+        }
+        File.WriteAllText(outPath, JsonSerializer.Serialize(result, new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+        Console.WriteLine(string.Join(" ", result.Select(kv => $"{kv.Key}:{kv.Value.Count}")));
+        return 0;
+    }
+}

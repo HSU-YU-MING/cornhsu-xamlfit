@@ -106,8 +106,13 @@ public sealed class ElementMeasurer : IElementMeasurer
             if (min.Value is null) lower = _chrome.ScrollBarWidth;
         }
 
+        // 量過的佈景開了 UseLayoutRounding：寬度捨入到裝置像素時可能往上多一個像素（100% 時 1 DIP，縮放越大越少）
+        var rounding = ChromeTable.IsWpf(element)
+            && _styles.TemplateOf(element) is { Kind: TemplateKind.Theme, Theme: { LayoutRounding: true } roundingTheme } && roundingTheme.TargetType == local
+            ? 1.0 : 0.0;
+
         // WPF 的規則：MinWidth 贏過 MaxWidth
-        double Finish(double content) => Math.Max(lower, Math.Min(content, upper)) + margin;
+        double Finish(double content) => Math.Max(lower, Math.Min(content, upper)) + rounding + margin;
 
         // 1. 明寫 Width 最乾脆
         if (Length(element, "Width") is not { } width) return null;

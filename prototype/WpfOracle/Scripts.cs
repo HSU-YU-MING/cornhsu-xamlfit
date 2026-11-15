@@ -32,9 +32,10 @@ internal static class Scripts
 
         foreach (var (script, strings) in sets)
         {
-            foreach (var family in fonts.GetValueOrDefault(script, []))
+            foreach (var family in fonts.GetValueOrDefault(script, ["Nirmala UI"]))
             {
-                var lookup = resolver.Resolve(family, 400, FontStyleKind.Normal, family, cultures[script]);
+                var culture = cultures.GetValueOrDefault(script, script == "si" ? "si-LK" : script + "-IN");
+                var lookup = resolver.Resolve(family, 400, FontStyleKind.Normal, family, culture);
                 if (lookup.Chain.Count == 0) { Console.WriteLine($"{script} {family}: no metrics"); continue; }
                 var tf = new Typeface(new FontFamily(family), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
                 double sumAbs = 0, worstWide = 0, worstNarrow = 0;
@@ -46,8 +47,8 @@ internal static class Scripts
                     var ours = TextMeasure.Measure(text, lookup, 12);
                     if (ours.MissingGlyphs > 0) continue;
                     if (ours.ComplexScript) { unjudged++; if (Environment.GetEnvironmentVariable("XF_SCRIPT_UNJUDGED") is null) continue; }
-                    var ft = new FormattedText(text, CultureInfo.GetCultureInfo(cultures[script]),
-                        script is "th" or "mr" or "ta" || Environment.GetEnvironmentVariable("XF_SCRIPT_LTR") is not null ? FlowDirection.LeftToRight : FlowDirection.RightToLeft,
+                    var ft = new FormattedText(text, CultureInfo.GetCultureInfo(culture),
+                        script is not ("he" or "ar" or "fa") || Environment.GetEnvironmentVariable("XF_SCRIPT_LTR") is not null ? FlowDirection.LeftToRight : FlowDirection.RightToLeft,
                         tf, 12, Brushes.Black, null, TextFormattingMode.Ideal, 1.0);
                     var wpf = ft.WidthIncludingTrailingWhitespace;
                     if (wpf <= 0.01) continue;

@@ -181,6 +181,11 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 98 | **畫在前面的母音符號要先移到前面再套字距** | 坦米爾文的 ெ ே ை（與兩段式母音的前段）畫在子音前面，字型的字距是照畫出來的順序套的；照字元順序算，叢集偏窄到 3.7% | WpfOracle --scripts |
 | 99 | **標點跟著印度系文字併進同一段** | 「ல்:」的冒號被字型撐開 0.08 px：叢集後面接標點時加匯出時量到的最大值 | WpfOracle --scripts |
 | 100 | **叢集相加對印度系文字是安全的近似** | 連寫（半形、合字）只會讓整個字變窄：馬拉地文 1,153 個字，叢集相加沒有一個比整個字窄。子音 + virama 後面接子音的改變量取「所有接法裡最少的」 | WpfOracle --indic |
+| 101 | **連寫的改變量要依「兩個子音」記，而且只套一串的第一個 virama** | 依第一個子音記「最少改變」會被不連寫的組合拉成 0（馬拉地文平均偏寬 2.1%）；依兩個子音記之後 0.6%。但三個子音（क्र्श）兩組都套時中間的 र 同時算成下加形與 reph，偏窄 30% —— 只套第一個；後面那個叢集自己又是「子音 + virama」也不套 | WpfOracle --scripts（隨機連寫字） |
+| 102 | **帶 nukta 的子音不能用不帶 nukta 的連寫值** | 匯出只算「子音 + virama」兩個字；「子音 + nukta + virama」借用會偏窄 1% | WpfOracle --scripts |
+| 103 | **單獨的「子音 + virama」要套 haln** | 卡納達文、僧伽羅文字尾的 virama 由 haln 組成；不套偏窄到 36%。僧伽羅文的 virama 一律看得見、跟子音成合字：照全部特性跑 | WpfOracle --scripts |
+| 104 | **古吉拉特文、泰盧固文的叢集會互相影響** | 附加符號（anusvara、visarga）與兩段式母音讓整個字比叢集相加寬到 3%：叢集模型處理不了，沒開 | WpfOracle --scripts |
+| 105 | **佈景的範本裡可能有 UseLayoutRounding** | 控制項本身沒設，範本裡的元素設了：內容寬度帶小數時控制項寬度被捨入到像素（HandyControl、WPF-UI 幾乎每個控制項）。用小數寬度的內容在真的視窗裡量才看得出來；當鄰居時多留 1 DIP | LayoutOracle --theme |
 | 88 | **成對的表蓋不住跨三個字以上的上下文規則** | Segoe UI 的 ے 依前面兩個字換長度（另存三字改變量）；Segoe UI 的點避讓字距、Calibri 6.27 的大量 calt 跨更遠。匯出時用 2 萬個隨機字自我檢查，拼窄的字母移出驗證清單（Segoe UI 13 個少用字母），剩不到一半整支不寫（Calibri） | 匯出自我檢查 |
 
 ### 環境層級的坑
@@ -198,7 +203,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 659 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 661 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 42 條 CLI 路徑的退出碼
@@ -218,14 +223,14 @@ M6 裡它兩次不是零，兩次都是工具錯。
 - `CorpusRender` —— **真實專案的真值**：把專案的 XAML 連同它的 `App.xaml` 合併字典、來源與各語言字串載進真的 WPF，
   量每段文字需要多寬、看得見多寬，輸出 CSV。輸入是一份 JSON 規格（`root`、`app`、`source`、`cultures`、`window`、
   `lines`、`replace`、`output`）；跟工具的判斷逐筆比對的腳本不在 repo 裡（它要語料）。畫不出下拉選單的內容與資料範本（Windows only）
-- `ThemeChrome` —— 量控制項函式庫的佈景：`themechrome mahapps|md2|md3 out.json`，再用 `node prototype/ThemeChrome/combine.js <輸出目錄> data/theme-chrome.json`
-  合成（之後複製到 `src/XamlFit.Core/`）。套件版本寫在它的 csproj；換版本要重量。LayoutOracle `-- --theme mahapps|md2|md3`（可加 `--check`）拿真的視窗驗（Windows only）
+- `ThemeChrome` —— 量控制項函式庫的佈景：`themechrome mahapps|md2|md3|handycontrol|wpfui out.json`，再用 `node prototype/ThemeChrome/combine.js <輸出目錄> data/theme-chrome.json`
+  合成（之後複製到 `src/XamlFit.Core/`）。套件版本寫在它的 csproj；換版本要重量。LayoutOracle `-- --theme mahapps|md2|md3|handycontrol|wpfui`（可加 `--check`）拿真的視窗驗（Windows only）
 - `DpiProbe` —— 各縮放比例下的視窗邊框與捲軸寬度（`AdjustWindowRectExForDpi`、`GetSystemMetricsForDpi`）。
   內距表裡的 16／20／17.5 就是從這裡確認的（Windows only）
 
 - `M0Survey` —— 可量測比例調查（已修過五個 bug，結論在 `docs/`）
 - `WpfOracle` —— 拿 WPF 的 `FormattedText` 當真值驗量測（Windows only）。`-- --scripts <度量檔> <strings.json>` 對照希伯來文、阿拉伯文、波斯文、泰文（strings.json：`{"ar": [...], ...}`；`XF_SCRIPT_FONTS` 換字型、`XF_SCRIPT_DUMP="ar/Segoe UI"` 加 `XF_SCRIPT_ALL=1` 逐句印、`XF_SCRIPT_LTR=1` 用左到右排）。`-- --display <out.tsv>` 存 Display 模式的寬度（10 支字型 × 11 個字級 × 5 種縮放），`-- --display-check <度量檔> <tsv>` 拿工具的量法比；
-`-- --indic <strings.json>` 比「整個字」與「叢集相加」。匯出時的阿拉伯文自我檢查：`XAMLFIT_ARABIC_SELFCHECK=1 xamlfit fonts export …` 印每個語言系統拼窄的字數與移掉的字母
+`-- --indic <strings.json>` 比「整個字」與「叢集相加」，`-- --indic-gen <out.json>` 從 IndicClusters 的定義產生每種文字的測試字串（餵給 `--scripts`）。匯出時的阿拉伯文自我檢查：`XAMLFIT_ARABIC_SELFCHECK=1 xamlfit fonts export …` 印每個語言系統拼窄的字數與移掉的字母
 - `ChromeGen` —— 量控制項內距表（Windows only）
 - `DemoMetrics` —— 產生示範用的合成字型度量（跨平台）
 - `GridOracle` —— 早期的 Grid 欄寬對照。⚠ 它量的是根元素而不是 Show 過的視窗，

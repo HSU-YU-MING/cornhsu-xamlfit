@@ -273,6 +273,7 @@ public static class TextMeasure
         ArabicShapes? prevShapes = null;   // 前一個阿拉伯字母（中間只隔附加符號）
         var prevArabic = -1;
         var prevForm = -1;
+        var afterConjunctHead = false;     // 前一個印度系叢集是「子音 + virama」
         var prev2Arabic = -1;              // 再前一個字母（同一串裡），三字改變量用
         var prev2Form = -1;
         var markBeforePrev = false;        // prev2 與前一個字母之間夾過附加符號
@@ -281,6 +282,7 @@ public static class TextMeasure
         for (var i = 0; i < cps.Count; i++)
         {
             var cp = cps[i];
+            if (IndicClusters.Of(cp) is null) afterConjunctHead = false;
             if (IsDefaultIgnorable(cp)) { prevFace = null; prevShapes = null; continue; }   // 先判斷：U+FEFF 落在阿拉伯表現形式的範圍裡
             if (prevShapes is not null && ArabicJoining.TypeOf(cp) != ArabicJoining.Type.Transparent && !(forms is not null && forms[i] >= 0))
                 prevShapes = null;
@@ -384,8 +386,14 @@ public static class TextMeasure
                 totalUnits += (units + (clusters.TryGetValue(IndicClusters.Key(cluster), out var d) ? d : 0)) * scale;
                 // 子音 + virama 後面直接接子音：連寫（半形…）變窄的量，取所有接法裡最少的那個
                 var head = IndicClusters.ConjunctHead(indic, cluster);
-                if (head >= 0 && i + length < cps.Count && indic.Consonants.Contains(cps[i + length]) && face.TryAdvance(cps[i + length], out _)
-                    && clusters.TryGetValue(IndicClusters.ConjunctPrefix + head, out var conjunct))
+                // 只套在一串連寫的**第一個** virama：三個子音（क्र्श）時中間那個子音不能同時當下加形又當 reph，兩組加起來會窄掉 30%
+                var chained = afterConjunctHead;
+                afterConjunctHead = head >= 0;
+                // 後面那個叢集自己又是「子音 + virama」（三個子音以上的連寫）也不套：後加形、下加形會再改一次（孟加拉文的 ya-phala）
+                var nextIsHead = i + length + 1 < cps.Count && cps[i + length + 1] == indic.Virama
+                                 && (i + length + 2 >= cps.Count || !indic.Modifiers.Contains(cps[i + length + 2]));
+                if (head >= 0 && !chained && !nextIsHead && i + length < cps.Count && indic.Consonants.Contains(cps[i + length]) && face.TryAdvance(cps[i + length], out _)
+                    && clusters.TryGetValue(IndicClusters.ConjunctKey(head, cps[i + length]), out var conjunct))
                     totalUnits += conjunct * scale;
                 // 後面接的不是同一個文字系统的字（標點、空白…）：字型可能把它們之間撐開，加上匯出時量到的最大值
                 if (i + length < cps.Count && IndicClusters.Of(cps[i + length]) != indic

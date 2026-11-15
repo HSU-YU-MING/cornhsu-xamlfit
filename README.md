@@ -116,15 +116,18 @@ English, German, French, Chinese, Japanese and Korean, including kerning-heavy p
 `To` and `AV`): mean error **0.006%**, worst under-estimate **0.025%**, worst over-estimate 0.26%.
 Kerning comes from the font's GPOS table and is applied the way WPF does by default.
 
-**Devanagari and Tamil, against `FormattedText`.** Each grapheme cluster (a letter with its vowel
-sign, or a consonant with its virama) is shaped at export time with the font's own rules, per
-language system (Nirmala UI draws ल and श differently for Marathi), and text is measured as the sum
-of its clusters, plus — per consonant — the smallest narrowing any following consonant produces when
-they join, and the largest kerning seen before punctuation. That errs wide: Marathi 2.1% on average,
-Tamil 1.6%. Against Nirmala UI on 290 Marathi and 300 Tamil strings from Playnite and ScreenToGif,
-every cluster alone (5,926 and 599) and random cluster sequences: worst under-estimate 0.02% for
-Marathi and 0.11% for Tamil (kerning between clusters, about 0.1 px). Other Indic scripts are not
-measured yet.
+**Indic scripts, against `FormattedText`.** Devanagari, Bengali, Gurmukhi, Odia, Tamil, Kannada,
+Malayalam and Sinhala. Each grapheme cluster (a letter with its vowel sign, or a consonant with its
+virama) is shaped at export time with the font's own rules, per language system (Nirmala UI draws ल
+and श differently for Marathi), with pre-base vowel signs drawn first and two-part vowels split.
+Text is the sum of its clusters, plus — for each pair of consonants joined by a virama — the smallest
+narrowing any form of the second one produces (only for the first virama of a chain: in क्र्श the
+middle र cannot be both a below-base form and a reph), and the largest kerning seen before
+punctuation. Against Nirmala UI — 290 Marathi and 300 Tamil strings from Playnite and ScreenToGif,
+every cluster alone, random cluster sequences and conjunct-heavy random words (about 4,000–15,000 per
+script): worst under-estimate 0.03%, Tamil 0.22%; on average Marathi text measures 1.0% wide.
+Gujarati and Telugu are not measured: marks and two-part vowels change their neighbours, and the sum
+of clusters came out up to 3% narrow.
 
 **`TextFormattingMode="Display"`, against `FormattedText`.** Display mode snaps every glyph to a
 whole pixel using the font's hinted widths, which depend on the pixel size — font size × display
@@ -162,7 +165,7 @@ and records how wide every text needs to be and how much of it is actually visib
 Playnite's GridEx declared, and an equivalent GridEx in the harness so WPF lays it out for real):
 **138 clipped by both, 2 false alarms, 0 missed**, 6,304 fit by both. The false alarms are within
 1.5 px. Where both agree, XamlFit's text width is −0.02 to +0.03 px off WPF's outside Devanagari and
-Tamil (which err wide, by up to 11 px here), and the width it believes is available is never more
+Tamil (which err wide, by up to 7 px here), and the width it believes is available is never more
 than 0.02 px too generous. ScreenToGif, 6 windows
 including the editor's side panel and every kind of drop-down, 3,043 comparisons with the same
 font on both sides (this machine's): **122 clipped by both, 28 false alarms, 0 missed**, 2,893 fit by
@@ -242,8 +245,9 @@ If `App.xaml` merges a dictionary from another assembly (`MaterialDesignThemes.W
 Design `Button` has 32 px of padding, not 4. The built-in table no longer applies, so sites
 inside those controls become blocked until you declare their chrome.
 
-Two libraries are **measured** and work without configuration: **MahApps.Metro 2.4** and
-**MaterialDesignThemes 5.3** (`MaterialDesign2.Defaults.xaml` or `MaterialDesign3.Defaults.xaml`).
+Four libraries are **measured** and work without configuration: **MahApps.Metro 2.4**,
+**MaterialDesignThemes 5.3** (`MaterialDesign2.Defaults.xaml` or `MaterialDesign3.Defaults.xaml`),
+**HandyControl 3.5** and **WPF-UI 4.3** (`ui:ThemesDictionary` / `ui:ControlsDictionary`).
 `prototype/ThemeChrome` loads each theme the way an application does and measures, in WPF, every
 standard control's chrome, what an explicit `Padding`/`BorderThickness` does to it, the font size
 and weight the style sets, whether string content is drawn in capitals (a MahApps `Button` draws
@@ -253,8 +257,10 @@ width — for the implicit styles and for every keyed style (`MahApps.Styles.But
 only when the project's package reference has the same major.minor version and no unmeasured theme
 shares its scope. Against real WPF windows with each theme merged (`prototype/LayoutOracle --theme`,
 43 cases each, normal and `check` row semantics): MahApps 42 exact / 1 conservative, MaterialDesign
-2 and 3 each 41 / 2, **0 over-estimates**; Material Design's switch-style `ToggleButton` is reported
-as not measurable.
+2 and 3 each 41 / 2, HandyControl and WPF-UI each 26 / 17, **0 over-estimates**; Material Design's
+switch-style `ToggleButton` is reported as not measurable. HandyControl and WPF-UI round most
+controls' widths to device pixels inside their templates; such a control, as a neighbour, is given
+one extra pixel (that rounding made two neighbours 0.7 px wider than measured before).
 
 ### Templates in your own project
 
@@ -393,8 +399,8 @@ out a horizontal `StackPanel` or `DockPanel`, and it is what `check` reports.
 
 What is *not* judged is counted and printed: strings with run-time placeholders (`{0}`), text
 the metrics do not cover (with the code points, so you know which font to export), and
-scripts that reshape in a way the metrics do not cover (Bengali and the other Indic scripts besides
-Devanagari and Tamil, Myanmar, Khmer, Tibetan, Arabic letters a font's data leaves out), and Display-mode
+scripts that reshape in a way the metrics do not cover (Gujarati, Telugu, Myanmar, Khmer, Tibetan,
+Arabic letters a font's data leaves out, Indic sequences that are not a grapheme cluster), and Display-mode
 text at a pixel size the font has no hinted widths for. **A culture in which nothing
 could be measured makes the run exit 3** — "not checked" must not look like "passed".
 
@@ -423,8 +429,8 @@ fail a build, because a guess should not block someone's pull request.
 | Styles applied by triggers, visual states or code-behind | not followed |
 | Text set through properties not scanned (`ToolTip`, `Title`, watermark/hint attached properties, `Hyperlink`/`Span` content) | not seen at all |
 | Resource dictionaries merged in code at run time | every dictionary file is assumed merged; conflicting definitions make the value unknown |
-| Shaping in scripts other than Arabic, Devanagari and Tamil (Bengali, Gurmukhi, Gujarati, Telugu, Kannada, Malayalam, Sinhala, Myanmar, Khmer, Tibetan, Mongolian) | reported as not measurable |
-| Devanagari and Tamil | measured as the sum of grapheme clusters: about 2% wide on average, never more than 0.11% narrow in the comparisons |
+| Shaping in Gujarati, Telugu, Myanmar, Khmer, Tibetan, Mongolian | reported as not measurable |
+| Devanagari, Bengali, Gurmukhi, Odia, Tamil, Kannada, Malayalam, Sinhala | measured as the sum of grapheme clusters, erring wide; never more than 0.22% narrow in the comparisons |
 | `TextFormattingMode="Display"` | measured from the font's hinted widths at every scaling in `displayScales`; a pixel size the font does not list is not measurable |
 | Arabic-script fonts whose contextual rules reach further than three letters | the letters involved, or the whole font, are reported as not measurable (see above) |
 | Arabic digits | WPF swaps 0–9 for Arabic-Indic digits in Arabic text; both are measured and the wider one is used |

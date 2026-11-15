@@ -37,6 +37,16 @@ internal static class Themes
                     Source = new Uri($"pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesign{which[2]}.Defaults.xaml"),
                 });
                 break;
+            case "handycontrol":
+                id = "HandyControl 3.5";
+                foreach (var s in new[] { "pack://application:,,,/HandyControl;component/Themes/SkinDefault.xaml", "pack://application:,,,/HandyControl;component/Themes/Theme.xaml" })
+                    app.Resources.MergedDictionaries.Add(new ResourceDictionary { Source = new Uri(s) });
+                break;
+            case "wpfui":
+                id = "WPF-UI 4.3";
+                app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ThemesDictionary { Theme = Wpf.Ui.Appearance.ApplicationTheme.Light });
+                app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ControlsDictionary());
+                break;
             default:
                 throw new ArgumentException(which);
         }
@@ -47,24 +57,31 @@ internal static class Themes
     /// <param name="ns">未使用；保留跟其他案例一樣的呼叫方式。</param>
     /// <returns>Unknown：量測資料裡這個控制項的 chrome 是「量不到」（MaterialDesign 的 ToggleButton 是開關，內容寬度不往外傳），
     /// 解析器該回「量不到」。</returns>
-    public static IEnumerable<(string Name, string Inner, int Width, bool Unknown)> Cases(string which, string ns, string longText)
+    public static IEnumerable<(string Name, string Inner, int Width, bool Unknown)> Cases(string which, string ns, string longText, ThemeProfile profile)
     {
         var text = $"<TextBlock x:Name='probe' Text='{longText}'/>";
-        var (keyedButton, keyedToggle) = which == "mahapps"
-            ? ("MahApps.Styles.Button.Square", "MahApps.Styles.ToggleButton")
-            : ("MaterialDesignOutlinedButton", "MaterialDesignFlatToggleButton");
+        var (keyedButton, keyedToggle) = which switch
+        {
+            "mahapps" => ("MahApps.Styles.Button.Square", "MahApps.Styles.ToggleButton"),
+            "handycontrol" => ("ButtonDanger.Small", "ToggleButtonPrimary"),
+            "wpfui" => ("DefaultButtonStyle", "DefaultToggleButtonStyle"),
+            _ => ("MaterialDesignOutlinedButton", "MaterialDesignFlatToggleButton"),
+        };
+        // 量測資料說這個控制項（或樣式）量不到時，解析器該回「量不到」
+        bool Unknown(string control) => !profile.Controls.TryGetValue(control, out var c) || c.Chrome is null;
+        bool UnknownKey(string key) => !profile.Styles.TryGetValue(key, out var c) || c.Chrome is null;
 
         foreach (var control in new[] { "Button", "ToggleButton", "RepeatButton", "CheckBox", "RadioButton", "Label", "StatusBarItem" })
         {
-            var unknown = which != "mahapps" && control == "ToggleButton";
+            var unknown = Unknown(control);
             yield return ($"{control}", $"<{control} Width='200' HorizontalAlignment='Left'>{text}</{control}>", 700, unknown);
             yield return ($"{control} Padding=3", $"<{control} Width='200' Padding='3' HorizontalAlignment='Left'>{text}</{control}>", 700, unknown);
             yield return ($"{control} BorderThickness=4", $"<{control} Width='200' BorderThickness='4' HorizontalAlignment='Left'>{text}</{control}>", 700, unknown);
         }
         yield return ("GroupBox content", $"<GroupBox Width='250' HorizontalAlignment='Left' Header='H'>{text}</GroupBox>", 700, false);
         yield return ("ListBoxItem", $"<ListBox Width='250' HorizontalAlignment='Left' ScrollViewer.HorizontalScrollBarVisibility='Disabled'><ListBoxItem>{text}</ListBoxItem></ListBox>", 700, false);
-        yield return ($"keyed {keyedButton}", $"<Button Style='{{StaticResource {keyedButton}}}' Width='200' HorizontalAlignment='Left'>{text}</Button>", 700, false);
-        yield return ($"keyed {keyedToggle}", $"<ToggleButton Style='{{StaticResource {keyedToggle}}}' Width='200' HorizontalAlignment='Left'>{text}</ToggleButton>", 700, which != "mahapps");
+        yield return ($"keyed {keyedButton}", $"<Button Style='{{StaticResource {keyedButton}}}' Width='200' HorizontalAlignment='Left'>{text}</Button>", 700, UnknownKey(keyedButton));
+        yield return ($"keyed {keyedToggle}", $"<ToggleButton Style='{{StaticResource {keyedToggle}}}' Width='200' HorizontalAlignment='Left'>{text}</ToggleButton>", 700, UnknownKey(keyedToggle));
         yield return ("project style BasedOn keyed",
             $"<Button Width='200' HorizontalAlignment='Left'><Button.Style><Style TargetType='Button' BasedOn='{{StaticResource {keyedButton}}}'><Setter Property='FontSize' Value='20'/></Style></Button.Style>{text}</Button>", 700, false);
         yield return ("ScrollViewer bar visible", $"<ScrollViewer Width='250' HorizontalAlignment='Left' VerticalScrollBarVisibility='Visible' HorizontalScrollBarVisibility='Disabled'>{text}</ScrollViewer>", 700, false);

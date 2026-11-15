@@ -51,7 +51,7 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
-        if (args.Length < 2) { Console.Error.WriteLine("usage: themechrome <mahapps|md2|md3> <out.json>"); return 2; }
+        if (args.Length < 2) { Console.Error.WriteLine("usage: themechrome <mahapps|md2|md3|handycontrol|wpfui> <out.json>"); return 2; }
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         var (themeName, assembly, version, sources) = Load(app, args[0]);
 
@@ -133,6 +133,20 @@ internal static class Program
                 });
                 sources = [$"pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesign{(which == "md2" ? 2 : 3)}.Defaults.xaml"];
                 break;
+            case "handycontrol":
+                name = "HandyControl"; asm = "HandyControl";
+                sources =
+                [
+                    "pack://application:,,,/HandyControl;component/Themes/SkinDefault.xaml",
+                    "pack://application:,,,/HandyControl;component/Themes/Theme.xaml",
+                ];
+                break;
+            case "wpfui":
+                name = "WPF-UI"; asm = "Wpf.Ui";
+                app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ThemesDictionary { Theme = Wpf.Ui.Appearance.ApplicationTheme.Light });
+                app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ControlsDictionary());
+                sources = [];
+                break;
             default:
                 throw new ArgumentException(which);
         }
@@ -149,8 +163,13 @@ internal static class Program
         var seen = new HashSet<string>();
         foreach (var d in Flatten(dict))
             foreach (var key in d.Keys)
-                if (key is string k && seen.Add(k) && d[key] is Style s && s.TargetType is not null)
-                    yield return (k, s);
+            {
+                if (key is not string k || !seen.Add(k)) continue;
+                object? value;
+                try { value = d[key]; }
+                catch { continue; }   // 有些資源一取值就丟例外（要執行期才有的東西）：跳過
+                if (value is Style s && s.TargetType is not null) yield return (k, s);
+            }
     }
 
     private static IEnumerable<ResourceDictionary> Flatten(ResourceDictionary dict)
@@ -215,6 +234,9 @@ internal static class Program
                 if (FromStyle(control, Control.FontSizeProperty)) row["fontSize"] = Math.Round(control.FontSize, 3);
                 if (FromStyle(control, Control.FontWeightProperty)) row["fontWeight"] = control.FontWeight.ToOpenTypeWeight();
                 if (!double.IsNaN(control.MinWidth) && control.MinWidth > 0) row["minWidth"] = Math.Round(control.MinWidth, 3);
+                // 範本裡有元素開了 UseLayoutRounding：內容寬度帶小數時，控制項的寬度被捨入到像素（可能往上），當鄰居時要多留一個像素。
+                // 要放進真的視窗才看得到（捨入用的是視窗的 DPI）
+                if (row.ContainsKey("chromeWidth") && RoundsWidth(make, set, style, (double)row["chromeWidth"])) row["layoutRounding"] = true;
 
                 // 明寫的 Padding／BorderThickness 是一比一取代樣式的值，還是被範本忽略
                 if (row.ContainsKey("chromeWidth"))
@@ -305,6 +327,26 @@ internal static class Program
         }
         catch (Exception e) { row["failed"] = e.GetType().Name; }
         return row;
+    }
+
+    private static bool RoundsWidth(Func<FrameworkElement> make, Action<FrameworkElement, object> set, Style? style, double chrome)
+    {
+        foreach (var w in new[] { 100.37, 57.61, 33.13 })
+        {
+            var c = make();
+            if (style is not null) c.Style = style;
+            c.HorizontalAlignment = HorizontalAlignment.Left;
+            set(c, new Border { Width = w, Height = ProbeHeight });
+            var root = new Grid();
+            root.Children.Add(c);
+            var window = new Window { Content = root, Width = 600, Height = 200, ShowInTaskbar = false, WindowStyle = WindowStyle.None, Left = -10000, Top = -10000, ShowActivated = false };
+            window.Show();
+            window.UpdateLayout();
+            var actual = c.ActualWidth;
+            window.Close();
+            if (Math.Abs(actual - (w + chrome)) > 0.01) return true;
+        }
+        return false;
     }
 
     private static bool FromStyle(DependencyObject d, DependencyProperty p) =>
