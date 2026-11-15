@@ -66,6 +66,14 @@ public sealed class FontMetrics
     /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>>? Indic { get; init; }
 
+    /// <summary>同一個字面，換上另一組 hinting 寬度（<c>fonts export --hinted</c> 補上 GDI 算的）。</summary>
+    public FontMetrics WithHinted(IReadOnlyDictionary<int, IReadOnlyDictionary<int, int>> hinted) => new()
+    {
+        Family = Family, Weight = Weight, Style = Style, Stretch = Stretch, LegacyFamily = LegacyFamily, Aliases = Aliases,
+        Variable = Variable, UnitsPerEm = UnitsPerEm, Ascender = Ascender, Descender = Descender, LineGap = LineGap,
+        DefaultAdvance = DefaultAdvance, Ranges = Ranges, Kerning = Kerning, Arabic = Arabic, Indic = Indic, Hinted = hinted,
+    };
+
     /// <summary>Display 模式下這個字在 ppem 像素大小時的寬度（整數像素）。這個 ppem 沒有 hinting 資料回 false。</summary>
     public bool TryHintedAdvance(int codepoint, int ppem, out int px)
     {
@@ -149,9 +157,24 @@ public static class TextMeasure
         var usedFallback = false;
         var firstMissing = -1;
 
+        // 像素大小剛好是 .5（10 px × 125%）：WPF 有時用小的那個、有時用大的（WpfOracle --display：Tahoma 用小的），
+        // 字距還可能照沒進位的大小算（Calibri 18 px × 175%：字寬用 31 或 32 px 都差一個像素）：
+        // 字寬兩個都量取寬的，字距在兩個整數與原本的大小裡取最寬的
+        var pixelSizes = new List<(double Scale, int Ppem, double[] KernSizes)>();
         foreach (var scale in scales)
         {
-            var ppem = RoundHalfUp(fontSizePx * scale);
+            var px = fontSizePx * scale;
+            if (Math.Abs(px - Math.Floor(px) - 0.5) < 1e-9)
+            {
+                double[] kernSizes = [Math.Floor(px), Math.Ceiling(px), px];
+                pixelSizes.Add((scale, RoundHalfUp(px), kernSizes));
+                pixelSizes.Add((scale, (int)Math.Floor(px), kernSizes));
+            }
+            else pixelSizes.Add((scale, RoundHalfUp(px), [RoundHalfUp(px)]));
+        }
+
+        foreach (var (scale, ppem, kernSizes) in pixelSizes)
+        {
             var total = 0;
             FontMetrics? prevFace = null;
             var prevCp = -1;
@@ -189,8 +212,9 @@ public static class TextMeasure
                             $"TextFormattingMode=\"Display\": {face.Family} has no hinted widths for {ppem} px ({fontSizePx:0.##} px at {scale * 100:0}% display scaling)"),
                     };
                 total += px;
-                if (ReferenceEquals(face, prevFace) && face.Kerning is { } kern)
-                    total += (int)Math.Round((double)kern.Adjust(prevCp, cp) * ppem / face.UnitsPerEm, MidpointRounding.ToEven);
+                if (ReferenceEquals(face, prevFace) && face.Kerning is { } kern && kern.Adjust(prevCp, cp) is var units && units != 0)
+                    // 剛好 .5 的字距 WPF 往大的進（Calibri 32 px：-1.5 → -1）：0.5 進位，不會比任何一種進位法窄
+                    total += kernSizes.Max(size => RoundHalfUp(units * size / face.UnitsPerEm));
                 prevFace = face;
                 prevCp = cp;
             }
@@ -395,6 +419,10 @@ public static class TextMeasure
                 if (head >= 0 && !chained && !nextIsHead && i + length < cps.Count && indic.Consonants.Contains(cps[i + length]) && face.TryAdvance(cps[i + length], out _)
                     && clusters.TryGetValue(IndicClusters.ConjunctKey(head, cps[i + length]), out var conjunct))
                     totalUnits += conjunct * scale;
+                // 叢集會影響下一個叢集的文字系統：後面接同一個文字系統的叢集時，加上匯出時量到的最大變寬
+                if (indic.Interacting && i + length < cps.Count && IndicClusters.Of(cps[i + length]) == indic
+                    && clusters.TryGetValue(IndicClusters.BoundaryKey(cluster), out var boundary))
+                    totalUnits += boundary * scale;
                 // 後面接的不是同一個文字系统的字（標點、空白…）：字型可能把它們之間撐開，加上匯出時量到的最大值
                 if (i + length < cps.Count && IndicClusters.Of(cps[i + length]) != indic
                     && clusters.TryGetValue(IndicClusters.TrailingKey, out var trailing))

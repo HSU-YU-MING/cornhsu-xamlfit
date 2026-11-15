@@ -17,21 +17,22 @@ namespace XamlFit.Core.OpenType;
 /// </summary>
 public static class FontMetricsExtractor
 {
-    public static IReadOnlyList<FontMetrics> FromFile(string path) => FromBytes(File.ReadAllBytes(path));
+    /// <param name="wantFamily">只要這些家族（讀完名稱就判斷，不要的字面不跑字距、阿拉伯文、印度系文字的形狀表）；null = 全部。</param>
+    public static IReadOnlyList<FontMetrics> FromFile(string path, Func<string, bool>? wantFamily = null) => FromBytes(File.ReadAllBytes(path), wantFamily);
 
-    public static IReadOnlyList<FontMetrics> FromBytes(byte[] bytes)
+    public static IReadOnlyList<FontMetrics> FromBytes(byte[] bytes, Func<string, bool>? wantFamily = null)
     {
         var faces = SfntReader.Open(bytes);
         var result = new List<FontMetrics>(faces.Count);
         foreach (var f in faces)
         {
-            var m = TryExtract(f);
+            var m = TryExtract(f, wantFamily);
             if (m is not null) result.Add(m);
         }
         return result;
     }
 
-    private static FontMetrics? TryExtract(SfntReader r)
+    private static FontMetrics? TryExtract(SfntReader r, Func<string, bool>? wantFamily)
     {
         // 五張表缺一不可。缺了就讀不出度量 —— 回 null 讓呼叫端記成「這支讀不了」，
         // 不要丟例外讓整批匯出失敗（一個資料夾裡有一支壞字型是常態）。
@@ -59,6 +60,7 @@ public static class FontMetricsExtractor
         var (weight, stretch, italic) = ReadOs2(r, head);
         var (family, subfamily, legacyFamily, aliases) = ReadNames(r);
         if (string.IsNullOrWhiteSpace(family)) family = Path.GetFileNameWithoutExtension("unknown");
+        if (wantFamily is not null && !wantFamily(family)) return null;
 
         // 子家族名有時才是斜體的唯一來源（OS/2 的 fsSelection 不一定可靠）
         if (!italic && subfamily.Contains("italic", StringComparison.OrdinalIgnoreCase)) italic = true;

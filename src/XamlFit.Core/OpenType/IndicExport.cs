@@ -65,7 +65,7 @@ internal static class IndicExport
 
                 // 子音 + virama 後面接子音（半形、合字、下加形、reph）：比兩個叢集各自量窄多少。
                 // 依「前一個子音, 後一個子音」記：後一個叢集帶什麼母音符號都試，取改變**最少**的 —— 錯在寬的那邊
-                foreach (var head in all.Where(c => c.Length == 2 && c[1] == script.Virama))
+                foreach (var head in all.Where(c => !script.Interacting && c.Length == 2 && c[1] == script.Virama))
                     foreach (var group in all.Where(c => script.Consonants.Contains(c[0])).GroupBy(c => c[0]))
                     {
                         int? least = null;
@@ -89,6 +89,37 @@ internal static class IndicExport
                         if (change > trailing) trailing = change;
                     }
                 if (trailing > 0) deltas[IndicClusters.TrailingKey] = trailing;
+
+                // 叢集會影響下一個叢集的文字系統：每個叢集接「每一種開頭」的叢集時最多變寬多少（開頭 = 畫出來的前兩個字）
+                if (script.Interacting)
+                {
+                    var starts = all.GroupBy(c => string.Join(",", IndicClusters.VisualOrder(script, c).Take(2)))
+                        .Select(g => g.OrderBy(c => c.Length).First()).ToList();
+                    // WPF 套字距時跳過附加符號（「દૃં」+「ડ」照「દૃ」+「ડ」撐開）；這支引擎不處理 LookupFlag，
+                    // 所以叢集的每一個前綴都試，取最寬的
+                    var memo = new Dictionary<string, int>(StringComparer.Ordinal);
+                    int Widest(int[] a)
+                    {
+                        var key = IndicClusters.Key(a);
+                        if (memo.TryGetValue(key, out var known)) return known;
+                        var widest = 0;
+                        var visualA = IndicClusters.VisualOrder(script, a);
+                        foreach (var b in starts)
+                        {
+                            var change = Width([.. visualA, .. IndicClusters.VisualOrder(script, b)], full)
+                                         - Width(visualA, full) - widths[IndicClusters.Key(b)];
+                            if (change > widest) widest = change;
+                        }
+                        return memo[key] = widest;
+                    }
+                    foreach (var a in all)
+                    {
+                        // 叢集的每一個前綴（字母、字母 + nukta、再加母音符號…）：被跳過的符號可能是其中任何一段
+                        var widest = 0;
+                        for (var n = 1; n <= a.Length; n++) widest = Math.Max(widest, Widest(a[..n]));
+                        if (widest > 0) deltas[IndicClusters.BoundaryKey(a)] = widest;
+                    }
+                }
                 result[IndicClusters.DataKey(script, lang)] = deltas;
                 }
             }

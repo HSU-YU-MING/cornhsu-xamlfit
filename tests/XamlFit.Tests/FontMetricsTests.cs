@@ -89,6 +89,9 @@ public class FontMetricsTests
         var latin = Sans();
         // 第二支字型只有 'Z'
         var other = FontMetricsExtractor.FromBytes(SyntheticFont.Build("Other Sans")).Single();
+        // 只要某些家族：其他的讀完名稱就跳過（不跑形狀表）
+        Assert.Empty(FontMetricsExtractor.FromBytes(SyntheticFont.Build("Other Sans"), f => f == "Test Sans"));
+        Assert.Single(FontMetricsExtractor.FromBytes(SyntheticFont.Build("Other Sans"), f => f == "Other Sans"));
         var r = TextMeasure.Measure("A中", [latin, other], 10);
         Assert.Equal(0, r.MissingGlyphs);
         Assert.Equal((600 + 1000) / 1000.0 * 10, r.WidthPx, 6);

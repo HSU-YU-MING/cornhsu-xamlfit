@@ -42,7 +42,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 - 綁定的 `Width`／`Margin`／`Padding`、專案外的樣式、被換掉而且拿不到的範本
 - 不是 WPF 內建的控制項（`ui:Button` 的範本跟 `Button` 沒有關係）、表裡沒有的 WPF 元素
 - 外部佈景底下的標準控制項、從宿主視窗繼承但各視窗不一致的字型
-- 度量檔裡沒有的字型、`TextFormattingMode="Display"`
+- 度量檔裡沒有的字型、`TextFormattingMode="Display"` 下沒有 hinting 寬度的像素大小
 
 少扣內距 → 可用寬度偏大 → **漏報溢出**。把文字量窄也是同一個方向。
 **不完整的數字比沒有數字危險，因為它錯在「看起來裝得下」那一邊。**
@@ -173,7 +173,8 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 90 | **量佈景樣式設了什麼要看值的來源** | 沒設的屬性量到的是這台機器的系統字型（Microsoft JhengHei UI）；MaterialDesign 的 PasswordBox 甚至把 FontFamily 設成系統字型。只記 BaseValueSource 是 Style 的，而且等於系統字型的不記 | ThemeChrome |
 | 91 | **捲軸要放進真的視窗才量得到寬度** | 單獨 Measure 一個 ScrollBar 得到 0。MahApps 的捲軸 14（固定）、MaterialDesign 的等於系統寬（跟著縮放 → 用 17.5 上限） | ThemeChrome |
 | 92 | **同一個範圍裡有沒量過的佈景，量過的也不能用** | 不知道另一個佈景改了哪些控制項。NETworkManager 的 Dragablz 其實是 git submodule —— 抓下來之後它是專案自己的 XAML（只有 keyed 樣式與它自己的控制項），佈景就只剩 MahApps | 語料（NETworkManager） |
-| 93 | **Display 模式的字寬是 hdmx 的 hinting 寬度，像素大小 0.5 進位** | 字距也四捨五入到整數像素（偶數進位）。有資料的大小 Segoe UI、Arial、Trebuchet MS 每一組都一樣；12.5 px 這種剛好一半的大小 Tahoma、JhengHei 偏寬 | WpfOracle --display |
+| 93 | **Display 模式的字寬是 hinting 寬度，像素大小 0.5 進位** | 字距也四捨五入到整數像素，**剛好一半往大的進**（Calibri 32 px 的 −1.5 → −1；原本偶數進位拼窄 1 px）。剛好落在半個像素（12.5、31.5 px）時 WPF 字寬用小的或大的、字距可能照另一個算：兩個像素大小都量，字距取三者（兩個整數與原本的大小）最寬 | WpfOracle --display-check |
+| 106 | **GDI 的 hinting 寬度就是 WPF Display 模式的寬度** | `fonts export --hinted` 用 GetCharWidth32W 補 hdmx 沒列的 8～48 px（WpfOracle --display-gdi：不含字距時一樣）。GDI 找不到要的字面會**默默換一支**：一定要比 GetTextFaceW、tmWeight、tmItalic，不對就不寫。同名字型不能同時註冊（會選到別支檔案），所以這段不平行 | WpfOracle --display-gdi |
 | 94 | **hinting 旗標說「不改寬度」不能信** | Yu Gothic UI 的 head.flags 第 4 位是 0，照樣在 20、21、24、28 px 改寬度（偏窄 2%）。Consolas 剛好沒改。沒有 hdmx 的大小一律量不到；hinting 讓一個字多出好幾個像素也有（hdmx 實查），沒有上限可估 | WpfOracle --display |
 | 95 | **TTC 的字面要照 nameID 1 挑** | YuGothR.ttc 裡的是 Yu Gothic 與 Yu Gothic UI Semilight；Yu Gothic UI Regular 在 YuGothM.ttc。比對程式挑錯字面就以為模型錯了 | WpfOracle --display |
 | 96 | **馬拉地文的 ल、श 字形不同** | Nirmala UI 的 dev2 有 MAR 語言系統；用預設的語言系統量 ल 窄 4.5%。印度系文字也要依元素語言挑語言系統 | WpfOracle --scripts |
@@ -184,7 +185,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 101 | **連寫的改變量要依「兩個子音」記，而且只套一串的第一個 virama** | 依第一個子音記「最少改變」會被不連寫的組合拉成 0（馬拉地文平均偏寬 2.1%）；依兩個子音記之後 0.6%。但三個子音（क्र्श）兩組都套時中間的 र 同時算成下加形與 reph，偏窄 30% —— 只套第一個；後面那個叢集自己又是「子音 + virama」也不套 | WpfOracle --scripts（隨機連寫字） |
 | 102 | **帶 nukta 的子音不能用不帶 nukta 的連寫值** | 匯出只算「子音 + virama」兩個字；「子音 + nukta + virama」借用會偏窄 1% | WpfOracle --scripts |
 | 103 | **單獨的「子音 + virama」要套 haln** | 卡納達文、僧伽羅文字尾的 virama 由 haln 組成；不套偏窄到 36%。僧伽羅文的 virama 一律看得見、跟子音成合字：照全部特性跑 | WpfOracle --scripts |
-| 104 | **古吉拉特文、泰盧固文的叢集會互相影響** | 附加符號（anusvara、visarga）與兩段式母音讓整個字比叢集相加寬到 3%：叢集模型處理不了，沒開 | WpfOracle --scripts |
+| 104 | **古吉拉特文、泰盧固文的叢集會互相影響** | WPF 套字距時**跳過**附加符號：「દૃં」+「ડ」照「દૃ」+「ડ」撐開；這支匯出引擎不處理 LookupFlag，量不到。改成不用連寫值、每個交界加「這個叢集或它任何前綴接任何叢集時最多變寬多少」（偏寬 2.7%／9%，偏窄 ≤0.03%） | WpfOracle --scripts |
 | 105 | **佈景的範本裡可能有 UseLayoutRounding** | 控制項本身沒設，範本裡的元素設了：內容寬度帶小數時控制項寬度被捨入到像素（HandyControl、WPF-UI 幾乎每個控制項）。用小數寬度的內容在真的視窗裡量才看得出來；當鄰居時多留 1 DIP | LayoutOracle --theme |
 | 88 | **成對的表蓋不住跨三個字以上的上下文規則** | Segoe UI 的 ے 依前面兩個字換長度（另存三字改變量）；Segoe UI 的點避讓字距、Calibri 6.27 的大量 calt 跨更遠。匯出時用 2 萬個隨機字自我檢查，拼窄的字母移出驗證清單（Segoe UI 13 個少用字母），剩不到一半整支不寫（Calibri） | 匯出自我檢查 |
 
@@ -229,7 +230,7 @@ M6 裡它兩次不是零，兩次都是工具錯。
   內距表裡的 16／20／17.5 就是從這裡確認的（Windows only）
 
 - `M0Survey` —— 可量測比例調查（已修過五個 bug，結論在 `docs/`）
-- `WpfOracle` —— 拿 WPF 的 `FormattedText` 當真值驗量測（Windows only）。`-- --scripts <度量檔> <strings.json>` 對照希伯來文、阿拉伯文、波斯文、泰文（strings.json：`{"ar": [...], ...}`；`XF_SCRIPT_FONTS` 換字型、`XF_SCRIPT_DUMP="ar/Segoe UI"` 加 `XF_SCRIPT_ALL=1` 逐句印、`XF_SCRIPT_LTR=1` 用左到右排）。`-- --display <out.tsv>` 存 Display 模式的寬度（10 支字型 × 11 個字級 × 5 種縮放），`-- --display-check <度量檔> <tsv>` 拿工具的量法比；
+- `WpfOracle` —— 拿 WPF 的 `FormattedText` 當真值驗量測（Windows only）。`-- --scripts <度量檔> <strings.json>` 對照希伯來文、阿拉伯文、波斯文、泰文（strings.json：`{"ar": [...], ...}`；`XF_SCRIPT_FONTS` 換字型、`XF_SCRIPT_DUMP="ar/Segoe UI"` 加 `XF_SCRIPT_ALL=1` 逐句印、`XF_SCRIPT_LTR=1` 用左到右排）。`-- --display <out.tsv>` 存 Display 模式的寬度（10 支字型 × 11 個字級 × 5 種縮放），`-- --display-check <度量檔> <tsv>` 拿工具的量法比（度量檔要用 `fonts export --hinted` 匯出才每組都量得到），`-- --display-gdi <tsv>` 拿 GDI 的 hinting 寬度比（`XF_GDI_NARROW=1` 印偏窄的）；
 `-- --indic <strings.json>` 比「整個字」與「叢集相加」，`-- --indic-gen <out.json>` 從 IndicClusters 的定義產生每種文字的測試字串（餵給 `--scripts`）。匯出時的阿拉伯文自我檢查：`XAMLFIT_ARABIC_SELFCHECK=1 xamlfit fonts export …` 印每個語言系統拼窄的字數與移掉的字母
 - `ChromeGen` —— 量控制項內距表（Windows only）
 - `DemoMetrics` —— 產生示範用的合成字型度量（跨平台）

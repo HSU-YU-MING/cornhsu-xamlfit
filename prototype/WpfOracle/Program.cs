@@ -16,6 +16,7 @@ if (args.Length >= 2 && args[0] == "--display") return Display.Run(args[1]);
 if (args.Length >= 2 && args[0] == "--indic") return Indic.Run(args[1]);
 if (args.Length >= 2 && args[0] == "--indic-gen") return IndicGen.Run(args[1]);
 if (args.Length >= 3 && args[0] == "--display-check") return DisplayCheck.Run(args[1], args[2]);
+if (args.Length >= 2 && args[0] == "--display-gdi") return DisplayGdi.Run(args[1]);
 
 var metricsPath = args.Length > 0 ? args[0] : "xamlfit.fonts.json";
 if (!File.Exists(metricsPath))

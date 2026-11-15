@@ -92,21 +92,32 @@ internal static class ArabicExport
 
                 var pairs = new Dictionary<long, int>();
                 var common = letters.Where(PairLetter).ToList();
+                var done = new HashSet<(int, int)>();
+                void ComputePair(int a, int b)
+                {
+                    if (!done.Add((a, b))) return;
+                    foreach (var (left, right) in new[] { (false, false), (true, false), (false, true), (true, true) })
+                    {
+                        var cps = new List<int>();
+                        if (left) cps.Add(tatweel);
+                        var ia = cps.Count;
+                        cps.Add(a);
+                        cps.Add(b);
+                        if (right) cps.Add(tatweel);
+                        var fm = ArabicJoining.FormsOf(cps);
+                        var delta = Total(cps) - (left ? tw : 0) - (right ? tw : 0) - forms[a][fm[ia]] - forms[b][fm[ia + 1]];
+                        var key = ArabicShapes.Key(a, fm[ia], b, fm[ia + 1]);
+                        if (!pairs.TryGetValue(key, out var old) || delta > old) pairs[key] = delta;
+                    }
+                }
+
+                // 先抽 1000 個隨機字（成對的改變量只算用到的）跟引擎整串跑比：超過 0.5% 拼窄就不用算完整的表了
+                // （Calibri 6.27 拼窄 1.7%，最後整支不寫：抽樣就知道，不用把幾萬組成對的改變量都算完）
+                if (QuickReject(common, forms, pairs, ComputePair, Total)) return null;
+
                 foreach (var a in common)
                     foreach (var b in common)
-                        foreach (var (left, right) in new[] { (false, false), (true, false), (false, true), (true, true) })
-                        {
-                            var cps = new List<int>();
-                            if (left) cps.Add(tatweel);
-                            var ia = cps.Count;
-                            cps.Add(a);
-                            cps.Add(b);
-                            if (right) cps.Add(tatweel);
-                            var fm = ArabicJoining.FormsOf(cps);
-                            var delta = Total(cps) - (left ? tw : 0) - (right ? tw : 0) - forms[a][fm[ia]] - forms[b][fm[ia + 1]];
-                            var key = ArabicShapes.Key(a, fm[ia], b, fm[ia + 1]);
-                            if (!pairs.TryGetValue(key, out var old) || delta > old) pairs[key] = delta;
-                        }
+                        ComputePair(a, b);
 
                 int Pair(int a, int fa, int b, int fb) => pairs.TryGetValue(ArabicShapes.Key(a, fa, b, fb), out var d) ? d : 0;
                 var triples = new Dictionary<long, int>();
@@ -159,14 +170,44 @@ internal static class ArabicExport
         }
     }
 
+    private static bool QuickReject(List<int> letters, Dictionary<int, int[]> forms, Dictionary<long, int> pairs,
+        Action<int, int> computePair, Func<IReadOnlyList<int>, int> total)
+    {
+        if (letters.Count == 0) return false;
+        const int Words = 1000;
+        var rng = new Random(20261116);
+        var failures = 0;
+        for (var n = 0; n < Words; n++)
+        {
+            var word = Enumerable.Range(0, rng.Next(2, 8)).Select(_ => letters[rng.Next(letters.Count)]).ToList();
+            if (word.Any(TripleEnds.Contains)) continue;   // 三字改變量還沒算：跳過 ے
+            var fm = ArabicJoining.FormsOf(word);
+            var model = 0;
+            for (var i = 0; i < word.Count; i++)
+            {
+                model += forms[word[i]][fm[i]];
+                if (i == 0) continue;
+                computePair(word[i - 1], word[i]);
+                if (pairs.TryGetValue(ArabicShapes.Key(word[i - 1], fm[i - 1], word[i], fm[i]), out var p)) model += p;
+            }
+            if (model < total(word)) failures++;
+        }
+        return failures * 200 > Words;
+    }
+
     /// <summary>反覆自我檢查、移掉出問題的字母，回傳驗證過的字母；剩不到一半回 null。</summary>
     private static HashSet<int>? Prune(ArabicShapes shapes, List<int> letters, Func<IReadOnlyList<int>, int> total, string lang)
     {
         var verified = letters.ToHashSet();
+        var first = true;
         while (true)
         {
             var failing = SelfCheck(shapes, [.. verified.Order()], total, lang);
             if (failing.Count == 0) return verified;
+            // 第一次就有超過 0.5% 的字拼窄（Calibri 6.27 是 1.7%，Segoe UI 是 0.015%）：上下文規則到處都是，
+            // 一個一個移字母最後也剩不到一半，直接不寫（原本要跑八十幾輪，匯出卡十分鐘）
+            if (first && failing.Count * 200 > SelfCheckWords) return null;
+            first = false;
             // 先移少用的字母：出問題的字裡有少用字母就移它（出現最多次的），全是常用字母才動常用的
             var culprit = failing.SelectMany(w => w.Distinct()).GroupBy(cp => cp)
                 .OrderBy(g => Core(g.Key)).ThenByDescending(g => g.Count()).ThenByDescending(g => g.Key).First().Key;

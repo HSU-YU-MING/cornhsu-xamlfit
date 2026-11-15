@@ -57,10 +57,10 @@ that comes from the hosting window. Each of those blocks the site and says why.
 number, the share that actually did. It is printed on every run and gated by `--min-coverage`.
 The table below is `budget`. `check` can resolve more, because it lays a row out in document order
 (the controls before a site are all it needs to know), while `budget` gives a row of controls
-whose widths it cannot all read no number at all — Kindling is 76.0% under `budget` and 86.7%
+whose widths it cannot all read no number at all — Playnite is 66.2% under `budget` and 69.1%
 under `check`.
 
-Measured out of the box, no configuration, on sixteen projects:
+Measured out of the box, no configuration, on sixteen projects (fonts exported with `--hinted`):
 
 | project | localizable sites | measured | blocked | no width bound | resolution |
 |---|---:|---:|---:|---:|---:|
@@ -74,9 +74,9 @@ Measured out of the box, no configuration, on sixteen projects:
 | MaterialDesignInXamlToolkit | 2,339 | 0 | 867 | 1,432 | 0% |
 | wpfui | 440 | 0 | 15 | 405 | 0% |
 | NETworkManager (MahApps.Metro 2.4) | 1,862 | 0 | 49 | 1,727 | 0% |
-| HandBrake | 705 | 0 | 165 | 520 | 0% |
+| HandBrake | 705 | 63 | 102 | 520 | 38.2% |
 | dnSpy | 1,265 | 27 | 488 | 326 | 5.2% |
-| EarTrumpet | 66 | 0 | 4 | 0 | 0% |
+| EarTrumpet | 66 | 1 | 3 | 0 | 25.0% |
 | PowerToys (WPF parts) | 55 | 6 | 28 | 20 | 17.6% |
 | WinUI-Gallery | — | — | — | — | not WPF |
 
@@ -88,8 +88,8 @@ exists at run time (ScreenToGif's number boxes, colour pickers and drop-downs fi
 declare them with `controlWidths`), a row whose neighbour is data-bound, `SharedSizeGroup` columns.
 The five added last mostly have no width to check against: NETworkManager's windows and HandBrake's
 size to their content or to sizes restored at run time (1,727 and 520 sites "no width bound"); dnSpy's
-text is bound to view models; EarTrumpet and HandBrake set `TextFormattingMode="Display"`, which
-snaps glyphs to whole pixels and is reported as not measurable. NETworkManager used to be 916 blocked
+text is bound to view models; EarTrumpet's sites are inside templates. EarTrumpet and HandBrake set
+`TextFormattingMode="Display"`, measured from hinted widths. NETworkManager used to be 916 blocked
 behind MahApps; with the measured profile 49 remain.
 
 **Control libraries** are near zero, and that is the correct answer: in those repositories the
@@ -116,8 +116,8 @@ English, German, French, Chinese, Japanese and Korean, including kerning-heavy p
 `To` and `AV`): mean error **0.006%**, worst under-estimate **0.025%**, worst over-estimate 0.26%.
 Kerning comes from the font's GPOS table and is applied the way WPF does by default.
 
-**Indic scripts, against `FormattedText`.** Devanagari, Bengali, Gurmukhi, Odia, Tamil, Kannada,
-Malayalam and Sinhala. Each grapheme cluster (a letter with its vowel sign, or a consonant with its
+**Indic scripts, against `FormattedText`.** Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil,
+Telugu, Kannada, Malayalam and Sinhala. Each grapheme cluster (a letter with its vowel sign, or a consonant with its
 virama) is shaped at export time with the font's own rules, per language system (Nirmala UI draws ल
 and श differently for Marathi), with pre-base vowel signs drawn first and two-part vowels split.
 Text is the sum of its clusters, plus — for each pair of consonants joined by a virama — the smallest
@@ -126,17 +126,23 @@ middle र cannot be both a below-base form and a reph), and the largest kerning
 punctuation. Against Nirmala UI — 290 Marathi and 300 Tamil strings from Playnite and ScreenToGif,
 every cluster alone, random cluster sequences and conjunct-heavy random words (about 4,000–15,000 per
 script): worst under-estimate 0.03%, Tamil 0.22%; on average Marathi text measures 1.0% wide.
-Gujarati and Telugu are not measured: marks and two-part vowels change their neighbours, and the sum
-of clusters came out up to 3% narrow.
+In Gujarati and Telugu a cluster changes its neighbour (WPF kerns across a trailing anusvara or vowel
+sign; two-part vowels reach over), so there the joined-consonant narrowing is not used and every
+cluster boundary adds the largest widening that cluster — or any prefix of it, since the marks are
+skipped — produces before any other cluster: worst under-estimate 0.03%, but they measure 2.7%
+(Gujarati) and 9% (Telugu) wide on average.
 
 **`TextFormattingMode="Display"`, against `FormattedText`.** Display mode snaps every glyph to a
 whole pixel using the font's hinted widths, which depend on the pixel size — font size × display
-scaling. Fonts that carry an `hdmx` table list those widths for common pixel sizes; with them and
-pixel-rounded kerning, 2,781 of WPF's widths across ten fonts, eleven sizes and five scalings match
-exactly and none is narrower. The tool measures every scaling in `displayScales` (default 100–200%)
-and keeps the widest; a pixel size the font does not list is reported as not measurable, because
-hinting can widen a glyph by several pixels (Yu Gothic UI says hinting never changes widths and still
-does). An app that only supports some scalings can say so.
+scaling. Fonts that carry an `hdmx` table list those widths for common pixel sizes; on Windows,
+`fonts export --hinted` asks GDI for the rest from 8 to 48 px (GDI's hinted widths are WPF's; only
+kerning differs). Kerning is rounded to whole pixels, half a pixel up, and a size that lands exactly
+on half a pixel (10 px at 125%) is measured at both pixel sizes, since WPF uses either. With that,
+all 13,200 of WPF's widths across ten fonts, eleven sizes and five scalings are measurable: 13,036
+exact, the rest wider, none narrower. The tool measures every scaling in `displayScales` (default
+100–200%) and keeps the widest; a pixel size the file has no hinted widths for is reported as not
+measurable, because hinting can widen a glyph by several pixels (Yu Gothic UI says hinting never
+changes widths and still does). An app that only supports some scalings can say so.
 
 **Right-to-left and Thai text, against `FormattedText`.** Hebrew and Thai add up like Latin
 (≤ 0.02%). Arabic, Persian and Urdu letters change shape with their neighbours, so
@@ -295,7 +301,8 @@ git add xamlfit.fonts.json
 ```
 
 `xamlfit.fonts.json` contains **numbers only** — advance widths, kerning adjustments, and the widths
-of Arabic letter forms worked out from the font's own rules. No glyph outlines, no font software.
+of Arabic letter forms worked out from the font's own rules, and with `--hinted` (Windows) the
+whole-pixel widths GDI gives each character from 8 to 48 px. No glyph outlines, no font software.
 You generate it from fonts you already have a licence for, into your own repository. CI needs
 no fonts installed.
 
@@ -304,8 +311,8 @@ It will not substitute a font it has for one it lacks:
 - the *first* family in a fallback list must be in the file (a later one is only a fallback);
 - bold text is not measured with the regular face;
 - a variable font only answers for its default weight;
-- `TextFormattingMode="Display"` snaps glyphs to whole pixels and cannot be predicted from
-  metrics at all (measured against WPF: −37% to +45%).
+- `TextFormattingMode="Display"` text is not measured with linear widths (measured against WPF:
+  −37% to +45%); it needs hinted widths for its pixel size (`fonts export --hinted`).
 
 Each of these makes the site unmeasurable and names the font to export.
 
@@ -399,7 +406,7 @@ out a horizontal `StackPanel` or `DockPanel`, and it is what `check` reports.
 
 What is *not* judged is counted and printed: strings with run-time placeholders (`{0}`), text
 the metrics do not cover (with the code points, so you know which font to export), and
-scripts that reshape in a way the metrics do not cover (Gujarati, Telugu, Myanmar, Khmer, Tibetan,
+scripts that reshape in a way the metrics do not cover (Myanmar, Khmer, Tibetan,
 Arabic letters a font's data leaves out, Indic sequences that are not a grapheme cluster), and Display-mode
 text at a pixel size the font has no hinted widths for. **A culture in which nothing
 could be measured makes the run exit 3** — "not checked" must not look like "passed".
@@ -429,8 +436,8 @@ fail a build, because a guess should not block someone's pull request.
 | Styles applied by triggers, visual states or code-behind | not followed |
 | Text set through properties not scanned (`ToolTip`, `Title`, watermark/hint attached properties, `Hyperlink`/`Span` content) | not seen at all |
 | Resource dictionaries merged in code at run time | every dictionary file is assumed merged; conflicting definitions make the value unknown |
-| Shaping in Gujarati, Telugu, Myanmar, Khmer, Tibetan, Mongolian | reported as not measurable |
-| Devanagari, Bengali, Gurmukhi, Odia, Tamil, Kannada, Malayalam, Sinhala | measured as the sum of grapheme clusters, erring wide; never more than 0.22% narrow in the comparisons |
+| Shaping in Myanmar, Khmer, Tibetan, Mongolian | reported as not measurable |
+| Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala) | measured as the sum of grapheme clusters, erring wide (Telugu by 9% on average); never more than 0.22% narrow in the comparisons |
 | `TextFormattingMode="Display"` | measured from the font's hinted widths at every scaling in `displayScales`; a pixel size the font does not list is not measurable |
 | Arabic-script fonts whose contextual rules reach further than three letters | the letters involved, or the whole font, are reported as not measurable (see above) |
 | Arabic digits | WPF swaps 0–9 for Arabic-Indic digits in Arabic text; both are measured and the wider one is used |

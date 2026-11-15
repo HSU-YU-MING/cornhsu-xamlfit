@@ -134,7 +134,9 @@ that over-estimated the available width.
   sequence that is not a cluster, is not measurable. Playnite's Marathi and ScreenToGif's Tamil are now
   judged (not-judged strings 304 -> 4 and 117 -> 1).
 - **More Indic scripts**: Bengali, Gurmukhi, Odia, Kannada, Malayalam and Sinhala join Devanagari
-  and Tamil (Gujarati and Telugu stay not measurable). Joined consonants are now adjusted per pair
+  and Tamil, and Gujarati and Telugu with a boundary model: no joined-consonant narrowing, and each
+  cluster boundary adds the largest widening that cluster or any prefix of it produces before any
+  cluster (WPF kerns across trailing marks). Joined consonants are now adjusted per pair
   (the least narrowing over every form of the second consonant), only for the first virama of a chain
   and only for plain consonants; a lone consonant + virama is shaped with halant forms; Sinhala's
   always-visible virama uses every feature. Marathi text measures 1.0% wide on average (was 2.1%).
@@ -144,7 +146,12 @@ that over-estimated the available width.
   with kerning rounded to whole pixels, at every scaling in the new `displayScales` setting (default
   1, 1.25, 1.5, 1.75, 2), keeping the widest. A pixel size the font does not list is not measurable;
   the report names it. The metrics file stores the hinted widths as differences from the rounded
-  linear width.
+  linear width. `fonts export --hinted` (Windows) adds GDI's hinted widths for every pixel size from
+  8 to 48 px the font's `hdmx` leaves out, after checking GDI picked the same face (name, weight,
+  italic). Kerning rounds half a pixel up; a size exactly on half a pixel is measured at both pixel
+  sizes, with the widest kerning of either.
+- `fonts export --family` skips other faces after reading their names, and exports files in
+  parallel: ten families with `--hinted` in 6 minutes instead of 16.
 
 ### Verified
 
@@ -161,8 +168,8 @@ that over-estimated the available width.
   script every cluster alone, random cluster sequences and conjunct-heavy random words, 4,000–15,000
   per script from `prototype/WpfOracle --indic-gen`): worst under-estimate 0.03%, Tamil 0.22%.
 - **Display mode** against `FormattedText` (`prototype/WpfOracle --display` / `--display-check`; 13,200
-  widths over ten fonts, eleven sizes, five scalings): 2,781 measurable cases, all exact or wider (only
-  at half-pixel sizes such as 12.5 px), none narrower; the rest are reported as not measurable.
+  widths over ten fonts, eleven sizes, five scalings): with `--hinted`, all 13,200 measurable, 13,036
+  exact, none narrower (with `hdmx` alone: 2,781 measurable, the rest reported as not measurable).
 - **Themes** against real WPF windows with the theme merged (`prototype/LayoutOracle --theme
   mahapps|md2|md3|handycontrol|wpfui`, 43 cases each, both row semantics): MahApps 42 exact /
   1 conservative, MaterialDesign 2 and 3 41 / 2, HandyControl and WPF-UI 26 / 17, 0 over-estimates,

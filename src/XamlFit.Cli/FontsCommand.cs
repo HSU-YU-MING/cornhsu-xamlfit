@@ -26,6 +26,7 @@ internal static class FontsCommand
         var families = new List<string>();
         var outPath = "xamlfit.fonts.json";
         var merge = false;
+        var hinted = false;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -42,6 +43,8 @@ internal static class FontsCommand
                     outPath = args[++i]; break;
                 case "--merge":
                     merge = true; break;
+                case "--hinted":
+                    hinted = true; break;
                 default:
                     return Fail($"unknown argument: {args[i]}");
             }
@@ -76,18 +79,33 @@ internal static class FontsCommand
         var wanted = new HashSet<string>(families.Select(f => f.Trim()), StringComparer.OrdinalIgnoreCase);
         var metrics = new List<FontMetrics>();
         var unreadable = 0;
+        var hintSkipped = 0;
+        if (hinted && !OperatingSystem.IsWindows())
+            return Fail("--hinted asks Windows GDI for hinted widths; run it on Windows");
 
-        foreach (var f in files)
+        // 每支字型檔各自獨立（阿拉伯文、印度系文字的形狀表要跑幾十萬次替換規則），平行處理；結果照檔案順序放回去
+        var perFile = new List<FontMetrics>?[files.Count];
+        Parallel.For(0, files.Count, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, i =>
         {
+            var f = files[i];
+            // 先只讀名稱就知道要不要：沒在 --family 裡的字型不跑形狀表
             IReadOnlyList<FontMetrics> got;
-            try { got = FontMetricsExtractor.FromFile(f); }
-            catch { unreadable++; continue; }   // 一個資料夾裡有壞字型是常態，不要整批失敗
+            try { got = FontMetricsExtractor.FromFile(f, m => wanted.Count == 0 || wanted.Contains(m)); }
+            catch { return; }   // 一個資料夾裡有壞字型是常態，不要整批失敗
 
-            foreach (var m in got)
+            perFile[i] = got.Where(m => wanted.Count == 0 || wanted.Contains(m.Family)).ToList();
+        });
+        for (var i = 0; i < files.Count; i++)
+        {
+            if (perFile[i] is not { } picked) { unreadable++; continue; }
+            // GDI 這段一支一支來：同名字型同時註冊到 GDI，會選到別支檔案的字面
+            if (hinted && picked.Count > 0 && OperatingSystem.IsWindows())
             {
-                if (wanted.Count > 0 && !wanted.Contains(m.Family)) continue;
-                metrics.Add(m);
+                var (withHints, skipped) = GdiHinting.Add(files[i], picked);
+                picked = withHints;
+                hintSkipped += skipped;
             }
+            metrics.AddRange(picked);
         }
 
         if (metrics.Count == 0)
@@ -127,6 +145,10 @@ internal static class FontsCommand
                           $"{deduped.Select(m => m.Family).Distinct(StringComparer.OrdinalIgnoreCase).Count()} families, " +
                           $"{bytes / 1024.0:F0} KB)");
         if (unreadable > 0) Console.WriteLine($"  skipped {unreadable} unreadable file(s)");
+        if (hinted)
+            Console.WriteLine(hintSkipped > 0
+                ? $"  hinted widths for 8–48 px added from GDI; {hintSkipped} face(s) left without them (GDI did not select that exact face)"
+                : "  hinted widths for 8–48 px added from GDI (TextFormattingMode=\"Display\")");
         Console.WriteLine("  contains advance widths, kerning adjustments and Arabic letter-form widths only — no glyph outlines, no font software");
         return 0;
     }

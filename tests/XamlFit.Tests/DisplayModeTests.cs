@@ -36,8 +36,8 @@ public class DisplayModeTests
     [Fact]
     public void Every_display_scaling_is_measured_and_the_widest_wins()
     {
-        // 10 px 在 125% 是 12.5 → 13 px：0.55 × 13 = 7.15 → 7，「aa」= 14 像素 = 11.2 DIP；100% 是 12 DIP
-        var face = Face(new() { [10] = new Dictionary<int, int>(), [13] = new Dictionary<int, int> { ['a'] = 1 } });
+        // 10 px 在 125% 是 12.5 px（12 與 13 都量）：0.55 × 13 = 7.15 → 7，「aa」= 14 像素 = 11.2 DIP；100% 是 12 DIP
+        var face = Face(new() { [10] = new Dictionary<int, int>(), [12] = new Dictionary<int, int>(), [13] = new Dictionary<int, int> { ['a'] = 1 } });
         var m = TextMeasure.MeasureDisplay("aa", Lookup(face), 10, [1.0, 1.25]);
         Assert.Equal(Math.Max(12.0, 16 / 1.25), m.WidthPx, 3);   // 125% 時每個字 8 像素
     }
@@ -59,6 +59,35 @@ public class DisplayModeTests
         var face = Face(new() { [10] = new Dictionary<int, int>() }, kern);
         // −80 / 1000 × 10 = −0.8 → −1
         Assert.Equal(6 + 6 - 1, TextMeasure.MeasureDisplay("AV", Lookup(face), 10, [1.0]).WidthPx, 3);
+    }
+
+    private static KerningTable Kern(int av) =>
+        new() { Lookups = [new KerningLookup { Subtables = [new KerningPairs { Pairs = new Dictionary<long, int> { [KerningPairs.Key('A', 'V')] = av } }] }] };
+
+    [Fact]
+    public void Kerning_of_exactly_half_a_pixel_rounds_up()
+    {
+        // −150 / 1000 × 10 = −1.5：WPF 給 −1（Calibri 32 px 實測），偶數進位會給 −2、拼窄一個像素
+        var face = Face(new() { [10] = new Dictionary<int, int>() }, Kern(-150));
+        Assert.Equal(6 + 6 - 1, TextMeasure.MeasureDisplay("AV", Lookup(face), 10, [1.0]).WidthPx, 3);
+    }
+
+    [Fact]
+    public void A_half_pixel_size_measures_both_pixel_sizes_and_keeps_the_wider()
+    {
+        // 10 px × 125% = 12.5 px：12 px 的 'a' hinting 後寬 2 像素，13 px 照線性
+        var face = Face(new() { [12] = new Dictionary<int, int> { ['a'] = 2 }, [13] = new Dictionary<int, int>() });
+        Assert.Equal((9 + 9) / 1.25, TextMeasure.MeasureDisplay("aa", Lookup(face), 10, [1.25]).WidthPx, 3);
+        // 只有一個有資料就量不到
+        Assert.False(TextMeasure.MeasureDisplay("aa", Lookup(Face(new() { [13] = new Dictionary<int, int>() })), 10, [1.25]).IsReliable);
+    }
+
+    [Fact]
+    public void At_a_half_pixel_size_kerning_may_come_from_the_other_pixel_size()
+    {
+        // 12.5 px：13 px 的字寬（'A' 8 + 'V' 7）配 12 px 的字距（−120 × 12 / 1000 = −1.44 → −1），不是 13 px 的（−1.56 → −2）
+        var face = Face(new() { [12] = new Dictionary<int, int>(), [13] = new Dictionary<int, int> { ['A'] = 1 } }, Kern(-120));
+        Assert.Equal((8 + 7 - 1) / 1.25, TextMeasure.MeasureDisplay("AV", Lookup(face), 10, [1.25]).WidthPx, 3);
     }
 
     [Fact]

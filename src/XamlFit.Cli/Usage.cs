@@ -21,6 +21,8 @@ internal static class Usage
               --out <path>         Output file (default: xamlfit.fonts.json)
               --family <name>      Only export these families. Repeatable.
               --merge              Merge into an existing output file instead of replacing it.
+              --hinted             Windows only: add GDI's hinted widths for 8–48 px, used for
+                                   TextFormattingMode="Display" where the font has no hdmx entry.
 
               The metrics file contains numbers only (advance widths, kerning, Arabic letter-
               form widths) — no glyph outlines and no font software. Generate it on a machine that has the fonts, commit it, and CI needs

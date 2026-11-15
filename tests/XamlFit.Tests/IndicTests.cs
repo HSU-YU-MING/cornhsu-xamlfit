@@ -85,8 +85,7 @@ public class IndicTests
         Assert.False(M(face, S(AaSign)).IsReliable);
         Assert.True(M(face, S(Ka, 0x0964)).IsReliable);   // danda 照 advance
         Assert.False(M(face, S(0x0995)).IsReliable);      // 孟加拉文：這支假字型沒有它的資料
-        Assert.Null(IndicClusters.Of(0x0A95));            // 古吉拉特文、泰盧固文沒有量（叢集之間的影響處理不了）
-        Assert.Null(IndicClusters.Of(0x0C15));
+        Assert.Null(IndicClusters.Of(0x1000));            // 緬甸文：沒做
     }
 
     [Fact]
@@ -103,6 +102,22 @@ public class IndicTests
         Assert.Equal(-300, back["deva"][IndicClusters.ConjunctKey(Ka, Ssa)]);
         Assert.Equal(20, back["deva"][IndicClusters.TrailingKey]);
         Assert.Empty(back["deva/MAR"]);
+    }
+
+    [Fact]
+    public void In_interacting_scripts_each_cluster_boundary_takes_the_widest_change_seen()
+    {
+        // 古吉拉特文：鼻化符號會把下一個字推開（WPF 套字距時跳過符號）
+        const int Da = 0x0AA6, Dda = 0x0AA1, Anusvara = 0x0A82;
+        var face = new FontMetrics
+        {
+            Family = "Gujr", UnitsPerEm = 1000, DefaultAdvance = 500,
+            Ranges = [new AdvanceRange(0x0A80, 0x0AFF, 400)],
+            Indic = new Dictionary<string, IReadOnlyDictionary<string, int>> { ["gujr"] = new Dictionary<string, int> { [IndicClusters.BoundaryKey([Da, Anusvara])] = 80 } },
+        };
+        Assert.True(IndicClusters.Gujarati.Interacting);
+        Assert.Equal((400 + 400 + 80 + 400) / 100.0, M(face, S(Da, Anusvara, Dda)).WidthPx, 3);
+        Assert.Equal((400 + 400) / 100.0, M(face, S(Da, Anusvara)).WidthPx, 3);   // 後面沒有叢集：不加
     }
 
     [Fact]

@@ -182,7 +182,9 @@ public sealed class MetricsFile
                     ? indic.ToDictionary(kv => kv.Key, kv => kv.Value.OrderBy(c => c.Key, StringComparer.Ordinal)
                         // 連寫改變量的鍵是「+碼位」：存成 [改變量, -碼位]
                         // 「+a,b」存成 [改變量, -a, -b]；「+1」（後面接標點）存成 [改變量, -1]
-                        .Select(c => c.Key.StartsWith(IndicClusters.ConjunctPrefix, StringComparison.Ordinal)
+                        // 「>碼位,…」（叢集交界）存成 [改變量, 0, 碼位, …]
+                        .Select(c => c.Key.StartsWith('>') ? new[] { c.Value, 0 }.Concat(c.Key[1..].Split(',').Select(x => int.Parse(x, System.Globalization.CultureInfo.InvariantCulture))).ToArray()
+                            : c.Key.StartsWith(IndicClusters.ConjunctPrefix, StringComparison.Ordinal)
                             ? new[] { c.Value }.Concat(c.Key[1..].Split(',').Select(x => -int.Parse(x, System.Globalization.CultureInfo.InvariantCulture))).ToArray()
                             : new[] { c.Value }.Concat(c.Key.Split(',').Select(x => int.Parse(x, System.Globalization.CultureInfo.InvariantCulture))).ToArray()).ToList())
                     : null,
@@ -292,7 +294,8 @@ public sealed class MetricsFile
                 Arabic = FromArabicEntries(e.Arabic),
                 Indic = e.Indic is { Count: > 0 } indicEntries
                     ? indicEntries.ToDictionary(kv => kv.Key, kv => (IReadOnlyDictionary<string, int>)kv.Value.Where(r => r.Length >= 2)
-                        .ToDictionary(r => r[1] < 0 ? IndicClusters.ConjunctPrefix + string.Join(",", r.Skip(1).Select(x => -x)) : IndicClusters.Key(r.Skip(1)), r => r[0], StringComparer.Ordinal))
+                        .ToDictionary(r => r[1] == 0 ? IndicClusters.BoundaryKey(r.Skip(2))
+                            : r[1] < 0 ? IndicClusters.ConjunctPrefix + string.Join(",", r.Skip(1).Select(x => -x)) : IndicClusters.Key(r.Skip(1)), r => r[0], StringComparer.Ordinal))
                     : null,
                 Hinted = e.Hinted is { Count: > 0 } hinted
                     ? hinted.Where(r => r.Length >= 1).ToDictionary(r => r[0], r =>

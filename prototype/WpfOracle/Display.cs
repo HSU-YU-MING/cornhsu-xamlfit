@@ -66,3 +66,59 @@ internal static class DisplayCheck
         return 0;
     }
 }
+
+/// <summary>--display-gdi &lt;wpf.tsv&gt;：假設「Display 模式的字寬 = GDI 在那個像素大小的 hinting 寬度」，拿 GDI 算出來跟 WPF 比。</summary>
+internal static class DisplayGdi
+{
+    [System.Runtime.InteropServices.DllImport("gdi32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern IntPtr CreateFontW(int h, int w, int esc, int orient, int weight, uint italic, uint underline, uint strike, uint charset, uint outPrec, uint clipPrec, uint quality, uint pitch, string face);
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr dc);
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")] private static extern IntPtr SelectObject(IntPtr dc, IntPtr obj);
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr obj);
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")] private static extern bool DeleteDC(IntPtr dc);
+    [System.Runtime.InteropServices.DllImport("gdi32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern bool GetCharWidth32W(IntPtr dc, uint first, uint last, int[] widths);
+    [System.Runtime.InteropServices.DllImport("gdi32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern bool GetTextExtentPoint32W(IntPtr dc, string s, int n, out SIZE size);
+    private struct SIZE { public int cx, cy; }
+
+    public static int Run(string tsv)
+    {
+        var dc = CreateCompatibleDC(IntPtr.Zero);
+        var stats = new Dictionary<string, (int N, int Exact, int Narrow, double Min, double Max, string Worst)>();
+        var cache = new Dictionary<(string, int, int), IntPtr>();
+        foreach (var line in File.ReadLines(tsv).Skip(1))
+        {
+            var c = line.Split('\t');
+            var family = c[0];
+            var weight = int.Parse(c[1], CultureInfo.InvariantCulture);
+            var size = double.Parse(c[2], CultureInfo.InvariantCulture);
+            var scale = double.Parse(c[3], CultureInfo.InvariantCulture);
+            var text = c[4];
+            var wpf = double.Parse(c[5], CultureInfo.InvariantCulture);
+            if (text.Any(ch => ch > 0x2FFF)) continue;   // 中日韓字會走後備字型，這裡只比主字型
+            var ppem = (int)Math.Floor(size * scale + 0.5);
+            if (!cache.TryGetValue((family, weight, ppem), out var font))
+                cache[(family, weight, ppem)] = font = CreateFontW(-ppem, 0, 0, 0, weight, 0, 0, 0, 1, 0, 0, 3 /*NONANTIALIASED*/, 0, family);
+            SelectObject(dc, font);
+            // 逐字加寬度（不含字距），再加四捨五入的字距由 WPF 那邊比 —— 這裡先只看不含字距的字串
+            var widths = new int[1];
+            var total = 0;
+            foreach (var ch in text) { GetCharWidth32W(dc, ch, ch, widths); total += widths[0]; }
+            var ours = total / scale;
+            var diff = (ours - wpf) / wpf * 100;
+            var s = stats.TryGetValue(family, out var v) ? v : (N: 0, Exact: 0, Narrow: 0, Min: 0.0, Max: 0.0, Worst: "");
+            s.N++;
+            if (Math.Abs(diff) < 0.01) s.Exact++;
+            if (diff < -0.01) { s.Narrow++; if (Environment.GetEnvironmentVariable("XF_GDI_NARROW") is not null) Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"NARROW {family} {weight} {size}px@{scale} ppem {size * scale} «{text}» gdi {ours:F2} wpf {wpf:F2}")); }
+            if (diff < s.Min) { s.Min = diff; s.Worst = string.Create(CultureInfo.InvariantCulture, $"{weight} {size}px@{scale} «{text}» gdi {ours:F2} wpf {wpf:F2}"); }
+            s.Max = Math.Max(s.Max, diff);
+            stats[family] = s;
+        }
+        foreach (var (family, s) in stats.OrderBy(k => k.Key))
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"{family,-22} n={s.N,5} exact={s.Exact,5} narrow={s.Narrow,4}  min {s.Min,6:F2}%  max {s.Max,6:F2}%  {s.Worst}"));
+        DeleteDC(dc);
+        return 0;
+    }
+}

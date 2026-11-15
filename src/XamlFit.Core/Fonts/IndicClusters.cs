@@ -19,6 +19,11 @@ public static class IndicClusters
         public Dictionary<int, int[]> Split { get; init; } = [];
         /// <summary>virama 一律看得見、跟子音組成合字（僧伽羅文）：單獨的「子音 + virama」也照全部特性跑。</summary>
         public bool VisibleVirama { get; init; }
+        /// <summary>
+        /// 叢集會影響下一個叢集（古吉拉特文、泰盧固文：鼻化／送氣符號、兩段式母音把下一個字推開）：
+        /// 不用連寫的變窄量（匯出引擎對它們的連寫不夠準），改成每個叢集記「接任何叢集時最多變寬多少」，量的時候每個叢集交界都加上去。
+        /// </summary>
+        public bool Interacting { get; init; }
     }
 
     /// <summary>度量檔裡記「子音 + virama 後面接子音」改變量的鍵前綴（＋子音碼位）。</summary>
@@ -29,6 +34,9 @@ public static class IndicClusters
 
     /// <summary>度量檔裡記「叢集後面接標點或空白時最多變寬多少」的鍵（標點跟著併進同一段，字型的字距會套上去）。</summary>
     public const string TrailingKey = "+1";
+
+    /// <summary>「這個叢集後面接同一個文字系統的叢集時最多變寬多少」的鍵（只有 <see cref="Script.Interacting"/> 的文字系統有）。</summary>
+    public static string BoundaryKey(IEnumerable<int> cluster) => ">" + Key(cluster);
 
     /// <summary>匯出時試的標點與空白。</summary>
     public const string TrailingChars = " ,.:;!?()[]'\"-/…";
@@ -106,6 +114,7 @@ public static class IndicClusters
         Plain: [.. Range(0x0AE6, 0x0AF1)])
     {
         PreBase = [0x0ABF],
+        Interacting = true,
     };
 
     public static readonly Script Oriya = new(
@@ -131,6 +140,7 @@ public static class IndicClusters
         Plain: [.. Range(0x0C66, 0x0C6F), .. Range(0x0C78, 0x0C7F)])
     {
         Split = new() { [0x0C48] = [0x0C46, 0x0C56] },
+        Interacting = true,
     };
 
     public static readonly Script Kannada = new(
@@ -181,7 +191,7 @@ public static class IndicClusters
     /// 有量的文字系統。古吉拉特文、泰盧固文定義在上面但**不在這裡**：WpfOracle --scripts 對照時叢集之間的附加符號與兩段式母音
     /// 讓整個字比叢集相加寬到 3%（偏窄、危險的那邊），叢集模型處理不了 —— 用到就量不到。
     /// </summary>
-    public static readonly Script[] All = [Devanagari, Bengali, Gurmukhi, Oriya, Tamil, Kannada, Malayalam, Sinhala];
+    public static readonly Script[] All = [Devanagari, Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada, Malayalam, Sinhala];
 
     public static Script? Of(int cp)
     {
