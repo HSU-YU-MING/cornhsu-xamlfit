@@ -79,7 +79,7 @@ internal static class FontsCommand
         var wanted = new HashSet<string>(families.Select(f => f.Trim()), StringComparer.OrdinalIgnoreCase);
         var metrics = new List<FontMetrics>();
         var unreadable = 0;
-        var hintSkipped = 0;
+        var hintSkipped = new List<string>();
         if (hinted && !OperatingSystem.IsWindows())
             return Fail("--hinted asks Windows GDI for hinted widths; run it on Windows");
 
@@ -103,7 +103,7 @@ internal static class FontsCommand
             {
                 var (withHints, skipped) = GdiHinting.Add(files[i], picked);
                 picked = withHints;
-                hintSkipped += skipped;
+                hintSkipped.AddRange(skipped);
             }
             metrics.AddRange(picked);
         }
@@ -146,9 +146,14 @@ internal static class FontsCommand
                           $"{bytes / 1024.0:F0} KB)");
         if (unreadable > 0) Console.WriteLine($"  skipped {unreadable} unreadable file(s)");
         if (hinted)
-            Console.WriteLine(hintSkipped > 0
-                ? $"  hinted widths for 8–48 px added from GDI; {hintSkipped} face(s) left without them (GDI did not select that exact face)"
-                : "  hinted widths for 8–48 px added from GDI (TextFormattingMode=\"Display\")");
+        {
+            Console.WriteLine("  hinted widths for 8–48 px added from GDI (TextFormattingMode=\"Display\")");
+            if (hintSkipped.Count > 0)
+            {
+                Console.WriteLine($"  {hintSkipped.Count} face(s) left without them (Display-mode text in them is not measurable):");
+                foreach (var s in hintSkipped) Console.WriteLine($"    {s}");
+            }
+        }
         Console.WriteLine("  contains advance widths, kerning adjustments and Arabic letter-form widths only — no glyph outlines, no font software");
         return 0;
     }

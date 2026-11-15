@@ -11,7 +11,10 @@ internal static class Display
 {
     public static int Run(string outPath)
     {
-        string[] families = ["Segoe UI", "Tahoma", "Arial", "Trebuchet MS", "Verdana", "Calibri", "Consolas", "Microsoft JhengHei UI", "Yu Gothic UI", "Malgun Gothic"];
+        // XF_DISPLAY_FAMILIES="Microsoft JhengHei,MingLiU" 換一組字型
+        string[] families = Environment.GetEnvironmentVariable("XF_DISPLAY_FAMILIES") is { Length: > 0 } custom
+            ? custom.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            : ["Segoe UI", "Tahoma", "Arial", "Trebuchet MS", "Verdana", "Calibri", "Consolas", "Microsoft JhengHei UI", "Yu Gothic UI", "Malgun Gothic"];
         double[] sizes = [9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 24];
         double[] scales = [1.0, 1.25, 1.5, 1.75, 2.0];
         string[] texts = ["Save", "Cancel", "Restart in Safe Mode", "The quick brown fox jumps over the lazy dog", "Einstellungen übernehmen", "AVAWAY To Ty", "1,234,567.89", "設定儲存", "設定を保存", "설정 저장", "iiiiiiiiii", "WWWWWWWWWW"];
@@ -53,7 +56,8 @@ internal static class DisplayCheck
             var m = XamlFit.Core.Fonts.TextMeasure.MeasureDisplay(text, lookup, size, [scale]);
             var s = stats.TryGetValue(family, out var v) ? v : (N: 0, Exact: 0, Unknown: 0, Min: 0.0, Max: 0.0, Worst: "");
             s.N++;
-            if (!m.IsReliable) { s.Unknown++; stats[family] = s; continue; }
+            // 沒有那個字重（細明體沒有粗體，WPF 用模擬粗體）：工具在解析時就報量不到
+            if (!m.IsReliable || lookup.Chain.Count == 0) { s.Unknown++; stats[family] = s; continue; }
             var diff = (m.WidthPx - wpf) / wpf * 100;
             if (Math.Abs(diff) < 0.01) s.Exact++;
             if (diff < s.Min) { s.Min = diff; s.Worst = string.Create(CultureInfo.InvariantCulture, $"{size}px@{scale} «{text}» ours {m.WidthPx:F2} wpf {wpf:F2}"); }

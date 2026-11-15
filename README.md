@@ -127,10 +127,22 @@ punctuation. Against Nirmala UI — 290 Marathi and 300 Tamil strings from Playn
 every cluster alone, random cluster sequences and conjunct-heavy random words (about 4,000–15,000 per
 script): worst under-estimate 0.03%, Tamil 0.22%; on average Marathi text measures 1.0% wide.
 In Gujarati and Telugu a cluster changes its neighbour (WPF kerns across a trailing anusvara or vowel
-sign; two-part vowels reach over), so there the joined-consonant narrowing is not used and every
-cluster boundary adds the largest widening that cluster — or any prefix of it, since the marks are
-skipped — produces before any other cluster: worst under-estimate 0.03%, but they measure 2.7%
-(Gujarati) and 9% (Telugu) wide on average.
+sign; two-part vowels reach over), so every cluster boundary also adds the largest widening that
+cluster — or any prefix of it, since the marks are skipped — produces before any other cluster.
+Telugu also leaves out the joined-consonant narrowing (the export engine gets ళ్కి 2.8% narrower than
+WPF), and the obsolete ఴ, whose virama form reaches into the previous cluster and made every boundary
+9% wider. Worst under-estimate 0.03%; on average Gujarati measures 1.9% wide and Telugu 7.9%.
+
+**Khmer and Tibetan, against `FormattedText`.** The same cluster model, extended: Khmer coeng
+(U+17D2) works like a virama, and a register shifter (៉ ៊) may come before the vowel — this export
+engine draws ត៉ា 0.44 px narrower than WPF, which draws it as wide as តា, so clusters with a shifter
+keep the wider of the two. A Tibetan stack takes up to two subjoined letters (the second only ya, ra,
+la or wa); with 240,000 stack-and-vowel combinations, the file stores one value per stack — the widest
+over every vowel sign — plus the most any mark (ཾ ཿ ྂ ྃ) widens a stack. Against 3,000 words each
+(Leelawadee UI, Microsoft Himalaya; generated from the syllable structure, not real translations):
+worst under-estimate 0.02% (Khmer) and 0.04% (Tibetan). **Lao** adds up like Thai (≤ 0.02%).
+**Myanmar** is not measured: Myanmar Text moves marks aside under consonants with a descender (WPF
+draws ဋို့ 29% wider than this export engine computes), which needs a real Myanmar shaper.
 
 **`TextFormattingMode="Display"`, against `FormattedText`.** Display mode snaps every glyph to a
 whole pixel using the font's hinted widths, which depend on the pixel size — font size × display
@@ -144,7 +156,7 @@ exact, the rest wider, none narrower. The tool measures every scaling in `displa
 measurable, because hinting can widen a glyph by several pixels (Yu Gothic UI says hinting never
 changes widths and still does). An app that only supports some scalings can say so.
 
-**Right-to-left and Thai text, against `FormattedText`.** Hebrew and Thai add up like Latin
+**Right-to-left and Thai text, against `FormattedText`.** Hebrew, Thai and Lao add up like Latin
 (≤ 0.02%). Arabic, Persian and Urdu letters change shape with their neighbours, so
 `fonts export` runs each font's own substitution and positioning rules over every letter form,
 every pair of letters and the three-letter contexts of `ے`, and stores only the resulting widths.
@@ -406,7 +418,7 @@ out a horizontal `StackPanel` or `DockPanel`, and it is what `check` reports.
 
 What is *not* judged is counted and printed: strings with run-time placeholders (`{0}`), text
 the metrics do not cover (with the code points, so you know which font to export), and
-scripts that reshape in a way the metrics do not cover (Myanmar, Khmer, Tibetan,
+scripts that reshape in a way the metrics do not cover (Myanmar, Mongolian,
 Arabic letters a font's data leaves out, Indic sequences that are not a grapheme cluster), and Display-mode
 text at a pixel size the font has no hinted widths for. **A culture in which nothing
 could be measured makes the run exit 3** — "not checked" must not look like "passed".
@@ -436,8 +448,8 @@ fail a build, because a guess should not block someone's pull request.
 | Styles applied by triggers, visual states or code-behind | not followed |
 | Text set through properties not scanned (`ToolTip`, `Title`, watermark/hint attached properties, `Hyperlink`/`Span` content) | not seen at all |
 | Resource dictionaries merged in code at run time | every dictionary file is assumed merged; conflicting definitions make the value unknown |
-| Shaping in Myanmar, Khmer, Tibetan, Mongolian | reported as not measurable |
-| Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala) | measured as the sum of grapheme clusters, erring wide (Telugu by 9% on average); never more than 0.22% narrow in the comparisons |
+| Shaping in Myanmar, Mongolian | reported as not measurable |
+| Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala), Khmer, Tibetan | measured as the sum of grapheme clusters, erring wide (Telugu by 7.9% on average); never more than 0.22% narrow in the comparisons; Khmer and Tibetan checked only against generated words |
 | `TextFormattingMode="Display"` | measured from the font's hinted widths at every scaling in `displayScales`; a pixel size the font does not list is not measurable |
 | Arabic-script fonts whose contextual rules reach further than three letters | the letters involved, or the whole font, are reported as not measurable (see above) |
 | Arabic digits | WPF swaps 0–9 for Arabic-Indic digits in Arabic text; both are measured and the wider one is used |

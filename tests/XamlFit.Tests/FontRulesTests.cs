@@ -214,7 +214,6 @@ public class StrictFontResolutionTests
     }
 
     [Theory]
-    [InlineData(0x0E81)]   // 寮文
     [InlineData(0x1000)]   // 緬甸文
     [InlineData(0x0750)]   // 阿拉伯文補充
     [InlineData(0x1820)]   // 蒙古文
@@ -227,8 +226,10 @@ public class StrictFontResolutionTests
     [InlineData(0xFB2A)]   // 希伯來文表現形式
     [InlineData(0x0E01)]   // 泰文
     [InlineData(0x0E48)]   // 泰文聲調符號
-    public void Hebrew_and_Thai_are_measured_by_adding_advances(int codepoint) =>
-        // WpfOracle --scripts：真實譯文把 advance 加起來跟 WPF 只差 0.02% 以內
+    [InlineData(0x0E81)]   // 寮文
+    [InlineData(0x0EC8)]   // 寮文聲調符號
+    public void Hebrew_Thai_and_Lao_are_measured_by_adding_advances(int codepoint) =>
+        // WpfOracle --scripts：真實譯文（寮文：依音節結構產生的 3,000 個字）把 advance 加起來跟 WPF 只差 0.02% 以內
         Assert.False(TextMeasure.IsComplexScript(codepoint));
 }
 

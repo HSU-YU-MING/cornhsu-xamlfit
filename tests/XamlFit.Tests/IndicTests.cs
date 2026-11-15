@@ -85,7 +85,7 @@ public class IndicTests
         Assert.False(M(face, S(AaSign)).IsReliable);
         Assert.True(M(face, S(Ka, 0x0964)).IsReliable);   // danda 照 advance
         Assert.False(M(face, S(0x0995)).IsReliable);      // 孟加拉文：這支假字型沒有它的資料
-        Assert.Null(IndicClusters.Of(0x1000));            // 緬甸文：沒做
+        Assert.Null(IndicClusters.Of(0x1820));            // 蒙古文：沒做
     }
 
     [Fact]
@@ -126,5 +126,78 @@ public class IndicTests
         var t = IndicClusters.Tamil;
         Assert.Equal([0x0BC6, 0x0B95, 0x0BBE], IndicClusters.VisualOrder(t, [0x0B95, 0x0BCA]));   // கொ → ெ + க + ா
         Assert.Equal([0x093F, Ka], IndicClusters.VisualOrder(IndicClusters.Devanagari, [Ka, ISign]));
+    }
+
+    [Fact]
+    public void Myanmar_clusters_take_medials_vowel_sequences_and_finals()
+    {
+        var m = IndicClusters.Myanmar;
+        // ကြော် = က + ြ + ေ + ာ + ်（介音 + 一串母音）
+        Assert.Equal(5, IndicClusters.Match([0x1000, 0x103C, 0x1031, 0x102C, 0x103A], 0, m));
+        // ကို့ = က + ိ + ု + ့
+        Assert.Equal(4, IndicClusters.Match([0x1000, 0x102D, 0x102F, 0x1037], 0, m));
+        // က္က：疊字符號是 virama，下一個子音另起一個叢集
+        Assert.Equal(2, IndicClusters.Match([0x1000, 0x1039, 0x1000], 0, m));
+        // ေ 在最左、ြ 第二、子音第三
+        Assert.Equal([0x1031, 0x103C, 0x1000, 0x102C], IndicClusters.VisualOrder(m, [0x1000, 0x103C, 0x1031, 0x102C]));
+    }
+
+    [Fact]
+    public void Tibetan_stacks_take_up_to_two_subjoined_letters()
+    {
+        var t = IndicClusters.Tibetan;
+        // སྒྲིཾ = ས + ྒ + ྲ + ི + ཾ
+        Assert.Equal(5, IndicClusters.Match([0x0F66, 0x0F92, 0x0FB2, 0x0F72, 0x0F7E], 0, t));
+        // 第二個疊字只能是 ya、ra、la、wa：ས + ྒ + ྒ 只認前兩個
+        Assert.Equal(2, IndicClusters.Match([0x0F66, 0x0F92, 0x0F92], 0, t));
+        // tsheg 不在叢集裡
+        Assert.Equal(1, IndicClusters.Match([0x0F40, 0x0F0B], 0, t));
+    }
+
+    [Fact]
+    public void Khmer_register_shifters_may_precede_the_vowel()
+    {
+        var k = IndicClusters.Khmer;
+        Assert.Equal(3, IndicClusters.Match([0x1794, 0x17C9, 0x17B8], 0, k));   // ប៊ី
+        Assert.Equal(2, IndicClusters.Match([0x1780, 0x17D2, 0x1781], 0, k));   // ក្ខ：coeng 是 virama
+        Assert.Equal([0x17C1, 0x1780, 0x17BE], IndicClusters.VisualOrder(k, [0x1780, 0x17BE]));   // កើ → េ + ក + ើ
+    }
+
+    [Fact]
+    public void Tibetan_is_measured_by_its_stack_with_the_widest_vowel_and_any_mark()
+    {
+        var face = new FontMetrics
+        {
+            Family = "Tibt",
+            UnitsPerEm = 1000,
+            DefaultAdvance = 500,
+            Ranges = [new AdvanceRange(0x0F00, 0x0F3F, 0), new AdvanceRange(0x0F40, 0x0F6C, 600), new AdvanceRange(0x0F6D, 0x0FFF, 0)],
+            Indic = new Dictionary<string, IReadOnlyDictionary<string, int>> { ["tibt"] = new Dictionary<string, int> { [IndicClusters.Key([0x0F66, 0x0F92])] = 50, [IndicClusters.ModifierKey] = 10 } },
+        };
+        // སྒི：疊字 ས + ྒ 記 50（各種母音裡最寬的）；ཾ 再加 10
+        Assert.Equal((600 + 50) / 100.0, TextMeasure.Measure(S(0x0F66, 0x0F92, 0x0F72), [face], 10).WidthPx, 3);
+        Assert.Equal((600 + 50 + 10) / 100.0, TextMeasure.Measure(S(0x0F66, 0x0F92, 0x0F72, 0x0F7E), [face], 10).WidthPx, 3);
+        Assert.Equal(600 / 100.0, TextMeasure.Measure(S(0x0F40), [face], 10).WidthPx, 3);   // 沒有記：照 advance
+
+        var back = MetricsFile.Parse(MetricsFile.FromMetrics([face], "test", new DateOnly(2026, 11, 16)).ToJson()).ToMetrics().Single().Indic!;
+        Assert.Equal(10, back["tibt"][IndicClusters.ModifierKey]);
+        Assert.Equal(50, back["tibt"][IndicClusters.Key([0x0F66, 0x0F92])]);
+    }
+
+    [Fact]
+    public void Myanmar_is_defined_but_not_measured()
+    {
+        Assert.Null(IndicClusters.Of(0x1000));   // Myanmar Text 的符號會依子音挪位置，這支匯出引擎算不出來
+        Assert.DoesNotContain(IndicClusters.Myanmar, IndicClusters.All);
+    }
+
+    [Fact]
+    public void Every_exported_cluster_is_matched_whole()
+    {
+        // 匯出的叢集量的時候要整個對得上（對成兩段就會用錯鍵）；度量檔裡沒有的鍵會被當成「寬度 = advance 相加」
+        foreach (var script in new[] { IndicClusters.Myanmar, IndicClusters.Khmer, IndicClusters.Devanagari })
+            foreach (var cluster in IndicClusters.Enumerate(script, _ => true))
+                Assert.Equal(cluster.Length, IndicClusters.Match(cluster, 0, script));
+        Assert.Contains(IndicClusters.Enumerate(IndicClusters.Myanmar, _ => true), c => IndicClusters.Key(c) == IndicClusters.Key([0x1000, 0x103C, 0x1031, 0x102C, 0x103A]));
     }
 }

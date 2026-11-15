@@ -134,9 +134,14 @@ that over-estimated the available width.
   sequence that is not a cluster, is not measurable. Playnite's Marathi and ScreenToGif's Tamil are now
   judged (not-judged strings 304 -> 4 and 117 -> 1).
 - **More Indic scripts**: Bengali, Gurmukhi, Odia, Kannada, Malayalam and Sinhala join Devanagari
-  and Tamil, and Gujarati and Telugu with a boundary model: no joined-consonant narrowing, and each
-  cluster boundary adds the largest widening that cluster or any prefix of it produces before any
-  cluster (WPF kerns across trailing marks). Joined consonants are now adjusted per pair
+  and Tamil, and Gujarati and Telugu with a boundary model: each cluster boundary adds the largest
+  widening that cluster or any prefix of it produces before any cluster (WPF kerns across trailing
+  marks); Telugu also leaves out joined-consonant narrowing and the obsolete ఴ.
+- **Khmer and Tibetan** with the same cluster model (coeng as virama, register shifters before the
+  vowel; Tibetan stacks of up to two subjoined letters, keyed by stack with the widest vowel sign,
+  plus the most any mark widens a stack). **Lao** adds advances like Thai. Myanmar stays not
+  measurable. Punctuation of the script itself (Tibetan tsheg, danda) now counts as trailing
+  punctuation. Joined consonants are now adjusted per pair
   (the least narrowing over every form of the second consonant), only for the first virama of a chain
   and only for plain consonants; a lone consonant + virama is shaped with halant forms; Sinhala's
   always-visible virama uses every feature. Marathi text measures 1.0% wide on average (was 2.1%).
@@ -148,8 +153,9 @@ that over-estimated the available width.
   the report names it. The metrics file stores the hinted widths as differences from the rounded
   linear width. `fonts export --hinted` (Windows) adds GDI's hinted widths for every pixel size from
   8 to 48 px the font's `hdmx` leaves out, after checking GDI picked the same face (name, weight,
-  italic). Kerning rounds half a pixel up; a size exactly on half a pixel is measured at both pixel
-  sizes, with the widest kerning of either.
+  italic, accepting the face's localized names: Traditional Chinese Windows reports 微軟正黑體).
+  Faces GDI cannot select are listed. Kerning rounds half a pixel up; a size exactly on half a pixel
+  is measured at both pixel sizes, with the widest kerning of either.
 - `fonts export --family` skips other faces after reading their names, and exports files in
   parallel: ten families with `--hinted` in 6 minutes instead of 16.
 
@@ -167,6 +173,8 @@ that over-estimated the available width.
 - **Indic scripts** against `FormattedText` (Nirmala UI; 290 Marathi and 300 Tamil strings, and per
   script every cluster alone, random cluster sequences and conjunct-heavy random words, 4,000–15,000
   per script from `prototype/WpfOracle --indic-gen`): worst under-estimate 0.03%, Tamil 0.22%.
+  Khmer, Tibetan and Lao against 3,000 generated words each (Leelawadee UI, Microsoft Himalaya):
+  0.02%, 0.04% and 0.02%.
 - **Display mode** against `FormattedText` (`prototype/WpfOracle --display` / `--display-check`; 13,200
   widths over ten fonts, eleven sizes, five scalings): with `--hinted`, all 13,200 measurable, 13,036
   exact, none narrower (with `hdmx` alone: 2,781 measurable, the rest reported as not measurable).

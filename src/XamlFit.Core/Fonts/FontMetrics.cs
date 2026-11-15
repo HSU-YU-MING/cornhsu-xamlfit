@@ -407,7 +407,15 @@ public static class TextMeasure
                 }
                 if (units < 0) { complex = true; prevFace = null; continue; }
                 var cluster = cps.Skip(i).Take(length).ToList();
-                totalUnits += (units + (clusters.TryGetValue(IndicClusters.Key(cluster), out var d) ? d : 0)) * scale;
+                if (indic.StackKeyed)
+                {
+                    // 疊字的鍵（各種母音符號裡最寬的）＋帶鼻化／送氣符號時它們最多讓疊字變寬多少
+                    var stack = IndicClusters.Stack(indic, cluster);
+                    units += clusters.TryGetValue(IndicClusters.Key(stack), out var stackChange) ? stackChange : 0;
+                    if (cluster.Any(indic.Modifiers.Contains) && clusters.TryGetValue(IndicClusters.ModifierKey, out var modifierChange)) units += modifierChange;
+                }
+                else if (clusters.TryGetValue(IndicClusters.Key(cluster), out var d)) units += d;
+                totalUnits += units * scale;
                 // 子音 + virama 後面直接接子音：連寫（半形…）變窄的量，取所有接法裡最少的那個
                 var head = IndicClusters.ConjunctHead(indic, cluster);
                 // 只套在一串連寫的**第一個** virama：三個子音（क्र्श）時中間那個子音不能同時當下加形又當 reph，兩組加起來會窄掉 30%
@@ -420,11 +428,11 @@ public static class TextMeasure
                     && clusters.TryGetValue(IndicClusters.ConjunctKey(head, cps[i + length]), out var conjunct))
                     totalUnits += conjunct * scale;
                 // 叢集會影響下一個叢集的文字系統：後面接同一個文字系統的叢集時，加上匯出時量到的最大變寬
-                if (indic.Interacting && i + length < cps.Count && IndicClusters.Of(cps[i + length]) == indic
+                if (indic.Interacting && i + length < cps.Count && IndicClusters.Of(cps[i + length]) == indic && !indic.Plain.Contains(cps[i + length])
                     && clusters.TryGetValue(IndicClusters.BoundaryKey(cluster), out var boundary))
                     totalUnits += boundary * scale;
                 // 後面接的不是同一個文字系统的字（標點、空白…）：字型可能把它們之間撐開，加上匯出時量到的最大值
-                if (i + length < cps.Count && IndicClusters.Of(cps[i + length]) != indic
+                if (i + length < cps.Count && (IndicClusters.Of(cps[i + length]) != indic || indic.Plain.Contains(cps[i + length]))
                     && clusters.TryGetValue(IndicClusters.TrailingKey, out var trailing))
                     totalUnits += trailing * scale;
                 i += length - 1;
@@ -478,13 +486,13 @@ public static class TextMeasure
     /// <summary>字形會依上下文變形的文字系統 —— 把 advance 加起來完全不對。
     /// 這類一律標成不可量測，不猜（規畫書 §4.3）。
     ///
-    /// 希伯來文（U+0590–05FF、表現形式 FB1D–FB4F）與泰文（U+0E00–0E7F）**不在這裡**：WpfOracle --scripts 拿真實譯文實測，
+    /// 希伯來文（U+0590–05FF、表現形式 FB1D–FB4F）、泰文（U+0E00–0E7F）與寮文（U+0E80–0EFF）**不在這裡**：WpfOracle --scripts 拿真實譯文（寮文是依音節結構產生的 3,000 個字）實測，
     /// 把 advance 加起來（含字距）跟 WPF 只差 0.02% 以內（Segoe UI／Arial／Tahoma；Leelawadee UI／Tahoma）。
+/// 高棉文、緬甸文、藏文走 <see cref="IndicClusters"/>，不會到這裡。
     /// 它們不換字形，附加符號的 advance 本來就是 0。</summary>
     public static bool IsComplexScript(int cp) =>
         cp is (>= 0x0600 and <= 0x08FF)   // 阿拉伯文（含補充與擴充）、敘利亞文、它拿文、N'Ko
            or (>= 0x0900 and <= 0x0DFF)   // 天城文～僧伽羅文（印度系）
-           or (>= 0x0E80 and <= 0x0EFF)   // 寮文（沒實測）
            or (>= 0x0F00 and <= 0x0FFF)   // 藏文
            or (>= 0x1000 and <= 0x109F)   // 緬甸文
            or (>= 0x1780 and <= 0x17FF)   // 高棉文

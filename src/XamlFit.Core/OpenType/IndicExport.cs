@@ -14,10 +14,10 @@ internal static class IndicExport
     private static readonly HashSet<string> Basic = ["ccmp", "locl", "nukt", "akhn", "haln"];
     private static readonly HashSet<string> Full =
         ["ccmp", "locl", "nukt", "akhn", "rphf", "rkrf", "pref", "blwf", "abvf", "half", "pstf", "vatu", "cjct",
-         "init", "pres", "abvs", "blws", "psts", "haln", "calt", "rclt", "liga", "clig"];
+         "init", "pres", "abvs", "blws", "psts", "haln", "cfar", "calt", "rclt", "liga", "clig"];
     private static readonly HashSet<string> Position = ["kern", "dist"];
     private static readonly HashSet<string> NoForms = [];
-    private static readonly string?[] Languages = [null, "MAR", "HIN", "NEP", "TAM", "SAN", "KOK", "BEN", "ASM", "PAN", "GUJ", "ORI", "TEL", "KAN", "MAL", "MLR", "SNH"];
+    private static readonly string?[] Languages = [null, "MAR", "HIN", "NEP", "TAM", "SAN", "KOK", "BEN", "ASM", "PAN", "GUJ", "ORI", "TEL", "KAN", "MAL", "MLR", "SNH", "KHM", "BRM", "TIB"];
 
     public static Dictionary<string, Dictionary<string, int>>? Read(SfntReader r, SortedDictionary<int, int> cmap, int[] advances)
     {
@@ -53,19 +53,49 @@ internal static class IndicExport
 
                 var deltas = new Dictionary<string, int>(StringComparer.Ordinal);
                 var widths = new Dictionary<string, int>(StringComparer.Ordinal);
-                var all = IndicClusters.Enumerate(script, cmap.ContainsKey).ToList();
+                // 只依疊字記的文字系統：鼻化／送氣符號不展開（另外記一個最大值），省掉五倍的組合
+                var all = IndicClusters.Enumerate(script, cmap.ContainsKey, withModifiers: !script.StackKeyed).ToList();
                 foreach (var cluster in all)
                 {
                     var endsInVirama = cluster[^1] == script.Virama && !script.VisibleVirama;
                     var width = Width(IndicClusters.VisualOrder(script, cluster), endsInVirama ? basic : full);
+                    // 可有可無的符號（高棉文 ៉ ៊）：沒有它的寬度 + 它自己的 advance 也算，取寬的
+                    if (cluster.Any(script.Droppable.Contains))
+                    {
+                        var without = cluster.Where(cp => !script.Droppable.Contains(cp)).ToList();
+                        width = Math.Max(width, Width(IndicClusters.VisualOrder(script, without), endsInVirama ? basic : full)
+                                                + cluster.Where(script.Droppable.Contains).Sum(cp => advances[cmap[cp]]));
+                    }
                     var plain = cluster.Sum(cp => advances[cmap[cp]]);
                     widths[IndicClusters.Key(cluster)] = width;
-                    if (width != plain) deltas[IndicClusters.Key(cluster)] = width - plain;
+                    if (script.StackKeyed)
+                    {
+                        // 疊字的鍵：各種母音符號裡改變量最大的（0 也算進去）
+                        var key = IndicClusters.Key(IndicClusters.Stack(script, cluster));
+                        var change = width - plain;
+                        if (!deltas.TryGetValue(key, out var old) || change > old) deltas[key] = change;
+                    }
+                    else if (width != plain) deltas[IndicClusters.Key(cluster)] = width - plain;
+                }
+                if (script.StackKeyed)
+                {
+                    foreach (var key in deltas.Where(kv => kv.Value == 0).Select(kv => kv.Key).ToList()) deltas.Remove(key);
+                    // 鼻化／送氣符號：接在每一個疊字後面最多讓它變寬多少
+                    var widest = 0;
+                    var stacks = all.Where(c => IndicClusters.Stack(script, c).Length == c.Length).ToList();
+                    foreach (var modifier in script.ModifierSeqs.Where(m => m.All(cmap.ContainsKey)))
+                        foreach (var stack in stacks)
+                        {
+                            var change = Width(IndicClusters.VisualOrder(script, [.. stack, .. modifier]), full)
+                                         - widths[IndicClusters.Key(stack)] - modifier.Sum(cp => advances[cmap[cp]]);
+                            if (change > widest) widest = change;
+                        }
+                    if (widest > 0) deltas[IndicClusters.ModifierKey] = widest;
                 }
 
                 // 子音 + virama 後面接子音（半形、合字、下加形、reph）：比兩個叢集各自量窄多少。
                 // 依「前一個子音, 後一個子音」記：後一個叢集帶什麼母音符號都試，取改變**最少**的 —— 錯在寬的那邊
-                foreach (var head in all.Where(c => !script.Interacting && c.Length == 2 && c[1] == script.Virama))
+                foreach (var head in all.Where(c => script.Conjuncts && c.Length == 2 && c[1] == script.Virama))
                     foreach (var group in all.Where(c => script.Consonants.Contains(c[0])).GroupBy(c => c[0]))
                     {
                         int? least = null;
@@ -80,8 +110,14 @@ internal static class IndicExport
                 // 叢集後面接標點或空白：WPF 把它們併進同一段，字型的字距會套上去（坦米爾文的「ல்:」寬 0.08 px）。
                 // 記全部叢集、全部標點裡**變寬最多**的那個，量的時候只要後面接的不是同一個文字系統的字就加上去
                 var trailing = 0;
-                var marks = IndicClusters.TrailingChars.Where(c => cmap.ContainsKey(c)).Select(c => (int)c).ToList();
-                foreach (var cluster in all)
+                // 同一個文字系統裡的標點（藏文的 tsheg ་、天城文的 danda）也試；量的時候同一個文字系統裡不組字的字（標點、數字）都加這個值
+                var marks = IndicClusters.TrailingChars.Select(c => (int)c)
+                    .Concat(script.Plain.Where(cp => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(cp) is
+                        System.Globalization.UnicodeCategory.OtherPunctuation or System.Globalization.UnicodeCategory.DashPunctuation
+                        or System.Globalization.UnicodeCategory.OpenPunctuation or System.Globalization.UnicodeCategory.ClosePunctuation))
+                    .Where(cmap.ContainsKey).Distinct().ToList();
+                // 只依疊字記的文字系統組合太多：標點只接在疊字（不帶母音符號）後面試
+                foreach (var cluster in script.StackKeyed ? all.Where(c => IndicClusters.Stack(script, c).Length == c.Length) : all)
                     foreach (var mark in marks)
                     {
                         var change = Width([.. IndicClusters.VisualOrder(script, cluster), mark], cluster[^1] == script.Virama && !script.VisibleVirama ? basic : full)

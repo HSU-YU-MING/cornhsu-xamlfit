@@ -24,10 +24,15 @@ internal static class Scripts
             ["th"] = ["Leelawadee UI", "Tahoma"],
             ["mr"] = ["Nirmala UI"],
             ["ta"] = ["Nirmala UI"],
+            ["km"] = ["Leelawadee UI"],
+            ["lo"] = ["Leelawadee UI"],
+            ["my"] = ["Myanmar Text"],
+            ["bo"] = ["Microsoft Himalaya"],
         };
         if (Environment.GetEnvironmentVariable("XF_SCRIPT_FONTS") is { Length: > 0 } extra)   // 例："Calibri,Courier New"
             foreach (var key in new[] { "ar", "fa" }) fonts[key] = extra.Split(',');
-        var cultures = new Dictionary<string, string> { ["he"] = "he-IL", ["ar"] = "ar-SA", ["fa"] = "fa-IR", ["th"] = "th-TH", ["mr"] = "mr-IN", ["ta"] = "ta-IN" };
+        var cultures = new Dictionary<string, string> { ["he"] = "he-IL", ["ar"] = "ar-SA", ["fa"] = "fa-IR", ["th"] = "th-TH", ["mr"] = "mr-IN", ["ta"] = "ta-IN",
+            ["km"] = "km-KH", ["lo"] = "lo-LA", ["my"] = "my-MM", ["bo"] = "bo-CN" };
         var worstAll = 0.0;
 
         foreach (var (script, strings) in sets)
