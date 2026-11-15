@@ -51,6 +51,13 @@ public sealed class MetricsFile
         /// pairLetters＝算過成對改變量的字母 [起, 迄]；tripleLetters＝算過三字改變量的結尾字母。
         /// formsFrom／pairsFrom／triplesFrom：跟另一個語言系統一模一樣時只寫它的名字（Segoe UI 的 URD 跟預設完全相同）。</summary>
         [JsonPropertyName("arabic")] public Dictionary<string, ArabicEntry>? Arabic { get; set; }
+
+        /// <summary>Display 模式的 hinting 寬度：每個像素大小一列 [ppem, 起, 迄, 差, 起, 迄, 差, …]，
+        /// 差 = hdmx 的寬度 − 線性寬度 0.5 進位，只列非零（一列只有 ppem 表示那個大小全部是 0）。</summary>
+        [JsonPropertyName("hinted")] public List<int[]>? Hinted { get; set; }
+
+        /// <summary>印度系字素叢集的寬度改變量，依文字系統（"deva"、"taml"）：每個叢集一列 [改變量, 碼位, 碼位, …]，只列非零。</summary>
+        [JsonPropertyName("indic")] public Dictionary<string, List<int[]>>? Indic { get; set; }
     }
 
     public sealed class ArabicEntry
@@ -171,6 +178,25 @@ public sealed class MetricsFile
                 Ranges = [.. m.Ranges.Select(r => new[] { r.Start, r.End, r.Advance })],
                 Kerning = ToEntries(m.Kerning),
                 Arabic = ToArabicEntries(m.Arabic),
+                Indic = m.Indic is { Count: > 0 } indic
+                    ? indic.ToDictionary(kv => kv.Key, kv => kv.Value.OrderBy(c => c.Key, StringComparer.Ordinal)
+                        // 連寫改變量的鍵是「+碼位」：存成 [改變量, -碼位]
+                        .Select(c => c.Key.StartsWith(IndicClusters.ConjunctPrefix, StringComparison.Ordinal)
+                            ? new[] { c.Value, -int.Parse(c.Key[1..], System.Globalization.CultureInfo.InvariantCulture) }
+                            : new[] { c.Value }.Concat(c.Key.Split(',').Select(x => int.Parse(x, System.Globalization.CultureInfo.InvariantCulture))).ToArray()).ToList())
+                    : null,
+                Hinted = m.Hinted is { Count: > 0 } h
+                    ? [.. h.OrderBy(kv => kv.Key).Select(kv =>
+                        {
+                            var row = new List<int> { kv.Key };
+                            foreach (var (cp, d) in kv.Value.OrderBy(x => x.Key))
+                            {
+                                if (row.Count > 1 && row[^2] == cp - 1 && row[^1] == d) row[^2] = cp;
+                                else { row.Add(cp); row.Add(cp); row.Add(d); }
+                            }
+                            return row.ToArray();
+                        })]
+                    : null,
             });
         }
 
@@ -213,6 +239,8 @@ public sealed class MetricsFile
             sb.Append(']');
             if (f.Kerning is { Count: > 0 }) sb.Append(",\n      \"kerning\": ").Append(JsonSerializer.Serialize(f.Kerning, Compact));
             if (f.Arabic is { Count: > 0 }) sb.Append(",\n      \"arabic\": ").Append(JsonSerializer.Serialize(f.Arabic, Compact));
+            if (f.Hinted is { Count: > 0 }) sb.Append(",\n      \"hinted\": ").Append(JsonSerializer.Serialize(f.Hinted, Compact));
+            if (f.Indic is { Count: > 0 }) sb.Append(",\n      \"indic\": ").Append(JsonSerializer.Serialize(f.Indic, Compact));
             sb.Append('\n');
             sb.Append(i == Fonts.Count - 1 ? "    }\n" : "    },\n");
         }
@@ -261,6 +289,19 @@ public sealed class MetricsFile
                 Ranges = ranges,
                 Kerning = FromEntries(e.Kerning),
                 Arabic = FromArabicEntries(e.Arabic),
+                Indic = e.Indic is { Count: > 0 } indicEntries
+                    ? indicEntries.ToDictionary(kv => kv.Key, kv => (IReadOnlyDictionary<string, int>)kv.Value.Where(r => r.Length >= 2)
+                        .ToDictionary(r => r.Length == 2 && r[1] < 0 ? IndicClusters.ConjunctPrefix + (-r[1]) : IndicClusters.Key(r.Skip(1)), r => r[0], StringComparer.Ordinal))
+                    : null,
+                Hinted = e.Hinted is { Count: > 0 } hinted
+                    ? hinted.Where(r => r.Length >= 1).ToDictionary(r => r[0], r =>
+                        {
+                            var map = new Dictionary<int, int>();
+                            for (var i = 1; i + 2 < r.Length; i += 3)
+                                for (var cp = r[i]; cp <= r[i + 1] && cp - r[i] < 0x10000; cp++) map[cp] = r[i + 2];
+                            return (IReadOnlyDictionary<int, int>)map;
+                        })
+                    : null,
             });
         }
         return list;

@@ -40,6 +40,7 @@ internal static class Pipeline
             GridPanels = opts.GridPanels,
             ControlWidths = opts.ControlWidths,
             HiddenScrollBars = opts.HiddenScrollBars,
+            DisplayScales = opts.DisplayScales ?? ScanOptions.AllDisplayScales,
             DefaultFontPinned = opts.DefaultFontPinned,
             ElementLanguage = opts.SourceElementLanguage,
             Sharing = sharing,

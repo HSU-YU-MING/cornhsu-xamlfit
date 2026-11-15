@@ -82,7 +82,46 @@ public static class FontMetricsExtractor
             Ranges = BuildRanges(cmap, advances),
             Kerning = GposKerning.Read(r, GlyphToCodepoints(cmap)),
             Arabic = ArabicExport.Read(r, cmap, advances),
+            Hinted = ReadHdmx(r, cmap, advances, unitsPerEm, numGlyphs),
+            Indic = IndicExport.Read(r, cmap, advances)?.ToDictionary(kv => kv.Key, kv => (IReadOnlyDictionary<string, int>)kv.Value),
         };
+    }
+
+    /// <summary>
+    /// hdmx：各像素大小 hinting 後的整數寬度（Display 模式用）。存跟「線性寬度 0.5 進位」的差、只列非零；
+    /// 只收 72 px 以下（再大的字 Display 模式跟線性幾乎一樣，用不到）。
+    /// </summary>
+    private static Dictionary<int, IReadOnlyDictionary<int, int>>? ReadHdmx(SfntReader r, SortedDictionary<int, int> cmap, int[] advances, int unitsPerEm, int numGlyphs)
+    {
+        if (!r.Has("hdmx")) return null;
+        try
+        {
+            var hdmx = r.TableOffset("hdmx");
+            var count = r.U16(hdmx + 2);
+            var recordSize = (int)r.U32(hdmx + 4);
+            if (recordSize < 2 + numGlyphs) return null;
+            var result = new Dictionary<int, IReadOnlyDictionary<int, int>>();
+            for (var i = 0; i < count; i++)
+            {
+                var rec = hdmx + 8 + i * recordSize;
+                int ppem = r.U8(rec);
+                if (ppem is 0 or > 72 || result.ContainsKey(ppem)) continue;
+                var deltas = new Dictionary<int, int>();
+                foreach (var (cp, glyph) in cmap)
+                {
+                    if (glyph >= numGlyphs || glyph >= advances.Length) continue;
+                    var width = r.U8(rec + 2 + glyph);
+                    var delta = width - Fonts.TextMeasure.RoundHalfUp((double)advances[glyph] * ppem / unitsPerEm);
+                    if (delta != 0) deltas[cp] = delta;
+                }
+                result[ppem] = deltas;
+            }
+            return result.Count > 0 ? result : null;
+        }
+        catch (Exception e) when (e is IndexOutOfRangeException or ArgumentOutOfRangeException)
+        {
+            return null;
+        }
     }
 
     private static Dictionary<int, List<int>> GlyphToCodepoints(SortedDictionary<int, int> cmap)

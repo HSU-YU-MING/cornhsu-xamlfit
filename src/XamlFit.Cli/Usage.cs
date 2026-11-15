@@ -77,6 +77,8 @@ internal static class Usage
                                    (a number box, a drop-down filled from code) ever gets
               "hiddenScrollBars": ["ActionScrollViewer"]   x:Name of a ScrollViewer or list
                                    whose vertical bar never shows (content never taller)
+              "displayScales": [1, 1.25]   display scalings TextFormattingMode="Display" text
+                                   must fit at (default 1, 1.25, 1.5, 1.75, 2)
               "absentFonts": ["Segoe UI Variable"]   skip a family target machines do not have
               "defaultFontByCulture": { "th": "Leelawadee UI" }
               "elementLanguage": "en-US"   the Language WPF uses to pick fallback fonts

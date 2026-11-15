@@ -263,11 +263,14 @@ public class FontSpecTests
     }
 
     [Fact]
-    public void Display_formatting_mode_cannot_be_measured_from_metrics()
+    public void Display_formatting_mode_is_read_and_measured_with_hinted_widths()
     {
-        // LayoutOracle 實測：Display 模式的寬度跟線性加總差到 −37% ~ +45%
-        Assert.Contains("Display", Read("", "TextOptions.TextFormattingMode=\"Display\"").Unreadable);
-        Assert.Null(Read("", "TextOptions.TextFormattingMode=\"Ideal\"").Unreadable);
+        // LayoutOracle 實測：Display 模式的寬度跟線性加總差到 −37% ~ +45% —— 要用 hinting 寬度（TextMeasure.MeasureDisplay）
+        var display = Read("", "TextOptions.TextFormattingMode=\"Display\"");
+        Assert.Null(display.Unreadable);
+        Assert.True(display.Display);
+        Assert.False(Read("", "TextOptions.TextFormattingMode=\"Ideal\"").Display);
+        Assert.Contains("TextFormattingMode", Read("", "TextOptions.TextFormattingMode=\"{Binding Mode}\"").Unreadable);
     }
 
     [Fact]

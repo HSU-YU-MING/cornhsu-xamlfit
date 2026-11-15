@@ -50,6 +50,9 @@ public sealed class TextSite
 
     /// <summary>佈景把字串內容畫成大寫／小寫（MahApps 的 Button）。量譯文之前先轉。</summary>
     public Layout.TextCasing Casing { get; init; } = Layout.TextCasing.AsIs;
+
+    /// <summary>TextFormattingMode="Display" 時要檢查的顯示縮放比例；null = 一般（Ideal）模式。</summary>
+    public IReadOnlyList<double>? DisplayScales { get; init; }
     public TrimMode Trim { get; init; } = TrimMode.None;
 
     /// <summary>宣告的高度（垂直裁切判定要用）。</summary>

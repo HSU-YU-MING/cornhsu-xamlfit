@@ -173,6 +173,14 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 90 | **量佈景樣式設了什麼要看值的來源** | 沒設的屬性量到的是這台機器的系統字型（Microsoft JhengHei UI）；MaterialDesign 的 PasswordBox 甚至把 FontFamily 設成系統字型。只記 BaseValueSource 是 Style 的，而且等於系統字型的不記 | ThemeChrome |
 | 91 | **捲軸要放進真的視窗才量得到寬度** | 單獨 Measure 一個 ScrollBar 得到 0。MahApps 的捲軸 14（固定）、MaterialDesign 的等於系統寬（跟著縮放 → 用 17.5 上限） | ThemeChrome |
 | 92 | **同一個範圍裡有沒量過的佈景，量過的也不能用** | 不知道另一個佈景改了哪些控制項。NETworkManager 的 Dragablz 其實是 git submodule —— 抓下來之後它是專案自己的 XAML（只有 keyed 樣式與它自己的控制項），佈景就只剩 MahApps | 語料（NETworkManager） |
+| 93 | **Display 模式的字寬是 hdmx 的 hinting 寬度，像素大小 0.5 進位** | 字距也四捨五入到整數像素（偶數進位）。有資料的大小 Segoe UI、Arial、Trebuchet MS 每一組都一樣；12.5 px 這種剛好一半的大小 Tahoma、JhengHei 偏寬 | WpfOracle --display |
+| 94 | **hinting 旗標說「不改寬度」不能信** | Yu Gothic UI 的 head.flags 第 4 位是 0，照樣在 20、21、24、28 px 改寬度（偏窄 2%）。Consolas 剛好沒改。沒有 hdmx 的大小一律量不到；hinting 讓一個字多出好幾個像素也有（hdmx 實查），沒有上限可估 | WpfOracle --display |
+| 95 | **TTC 的字面要照 nameID 1 挑** | YuGothR.ttc 裡的是 Yu Gothic 與 Yu Gothic UI Semilight；Yu Gothic UI Regular 在 YuGothM.ttc。比對程式挑錯字面就以為模型錯了 | WpfOracle --display |
+| 96 | **馬拉地文的 ल、श 字形不同** | Nirmala UI 的 dev2 有 MAR 語言系統；用預設的語言系統量 ल 窄 4.5%。印度系文字也要依元素語言挑語言系統 | WpfOracle --scripts |
+| 97 | **坦米爾文 virama 後面接鼻化符號是不合法的組合** | WPF 畫一個虛線圓圈佔位，寬到 +45%。這種序列量不到 | WpfOracle --scripts |
+| 98 | **畫在前面的母音符號要先移到前面再套字距** | 坦米爾文的 ெ ே ை（與兩段式母音的前段）畫在子音前面，字型的字距是照畫出來的順序套的；照字元順序算，叢集偏窄到 3.7% | WpfOracle --scripts |
+| 99 | **標點跟著印度系文字併進同一段** | 「ல்:」的冒號被字型撐開 0.08 px：叢集後面接標點時加匯出時量到的最大值 | WpfOracle --scripts |
+| 100 | **叢集相加對印度系文字是安全的近似** | 連寫（半形、合字）只會讓整個字變窄：馬拉地文 1,153 個字，叢集相加沒有一個比整個字窄。子音 + virama 後面接子音的改變量取「所有接法裡最少的」 | WpfOracle --indic |
 | 88 | **成對的表蓋不住跨三個字以上的上下文規則** | Segoe UI 的 ے 依前面兩個字換長度（另存三字改變量）；Segoe UI 的點避讓字距、Calibri 6.27 的大量 calt 跨更遠。匯出時用 2 萬個隨機字自我檢查，拼窄的字母移出驗證清單（Segoe UI 13 個少用字母），剩不到一半整支不寫（Calibri） | 匯出自我檢查 |
 
 ### 環境層級的坑
@@ -190,7 +198,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 644 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 659 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 42 條 CLI 路徑的退出碼
@@ -216,7 +224,8 @@ M6 裡它兩次不是零，兩次都是工具錯。
   內距表裡的 16／20／17.5 就是從這裡確認的（Windows only）
 
 - `M0Survey` —— 可量測比例調查（已修過五個 bug，結論在 `docs/`）
-- `WpfOracle` —— 拿 WPF 的 `FormattedText` 當真值驗量測（Windows only）。`-- --scripts <度量檔> <strings.json>` 對照希伯來文、阿拉伯文、波斯文、泰文（strings.json：`{"ar": [...], ...}`；`XF_SCRIPT_FONTS` 換字型、`XF_SCRIPT_DUMP="ar/Segoe UI"` 加 `XF_SCRIPT_ALL=1` 逐句印、`XF_SCRIPT_LTR=1` 用左到右排）。匯出時的阿拉伯文自我檢查：`XAMLFIT_ARABIC_SELFCHECK=1 xamlfit fonts export …` 印每個語言系統拼窄的字數與移掉的字母
+- `WpfOracle` —— 拿 WPF 的 `FormattedText` 當真值驗量測（Windows only）。`-- --scripts <度量檔> <strings.json>` 對照希伯來文、阿拉伯文、波斯文、泰文（strings.json：`{"ar": [...], ...}`；`XF_SCRIPT_FONTS` 換字型、`XF_SCRIPT_DUMP="ar/Segoe UI"` 加 `XF_SCRIPT_ALL=1` 逐句印、`XF_SCRIPT_LTR=1` 用左到右排）。`-- --display <out.tsv>` 存 Display 模式的寬度（10 支字型 × 11 個字級 × 5 種縮放），`-- --display-check <度量檔> <tsv>` 拿工具的量法比；
+`-- --indic <strings.json>` 比「整個字」與「叢集相加」。匯出時的阿拉伯文自我檢查：`XAMLFIT_ARABIC_SELFCHECK=1 xamlfit fonts export …` 印每個語言系統拼窄的字數與移掉的字母
 - `ChromeGen` —— 量控制項內距表（Windows only）
 - `DemoMetrics` —— 產生示範用的合成字型度量（跨平台）
 - `GridOracle` —— 早期的 Grid 欄寬對照。⚠ 它量的是根元素而不是 Show 過的視窗，

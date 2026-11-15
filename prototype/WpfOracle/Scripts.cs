@@ -22,10 +22,12 @@ internal static class Scripts
             ["ar"] = ["Segoe UI", "Arial", "Tahoma"],
             ["fa"] = ["Segoe UI", "Arial", "Tahoma"],
             ["th"] = ["Leelawadee UI", "Tahoma"],
+            ["mr"] = ["Nirmala UI"],
+            ["ta"] = ["Nirmala UI"],
         };
         if (Environment.GetEnvironmentVariable("XF_SCRIPT_FONTS") is { Length: > 0 } extra)   // 例："Calibri,Courier New"
             foreach (var key in new[] { "ar", "fa" }) fonts[key] = extra.Split(',');
-        var cultures = new Dictionary<string, string> { ["he"] = "he-IL", ["ar"] = "ar-SA", ["fa"] = "fa-IR", ["th"] = "th-TH" };
+        var cultures = new Dictionary<string, string> { ["he"] = "he-IL", ["ar"] = "ar-SA", ["fa"] = "fa-IR", ["th"] = "th-TH", ["mr"] = "mr-IN", ["ta"] = "ta-IN" };
         var worstAll = 0.0;
 
         foreach (var (script, strings) in sets)
@@ -45,7 +47,7 @@ internal static class Scripts
                     if (ours.MissingGlyphs > 0) continue;
                     if (ours.ComplexScript) { unjudged++; if (Environment.GetEnvironmentVariable("XF_SCRIPT_UNJUDGED") is null) continue; }
                     var ft = new FormattedText(text, CultureInfo.GetCultureInfo(cultures[script]),
-                        script is "th" || Environment.GetEnvironmentVariable("XF_SCRIPT_LTR") is not null ? FlowDirection.LeftToRight : FlowDirection.RightToLeft,
+                        script is "th" or "mr" or "ta" || Environment.GetEnvironmentVariable("XF_SCRIPT_LTR") is not null ? FlowDirection.LeftToRight : FlowDirection.RightToLeft,
                         tf, 12, Brushes.Black, null, TextFormattingMode.Ideal, 1.0);
                     var wpf = ft.WidthIncludingTrailingWhitespace;
                     if (wpf <= 0.01) continue;

@@ -28,6 +28,7 @@ internal sealed class CommonOptions
     public Dictionary<string, XamlFit.Core.Xaml.GridPanel> GridPanels { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, double> ControlWidths { get; } = new(StringComparer.Ordinal);
     public HashSet<string> HiddenScrollBars { get; } = new(StringComparer.Ordinal);
+    public List<double>? DisplayScales { get; set; }
     public string? SourceCulture { get; set; }
 
     /// <summary>沒寫 xml:lang 的元素的語言；"culture" = 跟著正在檢查的語言。</summary>
@@ -219,6 +220,7 @@ internal sealed class CommonOptions
             foreach (var name in hiddenBars) o.HiddenScrollBars.Add(name);
         if (config.ControlWidths is { Count: > 0 } controlWidths)
             foreach (var (name, width) in controlWidths) o.ControlWidths[name] = width;
+        if (config.DisplayScales is { Count: > 0 } scales) o.DisplayScales = [.. scales.Distinct().Order()];
 
         // 清單型的：旗標給了就不從設定檔補（不要混成一個難以預測的聯集）
         if (o.ResxDirs.Count == 0 && config.Resx is { Count: > 0 } resx) o.ResxDirs.AddRange(resx.Select(Resolve));

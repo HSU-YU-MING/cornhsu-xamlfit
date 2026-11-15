@@ -54,6 +54,27 @@ public sealed class FontMetrics
     /// <summary>阿拉伯字母的寬度，依 OpenType 語言系統（"dflt"、"ARA "、"FAR "、"URD "）；沒有的話用這支字型畫的阿拉伯文量不到。</summary>
     public IReadOnlyDictionary<string, ArabicShapes>? Arabic { get; init; }
 
+    /// <summary>
+    /// 字型 hdmx 表裡的 hinting 後寬度（TextFormattingMode="Display" 用的整數像素寬），依像素大小（ppem）。
+    /// 存的是跟「線性寬度四捨五入」的差，只列非零。沒有 hdmx、或 ppem 不在表裡 → Display 模式量不到。
+    /// </summary>
+    public IReadOnlyDictionary<int, IReadOnlyDictionary<int, int>>? Hinted { get; init; }
+
+    /// <summary>
+    /// 印度系文字（"deva"、"taml"）每個字素叢集比「各字 advance 相加」寬或窄多少（字型單位，只列非零；鍵是 <see cref="IndicClusters.Key"/>）。
+    /// 有這個文字系統的鍵才量得到。
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>>? Indic { get; init; }
+
+    /// <summary>Display 模式下這個字在 ppem 像素大小時的寬度（整數像素）。這個 ppem 沒有 hinting 資料回 false。</summary>
+    public bool TryHintedAdvance(int codepoint, int ppem, out int px)
+    {
+        px = 0;
+        if (Hinted is null || !Hinted.TryGetValue(ppem, out var deltas) || !TryAdvance(codepoint, out var advance)) return false;
+        px = TextMeasure.RoundHalfUp((double)advance * ppem / UnitsPerEm) + (deltas.TryGetValue(codepoint, out var d) ? d : 0);
+        return true;
+    }
+
     public ArabicShapes? ArabicFor(string? language) =>
         Arabic is null ? null
         : Arabic.TryGetValue(ArabicShapes.LanguageSystem(language), out var s) ? s
@@ -89,7 +110,14 @@ public sealed class FontMetrics
 public readonly record struct Measurement(
     double WidthPx, int MissingGlyphs, bool ComplexScript, bool UsedAutoFallback = false)
 {
-    public bool IsReliable => MissingGlyphs == 0 && !ComplexScript;
+    public bool IsReliable => MissingGlyphs == 0 && !ComplexScript && Unsupported is null;
+
+    /// <summary>量不到的其他原因（Display 模式沒有那個像素大小的 hinting 寬度…）。</summary>
+    public string? Unsupported { get; init; }
+
+    /// <summary>報告用：量不到的原因。</summary>
+    public string UnreliableReason => Unsupported
+        ?? (ComplexScript ? "complex script (advance widths do not sum correctly)" : "glyphs not covered by the font metrics");
 
     /// <summary>第一個量不到的碼位（沒有的話是 -1）。報告要能說出「缺的是哪個字」，
     /// 使用者才知道該去匯出哪支字型。</summary>
@@ -98,6 +126,78 @@ public readonly record struct Measurement(
 
 public static class TextMeasure
 {
+    /// <summary>GDI 的四捨五入（0.5 進位）。</summary>
+    public static int RoundHalfUp(double v) => (int)Math.Floor(v + 0.5);
+
+    /// <summary>
+    /// <paramref name="displayScales"/> 不是 null 時是 TextFormattingMode="Display"：照 <see cref="MeasureDisplay"/>；否則照一般的量法。
+    /// </summary>
+    public static Measurement Measure(string text, FontLookup lookup, double fontSizePx, IReadOnlyList<double>? displayScales) =>
+        displayScales is null ? Measure(text, lookup, fontSizePx) : MeasureDisplay(text, lookup, fontSizePx, displayScales);
+
+    /// <summary>
+    /// TextFormattingMode="Display"：每個字對齊整數像素，寬度用字型 hdmx 表裡那個像素大小的 hinting 寬度，
+    /// 字距也四捨五入到整數像素（WpfOracle --display 實測：Segoe UI、Arial、Trebuchet MS 每一組都一樣）。
+    /// 像素大小 = 字級 × 顯示縮放（0.5 進位），所以每個縮放比例各量一次、取最寬的；
+    /// 任何一個縮放比例、任何一個字沒有 hinting 寬度就是量不到 —— hinting 可以讓字寬多出好幾個像素，沒有上限可以估。
+    /// </summary>
+    public static Measurement MeasureDisplay(string text, FontLookup lookup, double fontSizePx, IReadOnlyList<double> scales)
+    {
+        if (string.IsNullOrEmpty(text) || lookup.Chain.Count == 0) return new Measurement(0, 0, false);
+        double widest = 0;
+        var missing = 0;
+        var usedFallback = false;
+        var firstMissing = -1;
+
+        foreach (var scale in scales)
+        {
+            var ppem = RoundHalfUp(fontSizePx * scale);
+            var total = 0;
+            FontMetrics? prevFace = null;
+            var prevCp = -1;
+            missing = 0;
+
+            foreach (var rune in text.EnumerateRunes())
+            {
+                var cp = rune.Value;
+                if (IsDefaultIgnorable(cp)) { prevFace = null; continue; }
+                if (IsComplexScript(cp) || ArabicJoining.IsArabic(cp))
+                    return new Measurement(0, 0, true) { Unsupported = "TextFormattingMode=\"Display\" with a script that needs shaping" };
+
+                FontMetrics? face = null;
+                foreach (var f in lookup.Chain)
+                    if (f.TryAdvance(cp, out _)) { face = f; break; }
+                if (face is null && lookup.Fallback?.Invoke(cp) is { } fb && fb.Face.TryAdvance(cp, out _))
+                {
+                    if (Math.Abs(fb.Scale - 1) > 1e-9)
+                        return new Measurement(0, 0, false) { Unsupported = "TextFormattingMode=\"Display\" with a scaled fallback font" };
+                    face = fb.Face;
+                    usedFallback = true;
+                }
+                if (face is null)
+                {
+                    missing++;
+                    if (firstMissing < 0) firstMissing = cp;
+                    prevFace = null;
+                    continue;
+                }
+
+                if (!face.TryHintedAdvance(cp, ppem, out var px))
+                    return new Measurement(0, 0, false)
+                    {
+                        Unsupported = string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                            $"TextFormattingMode=\"Display\": {face.Family} has no hinted widths for {ppem} px ({fontSizePx:0.##} px at {scale * 100:0}% display scaling)"),
+                    };
+                total += px;
+                if (ReferenceEquals(face, prevFace) && face.Kerning is { } kern)
+                    total += (int)Math.Round((double)kern.Adjust(prevCp, cp) * ppem / face.UnitsPerEm, MidpointRounding.ToEven);
+                prevFace = face;
+                prevCp = cp;
+            }
+            widest = Math.Max(widest, total / scale);
+        }
+        return new Measurement(widest, missing, false, usedFallback) { FirstMissing = firstMissing };
+    }
     /// <summary>
     /// 量一段文字在指定字級下的寬度（DIP）。
     ///
@@ -254,6 +354,45 @@ public static class TextMeasure
                 prevShapes = shapes;
                 prevArabic = cp;
                 prevForm = forms[i];
+                continue;
+            }
+
+            // 印度系文字：一個字素叢集一次量（匯出時算好的寬度），叢集之間相加
+            if (IndicClusters.Of(cp) is { } indic)
+            {
+                if (indic.Plain.Contains(cp)) { totalUnits += advance * scale; prevFace = null; continue; }
+                var length = IndicClusters.Match(cps, i, indic);
+                IReadOnlyDictionary<string, int>? clusters = null;
+                if (face.Indic is { } indicData
+                    && !(IndicClusters.LanguageSystem(language) is { } indicLang && indicData.TryGetValue(IndicClusters.DataKey(indic, indicLang), out clusters)))
+                    indicData.TryGetValue(indic.Tag, out clusters);
+                if (length == 0 || clusters is null)
+                {
+                    complex = true;
+                    totalUnits += advance * scale;
+                    prevFace = null;
+                    continue;
+                }
+                var units = 0;
+                for (var k = i; k < i + length; k++)
+                {
+                    if (!face.TryAdvance(cps[k], out var a)) { units = -1; break; }   // 叢集裡的字要同一支字型畫
+                    units += a;
+                }
+                if (units < 0) { complex = true; prevFace = null; continue; }
+                var cluster = cps.Skip(i).Take(length).ToList();
+                totalUnits += (units + (clusters.TryGetValue(IndicClusters.Key(cluster), out var d) ? d : 0)) * scale;
+                // 子音 + virama 後面直接接子音：連寫（半形…）變窄的量，取所有接法裡最少的那個
+                var head = IndicClusters.ConjunctHead(indic, cluster);
+                if (head >= 0 && i + length < cps.Count && indic.Consonants.Contains(cps[i + length]) && face.TryAdvance(cps[i + length], out _)
+                    && clusters.TryGetValue(IndicClusters.ConjunctPrefix + head, out var conjunct))
+                    totalUnits += conjunct * scale;
+                // 後面接的不是同一個文字系统的字（標點、空白…）：字型可能把它們之間撐開，加上匯出時量到的最大值
+                if (i + length < cps.Count && IndicClusters.Of(cps[i + length]) != indic
+                    && clusters.TryGetValue(IndicClusters.TrailingKey, out var trailing))
+                    totalUnits += trailing * scale;
+                i += length - 1;
+                prevFace = null;
                 continue;
             }
 

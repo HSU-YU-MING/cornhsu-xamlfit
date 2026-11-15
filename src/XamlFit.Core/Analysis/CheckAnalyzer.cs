@@ -392,11 +392,10 @@ public sealed class CheckAnalyzer
 
         foreach (var line in TextRules.Lines(display))
         {
-            var whole = TextMeasure.Measure(line, lookup, site.FontSize);
+            var whole = TextMeasure.Measure(line, lookup, site.FontSize, site.DisplayScales);
             if (!whole.IsReliable)
-                return new TextLayout(0, 0, 0, false, false, whole.ComplexScript
-                    ? "complex script (advance widths do not sum correctly)"
-                    : "glyphs not covered by the font metrics") { FirstMissing = whole.ComplexScript ? -1 : whole.FirstMissing };
+                return new TextLayout(0, 0, 0, false, false, whole.UnreliableReason)
+                    { FirstMissing = whole.ComplexScript || whole.Unsupported is not null ? -1 : whole.FirstMissing };
 
             usedAuto |= whole.UsedAutoFallback;
             widest = Math.Max(widest, whole.WidthPx);
@@ -407,12 +406,12 @@ public sealed class CheckAnalyzer
             // 中日韓文字每個字之間都可以斷。
             double used = 0;
             var lineCount = 1;
-            var space = TextMeasure.Measure(" ", lookup, site.FontSize).WidthPx;
+            var space = TextMeasure.Measure(" ", lookup, site.FontSize, site.DisplayScales).WidthPx;
 
             foreach (var word in BreakUnits(line))
             {
                 if (word.Text.Length == 0) continue;
-                var w = TextMeasure.Measure(word.Text, lookup, site.FontSize).WidthPx;
+                var w = TextMeasure.Measure(word.Text, lookup, site.FontSize, site.DisplayScales).WidthPx;
                 widestWord = Math.Max(widestWord, w);
 
                 var lead = used > 0 && word.SpaceBefore ? space : 0;

@@ -31,6 +31,11 @@ public sealed record ScanOptions
     /// <summary>使用者宣告的「執行期才知道寬度的控制項最寬多寬」（見 <see cref="ElementMeasurer.DeclaredWidths"/>）。</summary>
     public IReadOnlyDictionary<string, double> ControlWidths { get; init; } = new Dictionary<string, double>();
 
+    /// <summary>Display 模式要檢查的顯示縮放比例（設定檔的 displayScales）。</summary>
+    public IReadOnlyList<double> DisplayScales { get; init; } = AllDisplayScales;
+
+    public static readonly IReadOnlyList<double> AllDisplayScales = [1.0, 1.25, 1.5, 1.75, 2.0];
+
     /// <summary>使用者明確指定了預設字型（設定檔或旗標）。視窗之間對字型的設定不一致時，
     /// 以使用者指定的為準，不再把 UserControl 裡的文字判成「不知道繼承到什麼」。</summary>
     public bool DefaultFontPinned { get; init; }
@@ -264,6 +269,7 @@ public sealed partial class XamlScanner
             {
                 DefaultLanguage = _language,
                 DeclaredWidths = _options.ControlWidths,
+                DisplayScales = _options.DisplayScales,
                 ResourceText = key =>
                     strings is not null && strings.TryGetValue(key, out var localized) ? localized
                     : _sourceStrings.TryGetValue(key, out var source) ? source
@@ -999,6 +1005,7 @@ public sealed partial class XamlScanner
             Wrap = textHost is null ? WrapMode.NoWrap : ParseWrap(_styles.Resolve(textHost, "TextWrapping", inheritable: false)),
             // 控制項的字串內容（Button Content="…"）：樣式可能把它畫成大寫（MahApps）
             Casing = textHost is null && local != "Run" ? _styles.CasingOf(el) : TextCasing.AsIs,
+            DisplayScales = font.Display ? _options.DisplayScales : null,
             Trim = textHost is null ? TrimMode.None : ParseTrim(_styles.Resolve(textHost, "TextTrimming", inheritable: false)),
             Height = HeightOf(textHost ?? el),
             Width = width,

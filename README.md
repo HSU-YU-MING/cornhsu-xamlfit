@@ -116,6 +116,25 @@ English, German, French, Chinese, Japanese and Korean, including kerning-heavy p
 `To` and `AV`): mean error **0.006%**, worst under-estimate **0.025%**, worst over-estimate 0.26%.
 Kerning comes from the font's GPOS table and is applied the way WPF does by default.
 
+**Devanagari and Tamil, against `FormattedText`.** Each grapheme cluster (a letter with its vowel
+sign, or a consonant with its virama) is shaped at export time with the font's own rules, per
+language system (Nirmala UI draws ल and श differently for Marathi), and text is measured as the sum
+of its clusters, plus — per consonant — the smallest narrowing any following consonant produces when
+they join, and the largest kerning seen before punctuation. That errs wide: Marathi 2.1% on average,
+Tamil 1.6%. Against Nirmala UI on 290 Marathi and 300 Tamil strings from Playnite and ScreenToGif,
+every cluster alone (5,926 and 599) and random cluster sequences: worst under-estimate 0.02% for
+Marathi and 0.11% for Tamil (kerning between clusters, about 0.1 px). Other Indic scripts are not
+measured yet.
+
+**`TextFormattingMode="Display"`, against `FormattedText`.** Display mode snaps every glyph to a
+whole pixel using the font's hinted widths, which depend on the pixel size — font size × display
+scaling. Fonts that carry an `hdmx` table list those widths for common pixel sizes; with them and
+pixel-rounded kerning, 2,781 of WPF's widths across ten fonts, eleven sizes and five scalings match
+exactly and none is narrower. The tool measures every scaling in `displayScales` (default 100–200%)
+and keeps the widest; a pixel size the font does not list is reported as not measurable, because
+hinting can widen a glyph by several pixels (Yu Gothic UI says hinting never changes widths and still
+does). An app that only supports some scalings can say so.
+
 **Right-to-left and Thai text, against `FormattedText`.** Hebrew and Thai add up like Latin
 (≤ 0.02%). Arabic, Persian and Urdu letters change shape with their neighbours, so
 `fonts export` runs each font's own substitution and positioning rules over every letter form,
@@ -139,18 +158,19 @@ portable unit tests.
 **Real projects, against real WPF windows.** `prototype/CorpusRender` loads a real project's
 windows into WPF — with the project's own `App.xaml` dictionaries and each language's strings —
 and records how wide every text needs to be and how much of it is actually visible. Playnite,
-11 windows, 6,274 comparisons in every language including Arabic, Persian and Hebrew (with
+11 windows, 6,444 comparisons in every language including Arabic, Persian, Hebrew and Marathi (with
 Playnite's GridEx declared, and an equivalent GridEx in the harness so WPF lays it out for real):
-**136 clipped by both, 2 false alarms, 0 missed**, 6,136 fit by both. The false alarms are within
-1.5 px. Where both agree, XamlFit's text width is −0.02 to +0.03 px off WPF's, and the width it
-believes is available is never more than 0.02 px too generous. ScreenToGif, 6 windows
+**138 clipped by both, 2 false alarms, 0 missed**, 6,304 fit by both. The false alarms are within
+1.5 px. Where both agree, XamlFit's text width is −0.02 to +0.03 px off WPF's outside Devanagari and
+Tamil (which err wide, by up to 11 px here), and the width it believes is available is never more
+than 0.02 px too generous. ScreenToGif, 6 windows
 including the editor's side panel and every kind of drop-down, 3,043 comparisons with the same
 font on both sides (this machine's): **122 clipped by both, 28 false alarms, 0 missed**, 2,893 fit by
 both. The false alarms are all in one side panel whose `ScrollViewer` shows its bar only when
 needed; XamlFit assumes the bar is there (and says so), WPF's test window was tall enough that it
 was not; declaring that panel in `hiddenScrollBars` leaves 1 false alarm (0.8 px) and still 0 missed
-(3,361 comparisons once Arabic and Hebrew are measured too: 124 clipped by both, 1 false alarm,
-0 missed). Another 76 are Expander headers that WPF draws 0.5–1.2 px short of their text with 200 px
+(3,540 comparisons once Arabic, Hebrew and Tamil are measured too: 133 clipped by both, 2 false
+alarms — the second a Tamil title measured 5 px wide — 0 missed). Another 76 are Expander headers that WPF draws 0.5–1.2 px short of their text with 200 px
 to spare, because `UseLayoutRounding` rounds every layer to device pixels. English loses up to
 0.4 px at the same places; the loss does not grow with the text. That is the pixel grid, not a
 translation that does not fit, so XamlFit does not report it and the comparison counts it apart. These comparisons found the bugs listed in `docs/M6-全面重讀.md`.
@@ -194,6 +214,10 @@ them once in `xamlfit.config.json`.
   // ScrollViewers or lists (by x:Name) whose vertical scroll bar never shows, because their content is
   // never taller than they are. Otherwise an `Auto` bar is assumed to be there and takes its width.
   "hiddenScrollBars": ["ActionScrollViewer"],
+
+  // Display scalings (1 = 100%) TextFormattingMode="Display" text must fit at. Default: 1, 1.25,
+  // 1.5, 1.75, 2. Display widths come from the font's hinted widths for each pixel size.
+  "displayScales": [1, 1.25],
 
   // A family in a FontFamily fallback list that target machines do not have.
   "absentFonts": ["Segoe UI Variable"],
@@ -369,8 +393,9 @@ out a horizontal `StackPanel` or `DockPanel`, and it is what `check` reports.
 
 What is *not* judged is counted and printed: strings with run-time placeholders (`{0}`), text
 the metrics do not cover (with the code points, so you know which font to export), and
-scripts that reshape in a way the metrics do not cover (Indic, Myanmar, Khmer, Tibetan, Arabic
-letters a font's data leaves out). **A culture in which nothing
+scripts that reshape in a way the metrics do not cover (Bengali and the other Indic scripts besides
+Devanagari and Tamil, Myanmar, Khmer, Tibetan, Arabic letters a font's data leaves out), and Display-mode
+text at a pixel size the font has no hinted widths for. **A culture in which nothing
 could be measured makes the run exit 3** — "not checked" must not look like "passed".
 
 `--source-only` checks just the source language and needs no translations. `--pseudo`
@@ -398,7 +423,9 @@ fail a build, because a guess should not block someone's pull request.
 | Styles applied by triggers, visual states or code-behind | not followed |
 | Text set through properties not scanned (`ToolTip`, `Title`, watermark/hint attached properties, `Hyperlink`/`Span` content) | not seen at all |
 | Resource dictionaries merged in code at run time | every dictionary file is assumed merged; conflicting definitions make the value unknown |
-| Shaping outside Arabic script (Indic, Myanmar, Khmer, Tibetan, Mongolian) | reported as not measurable |
+| Shaping in scripts other than Arabic, Devanagari and Tamil (Bengali, Gurmukhi, Gujarati, Telugu, Kannada, Malayalam, Sinhala, Myanmar, Khmer, Tibetan, Mongolian) | reported as not measurable |
+| Devanagari and Tamil | measured as the sum of grapheme clusters: about 2% wide on average, never more than 0.11% narrow in the comparisons |
+| `TextFormattingMode="Display"` | measured from the font's hinted widths at every scaling in `displayScales`; a pixel size the font does not list is not measurable |
 | Arabic-script fonts whose contextual rules reach further than three letters | the letters involved, or the whole font, are reported as not measurable (see above) |
 | Arabic digits | WPF swaps 0–9 for Arabic-Indic digits in Arabic text; both are measured and the wider one is used |
 | Ligatures other than Arabic (`fi`, `ffl`…) | not applied; covered by the text-width comparison above (worst under-estimate 0.025%) |

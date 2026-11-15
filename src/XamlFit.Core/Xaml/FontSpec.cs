@@ -17,6 +17,9 @@ public readonly record struct FontSpec(
     /// <summary>元素的 Language（xml:lang，會繼承）。沒寫是 WPF 的預設 en-US —— 跟 Windows 的語言無關。</summary>
     public string Language { get; init; } = FontFallback.DefaultLanguage;
 
+    /// <summary>TextFormattingMode="Display"：字寬對齊整數像素，要用字型的 hinting 寬度量（<see cref="TextMeasure.MeasureDisplay"/>）。</summary>
+    public bool Display { get; init; }
+
     /// <summary>字型屬性會繼承：本地 → 樣式 → 祖先，都沒有才用預設值。</summary>
     public static FontSpec Read(StyleIndex styles, XElement el, string defaultFamily, double defaultSize,
         string defaultLanguage = FontFallback.DefaultLanguage)
@@ -63,10 +66,11 @@ public readonly record struct FontSpec(
         if (stretch.Length > 0 && !WidthLike(stretch, "Normal", "Medium", "5"))
             unreadable ??= $"FontStretch=\"{stretch}\" selects a face this tool does not measure";
 
-        // ⚠ LayoutOracle 實測：Display 模式把每個字的寬度對齊到整數像素，
-        //   跟線性加總（Ideal 模式，WPF 的預設）差到 −37% ~ +45%，從字型度量算不出來。
-        if (WidthLike(formatting, "Display"))
-            unreadable ??= "TextFormattingMode=\"Display\" snaps glyph widths to whole pixels, which font metrics cannot predict";
+        // ⚠ LayoutOracle 實測：Display 模式把每個字的寬度對齊到整數像素，跟線性加總（Ideal 模式，WPF 的預設）差到 −37% ~ +45%。
+        //   要用字型 hdmx 表裡各像素大小的 hinting 寬度量（WpfOracle --display：有資料的大小每一組都一樣），沒有就量不到。
+        var display = WidthLike(formatting, "Display");
+        if (formatting.Length > 0 && !display && !WidthLike(formatting, "Ideal"))
+            unreadable ??= $"TextFormattingMode=\"{formatting}\" is not statically readable";
 
         // 字距是照 WPF 的預設（開著）量的；關掉時字會比我們量的寬 —— 不猜
         if (kerning.Length > 0 && !WidthLike(kerning, "True"))
@@ -101,6 +105,7 @@ public readonly record struct FontSpec(
             family, size, FontResolver.ParseWeight(weightText), FontResolver.ParseStyle(styleText), unreadable)
         {
             Language = language,
+            Display = display,
         };
     }
 

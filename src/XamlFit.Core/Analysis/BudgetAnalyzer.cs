@@ -249,7 +249,8 @@ public sealed class BudgetAnalyzer
                         if (m.UsedAutoFallback)
                             warning = "some characters are drawn with WPF's fallback font for them (taken from WPF's own fallback table)";
                     }
-                    else warning = m.ComplexScript
+                    else warning = m.Unsupported is { } unsupported ? unsupported
+                        : m.ComplexScript
                         ? "complex script: advance widths do not sum correctly"
                         : $"{m.MissingGlyphs} glyph(s) not covered by the metrics";
                 }
@@ -481,17 +482,19 @@ public static class SiteMeasure
         var complex = false;
         var usedAuto = false;
         var firstMissing = -1;
+        string? unsupported = null;
 
         foreach (var line in TextRules.Lines(TextRules.Cased(TextRules.Display(site.Element, text), site.Casing)))
         {
-            var m = TextMeasure.Measure(line, lookup, site.FontSize);
+            var m = TextMeasure.Measure(line, lookup, site.FontSize, site.DisplayScales);
             widest = Math.Max(widest, m.WidthPx);
             missing += m.MissingGlyphs;
             complex |= m.ComplexScript;
             usedAuto |= m.UsedAutoFallback;
             if (firstMissing < 0) firstMissing = m.FirstMissing;
+            unsupported ??= m.Unsupported;
         }
 
-        return new Measurement(widest, missing, complex, usedAuto) { FirstMissing = firstMissing };
+        return new Measurement(widest, missing, complex, usedAuto) { FirstMissing = firstMissing, Unsupported = unsupported };
     }
 }

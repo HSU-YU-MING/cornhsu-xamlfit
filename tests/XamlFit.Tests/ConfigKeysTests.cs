@@ -24,7 +24,8 @@ public class ConfigKeysTests
               "absentFonts": ["Segoe UI Variable"],
               "sourceCulture": "zh-Hant",
               "defaultFontByCulture": { "th": "Leelawadee UI" },
-              "assumeDefaultTheme": true
+              "assumeDefaultTheme": true,
+              "displayScales": [1, 1.25]
             }
             """);
 
@@ -33,6 +34,7 @@ public class ConfigKeysTests
         Assert.Equal("Grid", config.TreatAs!["GridEx"]);
         Assert.Equal("zh-Hant", config.SourceCulture);
         Assert.True(config.AssumeDefaultTheme);
+        Assert.Equal([1.0, 1.25], config.DisplayScales);
     }
 
     [Theory]
@@ -42,6 +44,8 @@ public class ConfigKeysTests
     [InlineData("{ \"treatAs\": { \"GridEx\": \"\" } }", "treatAs")]
     [InlineData("{ \"defaultFontByCulture\": { \"th\": \"\" } }", "defaultFontByCulture")]
     [InlineData("{ \"sourceCulture\": \"\" }", "sourceCulture")]
+    [InlineData("{ \"displayScales\": [] }", "displayScales")]
+    [InlineData("{ \"displayScales\": [0.1] }", "displayScales")]
     public void A_bad_value_names_its_field(string json, string field)
     {
         var (_, problems) = Load(json);

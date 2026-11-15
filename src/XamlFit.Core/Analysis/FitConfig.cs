@@ -71,6 +71,13 @@ public sealed class FitConfig
     [JsonPropertyName("controlWidths")] public Dictionary<string, double>? ControlWidths { get; set; }
 
     /// <summary>
+    /// <c>TextFormattingMode="Display"</c> 的文字要在哪些顯示縮放比例下裝得下（1 = 100%）。預設 100%～200% 五種，取最寬的。
+    /// Display 模式的字寬是字型裡各像素大小的 hinting 寬度，像素大小跟著縮放變；字型沒有某個大小的資料時那個位置量不到 ——
+    /// App 只支援部分縮放比例時在這裡宣告，量得到的位置會變多。
+    /// </summary>
+    [JsonPropertyName("displayScales")] public List<double>? DisplayScales { get; set; }
+
+    /// <summary>
     /// 垂直捲軸實際上不會出現的 ScrollViewer（或清單）：它們的 <c>x:Name</c>。
     /// 捲軸是 Auto 時工具一律假設它在（佔掉捲軸寬）；內容永遠不會比它高的，在這裡宣告就不扣。
     /// 宣告錯了就是把文字的空間算大 —— 只寫確定的。
@@ -178,6 +185,15 @@ public sealed class FitConfig
             foreach (var name in config.HiddenScrollBars)
                 if (string.IsNullOrWhiteSpace(name) || name.Contains(':') || name.Contains('.') || name.Contains(' '))
                     problems.Add(new Problem($"hiddenScrollBars[\"{name}\"]", "each entry is the x:Name of a ScrollViewer or a list"));
+
+        if (config.DisplayScales is not null)
+        {
+            if (config.DisplayScales.Count == 0)
+                problems.Add(new Problem("displayScales", "list at least one display scaling (1 = 100%)"));
+            foreach (var scale in config.DisplayScales)
+                if (!double.IsFinite(scale) || scale < 0.5 || scale > 5)
+                    problems.Add(new Problem("displayScales", $"{scale.ToString(System.Globalization.CultureInfo.InvariantCulture)} is not a display scaling between 0.5 and 5 (1 = 100%)"));
+        }
 
         if (config.ControlWidths is not null)
             foreach (var (name, value) in config.ControlWidths)

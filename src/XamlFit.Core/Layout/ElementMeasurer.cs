@@ -59,6 +59,9 @@ public sealed class ElementMeasurer : IElementMeasurer
     /// <summary>想查但查不到的次數：有這種情形，換一個語言的字串表重掃才有意義。</summary>
     public int ResourceMisses { get; private set; }
 
+    /// <summary>Display 模式要檢查的顯示縮放比例。</summary>
+    public IReadOnlyList<double> DisplayScales { get; init; } = Xaml.ScanOptions.AllDisplayScales;
+
     public double? DesiredWidth(XElement element, int depth)
     {
         if (depth > 8) return null;
@@ -290,7 +293,7 @@ public sealed class ElementMeasurer : IElementMeasurer
         var casing = IsTextElement(element.Name.LocalName) ? TextCasing.AsIs : _styles.CasingOf(element);
         foreach (var line in TextRules.Lines(TextRules.Cased(TextRules.Display(element.Name.LocalName, text), casing)))
         {
-            var m = TextMeasure.Measure(line, lookup, font.Size);
+            var m = TextMeasure.Measure(line, lookup, font.Size, font.Display ? DisplayScales : null);
             if (!m.IsReliable) return null;
             widest = Math.Max(widest, m.WidthPx);
         }
