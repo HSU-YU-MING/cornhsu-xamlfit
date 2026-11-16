@@ -180,21 +180,30 @@ that over-estimated the available width.
   ౖ and vocalic-L signs, a Khmer robat after anything but the base consonant and a second coeng ro in
   one cluster are not measurable (WPF draws them differently, or with a dotted circle).
 - **Mongolian** is measured. `fonts export` runs the font's rules over every letter, pair, three
-  basic letters in both genders and 150,000 random words, and keeps the widest width each letter — or
-  each pair the font joins into one ligature — took, separately by joining position, vowel harmony,
-  a following variation selector, an adjacent vowel separator or narrow no-break space, first syllable
-  or not, and whether the letter before is a vowel; a coarser table backs it up. Variation selectors
-  take the joining form of the letter before them, as in HarfBuzz. A self-check on 20,000 other words
-  removes letters that come out narrow.
+  basic letters in both genders and 400,000 random words (masculine, feminine and neutral-vowel), and
+  keeps the widest width each letter — or each pair the font joins into one ligature — took,
+  separately by joining position, vowel harmony, a following variation selector, an adjacent vowel
+  separator or narrow no-break space, first syllable or not, whether the letter before is a vowel, and
+  the neighbouring letter (a vowel's preceding letter, a consonant's following one); a coarser table
+  backs it up. Variation selectors take the joining form of the letter before them, as in HarfBuzz. A
+  self-check on 20,000 other words removes letters that come out narrow. Punctuation inside Mongolian
+  text is shaped with it (Mongolian Baiti's `rclt` widens 25 marks such as 《 and 「), and the file
+  records the wider width.
+- **Digits WPF replaces.** Besides Arabic text, WPF always draws 0–9 as native digits when the
+  element's language is Burmese, Dzongkha, Nepali (India), Pashto, Sindhi, Kashmiri, Urdu (India),
+  Punjabi or Uzbek in Arabic script, Mazanderani or Northern Luri — and not for Khmer, Bengali or
+  N'Ko, though .NET lists native digits for them (checked culture by culture against WPF). Both forms
+  are measured and the wider one is used; Myanmar Text's ၀ is 17% wider than 0. In Display mode the
+  replaced digits are reported as not measurable.
 - **Variable fonts** are exported as one face per named instance, under the family names WPF uses
   (`Segoe UI Variable Text`, `Small`, `Display`; the bare `Segoe UI Variable` is not a family to WPF,
   which draws Segoe UI for it), with advance widths from `HVAR` and kerning from the variation deltas
   in `GDEF`. Legacy names such as `Segoe UI Variable Text Semibold` resolve. `--family` accepts either
   the font's family or an instance family. `--hinted` leaves variable fonts out: WPF's Display-mode
   widths for them are not GDI's.
-- **Gzipped metrics files**: `fonts export --out xamlfit.fonts.json.gz` writes the file gzipped (a
-  30 MB file becomes about 5 MB); every command reads either, and the default lookup also tries
-  `xamlfit.fonts.json.gz`. Schema version 2 stores an Indic language system's table as its
+- **Gzipped metrics files**: `fonts export` writes `xamlfit.fonts.json.gz` by default (a 30 MB file
+  becomes about 5 MB; `--out xamlfit.fonts.json` writes it uncompressed); every command reads either,
+  and when a folder has both, the newer one. Schema version 2 stores an Indic language system's table as its
   differences from the script's default table (about 1 MB less); version 1 files still read.
 - **Three-consonant chains keep a value per sign on the last consonant**, and the export engine
   applies the mark-positioning features (`abvm`, `blwm`, `mark`, `mkmk`), where Nirmala UI spaces
@@ -229,10 +238,13 @@ that over-estimated the available width.
   Myanmar Text, Microsoft Himalaya): 0.02%, 0.02%, 0.04% and 0.02%; Khmer exhaustively (about
   800,000 strings) 0.04%. Real translations: Khmer 1,176 strings (Survey Solutions, SystemTrayMenu),
   Tibetan 879 (SOSpect), Burmese 173 (Discord CustomRP, dotnet-ftps-server): worst under-estimate
-  0.02%, 0.04% and 0.01%, on average 0.35%, 0.17% and 1.4% wide.
+  0.02%, 0.04% and 0.01%, on average 0.35%, 0.17% and 0.79% wide. Myanmar's generated words average
+  7.7% wide (12% before Myanmar Text's single-adjustment `dist` lookup on ြ, which WPF does not apply,
+  was skipped).
 - **Mongolian** against `FormattedText` (Mongolian Baiti; `prototype/WpfOracle/gen-mong.js`, three sets
-  of 4,000 words and sentences): worst under-estimate 0.04%, about 4% wide on average; the 32 strings
-  of Windows' mn-Mong locale data: 0.01% and 5.2%.
+  of 4,000 words and sentences): worst under-estimate 0.04%, about 2.7% wide on average; the 32 strings
+  of Windows' mn-Mong locale data: 0.02% and 2.4%; 312 real translations (MonkeyPaste): 0.02% and
+  1.45%.
 - **Variable fonts** against `FormattedText` (Segoe UI Variable, 15 named instances, 2,415 comparisons):
   mean error 0.016%, worst under-estimate 0.029%, worst over-estimate 0.09%. Display mode: 9,900
   widths over 15 instances, eleven sizes and five scalings, none narrower.

@@ -319,6 +319,17 @@ public class FontResolverTests
             Assert.Equal('{', (char)File.ReadAllBytes(plain)[0]);
             Assert.Equal(json, MetricsFile.ReadText(gz));
             Assert.Equal(MetricsFile.Load(plain).ToJson(), MetricsFile.Load(gz).ToJson());
+
+            // 預設的名字兩個都有時用比較新的（舊的 .json 留在 repo 裡、新匯出的是 .gz）
+            var newGz = Path.Combine(dir, "xamlfit.fonts.json.gz");
+            var oldJson = Path.Combine(dir, "xamlfit.fonts.json");
+            MetricsFile.Save(oldJson, json);
+            MetricsFile.Save(newGz, json);
+            File.SetLastWriteTimeUtc(oldJson, DateTime.UtcNow.AddDays(-1));
+            Assert.Equal(newGz, MetricsFile.Find(dir));
+            File.SetLastWriteTimeUtc(oldJson, DateTime.UtcNow.AddDays(1));
+            Assert.Equal(oldJson, MetricsFile.Find(dir));
+            Assert.Null(MetricsFile.Find(Path.Combine(dir, "nothing-here")));
         }
         finally { Directory.Delete(dir, true); }
     }

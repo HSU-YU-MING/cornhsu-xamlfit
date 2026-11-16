@@ -141,7 +141,7 @@ public static class TextMeasure
     /// <paramref name="displayScales"/> 不是 null 時是 TextFormattingMode="Display"：照 <see cref="MeasureDisplay"/>；否則照一般的量法。
     /// </summary>
     public static Measurement Measure(string text, FontLookup lookup, double fontSizePx, IReadOnlyList<double>? displayScales) =>
-        displayScales is null ? Measure(text, lookup, fontSizePx) : MeasureDisplay(text, lookup, fontSizePx, displayScales);
+        displayScales is null ? Measure(text, lookup, fontSizePx) : WithDigits(text, t => MeasureDisplay(t, lookup, fontSizePx, displayScales), lookup.Language);
 
     /// <summary>
     /// TextFormattingMode="Display"：每個字對齊整數像素，寬度用字型 hdmx 表裡那個像素大小的 hinting 寬度，
@@ -268,20 +268,48 @@ public static class TextMeasure
     }
 
     /// <summary>
-    /// 阿拉伯文裡的 0–9：WPF 會換成阿拉伯—印度數字（WpfOracle --scripts 實測：元素語言是 ar 時連純數字的字串也換；
-    /// 前面最近的字母是阿拉伯文的才換，「8x8」只換第一個）。兩種數字寬度不同 —— Segoe UI 的比較窄、Tahoma 的比較寬。
+    /// 0–9 會被 WPF 換成別的數字：
+    /// - 阿拉伯文裡：換成阿拉伯—印度數字（WpfOracle --scripts 實測：元素語言是 ar 時連純數字的字串也換；
+    ///   前面最近的字母是阿拉伯文的才換，「8x8」只換第一個）。兩種數字寬度不同 —— Segoe UI 的比較窄、Tahoma 的比較寬。
+    /// - 元素語言是 <see cref="NativeZero"/> 列的那幾種：不管前後是什麼字都換（緬甸文 Myanmar Text 的 ၀ 比 0 寬 17%）。
     /// 不去猜哪幾個會換：全換、不換各量一次，取寬的。
     /// </summary>
     private static Measurement WithDigits(string text, Func<string, Measurement> measure, string? language)
     {
         var plain = measure(text);
         if (!text.Any(c => c is >= '0' and <= '9')) return plain;
-        if (ArabicShapes.LanguageSystem(language) == "dflt" && !text.EnumerateRunes().Any(r => ArabicJoining.IsArabic(r.Value))) return plain;
-        var zero = ArabicShapes.LanguageSystem(language) is "FAR " or "URD " ? 0x06F0 : 0x0660;
-        var swapped = string.Concat(text.Select(c => c is >= '0' and <= '9' ? char.ConvertFromUtf32(zero + c - '0') : c.ToString()));
-        var other = measure(swapped);
-        if (!other.IsReliable) return plain with { ComplexScript = true };
-        return other.WidthPx > plain.WidthPx ? other : plain;
+        var zeros = new List<int>();
+        if (NativeZero(language) is { } native) zeros.Add(native);
+        if (ArabicShapes.LanguageSystem(language) != "dflt" || text.EnumerateRunes().Any(r => ArabicJoining.IsArabic(r.Value)))
+            zeros.Add(ArabicShapes.LanguageSystem(language) is "FAR " or "URD " ? 0x06F0 : 0x0660);
+        var widest = plain;
+        foreach (var zero in zeros.Distinct())
+        {
+            var swapped = string.Concat(text.Select(c => c is >= '0' and <= '9' ? char.ConvertFromUtf32(zero + c - '0') : c.ToString()));
+            var other = measure(swapped);
+            // 換過的數字量不到（Display 模式不量需要排版的文字）：整句量不到，不拿沒換的寬度充數
+            if (!other.IsReliable) return plain with { ComplexScript = other.ComplexScript || other.Unsupported is null, Unsupported = other.Unsupported };
+            if (other.WidthPx > widest.WidthPx) widest = other;
+        }
+        return widest;
+    }
+
+    /// <summary>
+    /// 元素語言是這幾種時，WPF 一律把 0–9 畫成這種文字的數字（回傳那種數字的 0）。WpfOracle --glyphs 對 .NET 列為
+    /// 「原生數字」的 97 個文化逐一實測，只有這些會換：km、bn、nqo、fa-AF 雖然也列為原生數字，WPF 不換；同一個語言別的地區（ne-NP、ur-PK）也不換。
+    /// </summary>
+    public static int? NativeZero(string? language)
+    {
+        var tag = (language ?? "").Replace('_', '-').ToLowerInvariant();
+        var parts = tag.Split('-');
+        bool Is(string lang, string? sub = null) => parts[0] == lang && (sub is null || parts.Skip(1).Contains(sub));
+        if (Is("my")) return 0x1040;
+        if (Is("dz")) return 0x0F20;
+        if (Is("ne", "in")) return 0x0966;
+        if (Is("ks") && !Is("ks", "deva") || Is("lrc") || Is("mzn") || Is("pa", "arab") || Is("ps") || Is("sd") && !Is("sd", "deva")
+            || Is("ur", "in") || Is("uz", "arab"))
+            return 0x06F0;
+        return null;
     }
 
     /// <summary>
@@ -331,6 +359,13 @@ public static class TextMeasure
             if (mongolian is not null && MongolianJoining.Handles(cp) && MongolianWidth(i, mongolian[i]) is { } mongol)
             {
                 totalUnits += mongol;
+                prevFace = null;
+                continue;
+            }
+            // 夾在蒙古文裡的標點：WPF 跟蒙古文排成同一段、套蒙古文的規則，可能換成比較寬的字形（表裡只記比較寬的）
+            if (mongolian is not null && MongolianJoining.IsCommon(cp) && MongolianCommonWidth(cp) is { } common)
+            {
+                totalUnits += common;
                 prevFace = null;
                 continue;
             }
@@ -506,26 +541,32 @@ public static class TextMeasure
 
         // 畫這個字的字型有蒙古文表、表裡有這個字這種形狀：寬度（換算成第一支字型的單位）；否則 null（照一般的字處理，蒙古文字母會被當成量不到）
         // 從 at 開始的一段（合字對或一個字）的寬度；at 是上一段合字對的第二個字時回 0。字型沒有表、表裡沒有這一段回 null
+        (FontMetrics Face, double Scale)? MongolianFace(int cp)
+        {
+            for (var k = 0; k < chain.Count; k++)
+                if (chain[k].TryAdvance(cp, out _))
+                {
+                    if (k >= declaredCount) usedFallback = true;
+                    return (chain[k], (double)primary.UnitsPerEm / chain[k].UnitsPerEm);
+                }
+            if (fallback?.Invoke(cp) is { } fb && fb.Face.TryAdvance(cp, out _))
+            {
+                usedFallback = true;
+                return (fb.Face, fb.Scale * (double)primary.UnitsPerEm / fb.Face.UnitsPerEm);
+            }
+            return null;
+        }
+
+        // 畫這個標點的字型的蒙古文表裡，它夾在蒙古文裡的寬度（只有比原本寬的才有）
+        double? MongolianCommonWidth(int cp) =>
+            MongolianFace(cp) is { } f && f.Face.Indic is { } data && data.TryGetValue(MongolianJoining.DataKey, out var table)
+            && table.TryGetValue(MongolianJoining.CommonKey(cp), out var w) ? w * f.Scale : null;
+
         double? MongolianWidth(int at, int form)
         {
             if (at == mongolianPairEnd) return 0;
             var cp = cps[at];
-            (FontMetrics Face, double Scale)? Face()
-            {
-                for (var k = 0; k < chain.Count; k++)
-                    if (chain[k].TryAdvance(cp, out _))
-                    {
-                        if (k >= declaredCount) usedFallback = true;
-                        return (chain[k], (double)primary.UnitsPerEm / chain[k].UnitsPerEm);
-                    }
-                if (fallback?.Invoke(cp) is { } fb && fb.Face.TryAdvance(cp, out _))
-                {
-                    usedFallback = true;
-                    return (fb.Face, fb.Scale * (double)primary.UnitsPerEm / fb.Face.UnitsPerEm);
-                }
-                return null;
-            }
-            if (Face() is not { } f || f.Face.Indic is not { } data || !data.TryGetValue(MongolianJoining.DataKey, out var table)) return null;
+            if (MongolianFace(cp) is not { } f || f.Face.Indic is not { } data || !data.TryGetValue(MongolianJoining.DataKey, out var table)) return null;
             var pair = at + 1 < cps.Count && MongolianJoining.IsLetter(cp) && MongolianJoining.IsLetter(cps[at + 1])
                        && table.ContainsKey(MongolianJoining.PairKey(cp, cps[at + 1])) && f.Face.TryAdvance(cps[at + 1], out _);
             if (!table.TryGetValue(MongolianJoining.SegmentKey(cps, at, pair ? 2 : 1, mongolian!), out var w)

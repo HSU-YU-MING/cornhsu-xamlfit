@@ -156,24 +156,31 @@ one value per stack — the widest over every vowel sign — plus the most any m
 stack. **Myanmar** takes medial combinations and vowel sequences; with lookup flags honoured, the
 export engine draws ဋို့ as WPF does (it was 29% narrow), and since a syllable can widen the next one
 (ပျု့ + ငွီ), each boundary adds the largest widening seen after a cluster ending the same way.
-Real translations (Leelawadee UI, Myanmar Text, Microsoft Himalaya): 1,176 Khmer strings from Survey
-Solutions and SystemTrayMenu measure 0.35% wide on average, 879 Tibetan strings from SOSpect 0.17%,
-173 Burmese strings from Discord CustomRP and dotnet-ftps-server 1.4%; worst under-estimate 0.04%.
-Every Khmer join and chain (about 800,000 strings) stays within 0.04%; two sets of 3,000 generated words
-per script within 0.04% too, Myanmar's averaging 12% wide (generated syllables are denser than real
-text). **Lao** adds up like Thai (≤ 0.02%).
+Myanmar Text's `dist` feature pushes ြ 440 units right with a single-adjustment lookup that WPF does
+not apply; the export skips that lookup for ြ only (skipping all of `dist` makes ya-medial clusters 24%
+narrow). Real translations (Leelawadee UI, Myanmar Text, Microsoft Himalaya): 1,176 Khmer strings from
+Survey Solutions and SystemTrayMenu measure 0.35% wide on average, 879 Tibetan strings from SOSpect
+0.17%, 173 Burmese strings from Discord CustomRP and dotnet-ftps-server 0.79%; worst under-estimate
+0.04%. Every Khmer join and chain (about 800,000 strings) stays within 0.04%; two sets of 3,000
+generated words per script within 0.04% too, Myanmar's averaging 7.7% wide (generated syllables are
+denser than real text). **Lao** adds up like Thai (≤ 0.02%).
 
 **Mongolian, against `FormattedText`.** A Mongolian letter's glyph depends on its position, on the
 word's vowel harmony, on a following variation selector, on a vowel separator (MVS) or narrow
-no-break space next to it, on whether it is in the first syllable, and on the letter before it; a
+no-break space next to it, on whether it is in the first syllable, on whether the letter before it
+is a vowel, and on its neighbour (a vowel's preceding letter, a consonant's following one); a
 consonant and a vowel often become one ligature that WPF counts all to the consonant. `fonts export`
 runs the font's rules over every letter, every pair, every three basic letters in both genders and
-150,000 random words, and stores the widest width each letter — or each ligature pair — took in each
-of those situations; text is the sum. Variation selectors draw nothing after a letter; MVS between
-letters has a width (205 units in Mongolian Baiti), it is not invisible. Against Mongolian Baiti, three
-sets of 4,000 generated words and sentences: about 4% wide on average, worst under-estimate 0.04%;
-the 32 Mongolian strings Windows ships for the mn-Mong locale (month and day names, the language name):
-5.2% wide, 0.01% narrow. Mongolian Baiti's table is about 600 KB.
+400,000 random words (masculine, feminine and neutral-vowel words), and stores the widest width each
+letter — or each ligature pair — took in each of those situations, plus a coarser table for
+combinations it never met; text is the sum. Variation selectors draw nothing after a letter; MVS
+between letters has a width (205 units in Mongolian Baiti), it is not invisible. Punctuation inside
+Mongolian text is shaped with it: Mongolian Baiti's `rclt` swaps 25 marks (《 》 「 」 。 、 “ ” …) for
+wider glyphs, which the file records. Against Mongolian Baiti, three sets of 4,000 generated words and
+sentences: about 2.7% wide on average, worst under-estimate 0.04%; the 32 Mongolian strings Windows
+ships for the mn-Mong locale (month and day names, the language name): 2.4% wide; 312 real
+translations from MonkeyPaste: 1.45% wide, 0.02% narrow. Mongolian Baiti's table is about 3.5 MB of
+JSON (0.55 MB gzipped).
 
 **`TextFormattingMode="Display"`, against `FormattedText`.** Display mode snaps every glyph to a
 whole pixel using the font's hinted widths, which depend on the pixel size — font size × display
@@ -345,14 +352,14 @@ and sums advance widths: `width = Σ advance(codepoint) × fontSize ÷ unitsPerE
 
 ```bash
 xamlfit fonts export --family "Segoe UI" --family "Microsoft JhengHei UI"
-git add xamlfit.fonts.json
+git add xamlfit.fonts.json.gz
 ```
 
-A file with many families is large (37 families with complex-script fonts: about 30 MB); written as
-`--out xamlfit.fonts.json.gz` it is gzipped to about a sixth, and every command reads either (the
-default lookup tries `xamlfit.fonts.json`, then `xamlfit.fonts.json.gz`).
+The file is gzipped JSON: with many families it is large (37 families with complex-script fonts:
+about 30 MB of JSON, 5 MB gzipped). `--out xamlfit.fonts.json` writes it uncompressed; every command
+reads either, and when a folder has both, the newer one.
 
-`xamlfit.fonts.json` contains **numbers only** — advance widths, kerning adjustments, and the widths
+The metrics file contains **numbers only** — advance widths, kerning adjustments, and the widths
 of Arabic letter forms worked out from the font's own rules, and with `--hinted` (Windows) the
 whole-pixel widths GDI gives each character from 8 to 48 px. No glyph outlines, no font software.
 You generate it from fonts you already have a licence for, into your own repository. CI needs
@@ -495,11 +502,11 @@ fail a build, because a guess should not block someone's pull request.
 | Styles applied by triggers, visual states or code-behind | not followed |
 | Text set through properties not scanned (`ToolTip`, `Title`, watermark/hint attached properties, `Hyperlink`/`Span` content) | not seen at all |
 | Resource dictionaries merged in code at run time | every dictionary file is assumed merged; conflicting definitions make the value unknown |
-| Mongolian | the sum of the widest width each letter or ligature pair took in the same situation at export time, erring wide (about 4%); a letter in a situation the export never saw is not measurable; checked against generated words and 32 strings from Windows' locale data only |
-| Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala), Khmer, Myanmar, Tibetan | measured as the sum of grapheme clusters, erring wide (Kannada by up to 3%, Myanmar's generated words by 12%, real Burmese by 1.4%); never more than 0.18% narrow in the comparisons, including every two-consonant join of the Indic scripts and Khmer |
+| Mongolian | the sum of the widest width each letter or ligature pair took in the same situation at export time, erring wide (about 2.5%); a letter in a situation the export never saw is not measurable; checked against generated words, 32 strings from Windows' locale data and 312 real translations |
+| Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala), Khmer, Myanmar, Tibetan | measured as the sum of grapheme clusters, erring wide (Kannada by up to 3%, Myanmar's generated words by 7.7%, real Burmese by 0.8%); never more than 0.18% narrow in the comparisons, including every two-consonant join of the Indic scripts and Khmer |
 | `TextFormattingMode="Display"` | measured from the font's hinted widths at every scaling in `displayScales` (variable fonts: rounded linear widths); a pixel size a static font does not list is not measurable |
 | Arabic-script fonts whose contextual rules reach further than three letters | the letters involved, or the whole font, are reported as not measurable (see above) |
-| Arabic digits | WPF swaps 0–9 for Arabic-Indic digits in Arabic text; both are measured and the wider one is used |
+| Native digits | WPF swaps 0–9 for Arabic-Indic digits in Arabic text, and always when the element's language is Burmese, Dzongkha, Nepali (India), Pashto, Sindhi, Kashmiri, Urdu (India), Punjabi or Uzbek in Arabic script, Mazanderani or Northern Luri (Myanmar Text's ၀ is 17% wider than 0); both are measured and the wider one is used. In `Display` mode the swapped digits are not measurable |
 | Ligatures other than Arabic (`fi`, `ffl`…) | not applied; covered by the text-width comparison above (worst under-estimate 0.025%) |
 | Vertical clipping | only when the text element itself declares `Height`/`MaxHeight` |
 | Window frame, scroll bar width | taken at the display scaling where they are largest in DIPs |

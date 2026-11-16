@@ -9,7 +9,7 @@ namespace XamlFit.Core.OpenType;
 /// 量的時候照同樣的切法查表相加 —— 每一段都不比真的窄，加起來也不會窄。
 ///
 /// 上下文：每個字母單獨與兩兩相接、基本字母（U+1820–1842）三個三個相接、每個字母接 FVS、MVS、窄不換行空白，
-/// 再加 15 萬個隨機的字（陽性／陰性母音、FVS、MVS、窄不換行空白都有）。
+/// 再加 40 萬個隨機的字（陽性、陰性、只有中性母音的字，FVS、MVS、窄不換行空白都有）。
 /// 蒙古文的上下文規則會看整個字（陰陽性），三個字以內看不全，所以要隨機的長字補。
 /// **自我檢查**：另外 2 萬個隨機字（不同種子）整串跑、用表相加；拼窄的字拿去補表再檢查，三輪還拼窄的字母從表裡拿掉（用到就量不到）。
 /// </summary>
@@ -19,7 +19,7 @@ internal static class MongolianExport
     private static readonly HashSet<string> AllFeatures = ["ccmp", "locl", "isol", "init", "medi", "fina", "rlig", "calt", "rclt", "liga", "clig"];
     private static readonly HashSet<string> PositionFeatures = ["kern", "dist"];
     private static readonly string[] FormTags = ["isol", "init", "medi", "fina"];
-    private const int TrainingWords = 150000, SelfCheckWords = 20000;
+    private const int TrainingWords = 400000, SelfCheckWords = 20000;
     // 除錯：XAMLFIT_MONGOLIAN_WHY="6176,2;6155,0" 印出把這些鍵撐到最大的上下文
     private static readonly HashSet<string>? Why = Environment.GetEnvironmentVariable("XAMLFIT_MONGOLIAN_WHY") is { Length: > 0 } w ? [.. w.Split(';')] : null;
 
@@ -129,7 +129,8 @@ internal static class MongolianExport
             List<int> Word(Random rng)
             {
                 // 陽性（a o u）或陰性（e ö ü）母音，加 i；子音多半從基本字母挑
-                int[] vowels = rng.Next(2) == 0 ? [0x1820, 0x1823, 0x1824, 0x1822] : [0x1821, 0x1825, 0x1826, 0x1822, 0x1827];
+                // 陽性、陰性，也有只用中性母音 ᠢ 的字（ᠵᠢᠩᠬᠢᠨᠢ：只練前兩種時偏窄 7%）
+                int[] vowels = rng.Next(5) switch { 0 or 1 => [0x1820, 0x1823, 0x1824, 0x1822], 2 or 3 => [0x1821, 0x1825, 0x1826, 0x1822, 0x1827], _ => [0x1822] };
                 var word = new List<int>();
                 for (var n = rng.Next(2, 13); n > 0; n--)
                 {
@@ -171,6 +172,15 @@ internal static class MongolianExport
             }
             foreach (var key in widest.Keys.Where(k => k.Split(',').Take(2).Any(x => removed.Contains(int.Parse(x, System.Globalization.CultureInfo.InvariantCulture)))).ToList())
                 widest.Remove(key);
+
+            // 夾在蒙古文裡的標點：前後是字母、空白，各排一次取最寬的；比原本寬才記（見 MongolianJoining.CommonKey）
+            foreach (var cp in cmap.Keys.Where(MongolianJoining.IsCommon))
+            {
+                var width = 0;
+                foreach (var (word, at) in new (int[], int)[] { ([a, cp], 1), ([cp, a], 0), ([a, cp, a], 1), ([a, 0x20, cp], 2), ([cp, 0x20, a], 0), ([e, cp], 1), ([cp, e], 0) })
+                    width = Math.Max(width, Shaped(word)[at]);
+                if (width > advances[cmap[cp]]) widest[MongolianJoining.CommonKey(cp)] = width;
+            }
             return widest.Count > 0 ? widest : null;
         }
         catch (Exception ex) when (ex is IndexOutOfRangeException or ArgumentOutOfRangeException)

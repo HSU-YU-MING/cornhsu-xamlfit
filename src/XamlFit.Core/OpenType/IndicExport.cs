@@ -76,7 +76,8 @@ internal static class IndicExport
                         }
                         shaped = gsub.Shape(shaped, stages[k], NoForms);
                     }
-                    if (pos is not null) shaped = gpos!.Shape(shaped, pos, NoForms);
+                    if (pos is not null)
+                        shaped = gpos!.Shape(shaped, pos, NoForms, script.NoDistOn.Count == 0 ? null : g => g.Cluster >= 0 && g.Cluster < cps.Count && script.NoDistOn.Contains(cps[g.Cluster]));
                     if (Trace is { } trace && trace.Contains(string.Join(",", cps.Select(cp => cp.ToString("X4")))))
                         Console.Error.WriteLine($"[trace] {tag}/{lang ?? "dflt"} {string.Join(",", cps.Select(cp => cp.ToString("X4")))} stages={stages.Count}  [{string.Join(" ", shaped.Select(g => $"{g.Id}:{(g.Id < advances.Length ? advances[g.Id] : 0) + g.Adv}"))}]");
                     return shaped.Sum(g => (g.Id < advances.Length ? advances[g.Id] : 0) + g.Adv);
@@ -364,6 +365,7 @@ internal static class IndicExport
                 {
                     // 依結尾記：每個叢集接「每一種開頭」（畫出來的第一個字）時最多變寬多少，同一個結尾取最大
                     var firsts = all.GroupBy(c => IndicClusters.VisualOrder(script, c)[0]).Select(g => g.OrderBy(c => c.Length).First()).ToList();
+                    // （試過另外依「下一個叢集畫出來的第一個字」分開記：撐寬還看下一個叢集後面的符號，用最短的代表字試會偏窄 12%，撤掉）
                     foreach (var a in all.Where(c => c[^1] != script.Virama))
                     {
                         var visualA = IndicClusters.VisualOrder(script, a);

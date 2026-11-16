@@ -34,6 +34,14 @@ internal static class Scripts
             foreach (var key in new[] { "ar", "fa" }) fonts[key] = extra.Split(',');
         var cultures = new Dictionary<string, string> { ["he"] = "he-IL", ["ar"] = "ar-SA", ["fa"] = "fa-IR", ["th"] = "th-TH", ["mr"] = "mr-IN", ["ta"] = "ta-IN",
             ["km"] = "km-KH", ["lo"] = "lo-LA", ["my"] = "my-MM", ["bo"] = "bo-CN", ["mn"] = "mn-Mong-CN" };
+        // XF_SCRIPT_SET="dz=dz-BT/Microsoft Himalaya;ps=ps-AF/Segoe UI"：其他語言的文化與字型
+        if (Environment.GetEnvironmentVariable("XF_SCRIPT_SET") is { Length: > 0 } set)
+            foreach (var item in set.Split(';'))
+            {
+                var (key, rest) = (item.Split('=')[0], item.Split('=')[1].Split('/'));
+                cultures[key] = rest[0];
+                fonts[key] = [rest[1]];
+            }
         var worstAll = 0.0;
 
         foreach (var (script, strings) in sets)

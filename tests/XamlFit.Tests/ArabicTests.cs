@@ -135,6 +135,40 @@ public class ArabicTests
         Assert.Equal(expected, m.WidthPx, 3);
     }
 
+    [Theory]
+    [InlineData("my-MM", 0x1040)]
+    [InlineData("my", 0x1040)]
+    [InlineData("dz-BT", 0x0F20)]
+    [InlineData("ne-IN", 0x0966)]
+    [InlineData("ps-AF", 0x06F0)]
+    [InlineData("ur-IN", 0x06F0)]
+    [InlineData("pa-Arab-PK", 0x06F0)]
+    [InlineData("sd-Arab-PK", 0x06F0)]
+    [InlineData("uz-Arab-AF", 0x06F0)]
+    [InlineData("ks", 0x06F0)]
+    [InlineData("ne-NP", null)]      // 以下 .NET 也列為原生數字（或同一個語言的別的地區），WPF 實測不換
+    [InlineData("ur-PK", null)]
+    [InlineData("pa-IN", null)]
+    [InlineData("ks-Deva", null)]
+    [InlineData("uz-Latn-UZ", null)]
+    [InlineData("km-KH", null)]
+    [InlineData("bn-BD", null)]
+    [InlineData("fa-AF", null)]
+    [InlineData("en-US", null)]
+    [InlineData(null, null)]
+    public void Languages_whose_digits_wpf_always_replaces(string? language, int? zero)
+    {
+        Assert.Equal(zero, TextMeasure.NativeZero(language));
+    }
+
+    [Fact]
+    public void Digits_are_measured_both_ways_when_the_language_always_replaces_them()
+    {
+        // 普什圖文：沒有阿拉伯字母也換成波斯數字（700 比 ASCII 500 寬）
+        Assert.Equal(14.0, Measure(Face(Shapes()), "12", "ps-AF").WidthPx, 3);
+        Assert.Equal(10.0, Measure(Face(Shapes()), "12", "pa-IN").WidthPx, 3);
+    }
+
     [Fact]
     public void Digits_next_to_arabic_letters_are_measured_both_ways_whatever_the_language()
     {

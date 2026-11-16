@@ -24,7 +24,7 @@ internal static class FontsCommand
     {
         var sources = new List<string>();
         var families = new List<string>();
-        var outPath = "xamlfit.fonts.json";
+        var outPath = MetricsFile.DefaultFileName;
         var merge = false;
         var hinted = false;
 
@@ -166,7 +166,7 @@ internal static class FontsCommand
 
     private static int List(string[] args)
     {
-        var path = "xamlfit.fonts.json";
+        var path = MetricsFile.Find(".") ?? MetricsFile.DefaultFileName;
         for (var i = 0; i < args.Length; i++)
         {
             if (args[i] == "--metrics" && i + 1 < args.Length) { path = args[++i]; continue; }

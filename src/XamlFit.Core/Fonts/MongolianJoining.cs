@@ -48,6 +48,8 @@ public static class MongolianJoining
     /// <item>第 9 位：後面緊接 MVS 或窄不換行空白。</item>
     /// <item>第 10 位：同一個字裡前面已經有母音（不在第一個音節：ö ü 在第一個音節以外寫短的，923 → 514）。</item>
     /// <item>第 11 位：前一個字母是母音（ᠢ 接在母音後面是雙齒的，852；接在子音後面 426）。</item>
+    /// <item>第 16–21 位：鄰字（基本字母 ᠠ…ᠸ 的序號 + 1）。母音記前一個字母、子音記後一個字母：第二音節以後的 ö ü 寬度看前面的子音，
+    /// ᠬ ᠭ 的字形看後面的母音。表裡沒有這個組合時退回粗的鍵（第 14 位，只看前 8 位元）。</item>
     /// </list>
     /// </summary>
     public static int[] FormsOf(IReadOnlyList<int> cps)
@@ -71,6 +73,10 @@ public static class MongolianJoining
             var before = i - 1;
             while (before >= 0 && Transparent(cps[before])) before--;
             if (before >= 0 && Vowel(cps[before])) form |= 1 << 11;
+            // 第 16–21 位：鄰字（基本字母）。母音記前一個字母、子音記後一個字母 —— 第二音節以後的 ö ü 寬度看前面的子音（514～923），
+            // ᠬ ᠭ 的字形看後面的母音（616～818）。表裡沒有這種組合就用粗的鍵（不看這些位元）
+            var neighbor = Vowel(cp) ? before : Next(cps, i);
+            if (neighbor >= 0 && neighbor < cps.Count && cps[neighbor] is >= 0x1820 and <= 0x1842) form |= (cps[neighbor] - 0x1820 + 1) << 16;
             forms[i] = form;
         }
         for (var start = 0; start < cps.Count;)
@@ -96,6 +102,13 @@ public static class MongolianJoining
     /// <summary>字母在 <see cref="FormsOf"/> 裡的連寫形狀（0–3）。</summary>
     public static int Position(int form) => form & 3;
 
+    private static int Next(IReadOnlyList<int> cps, int i)
+    {
+        var k = i + 1;
+        while (k < cps.Count && Transparent(cps[k])) k++;
+        return k < cps.Count ? k : -1;
+    }
+
     private static bool Joins(IReadOnlyList<int> cps, int i, int step)
     {
         var k = i + step;
@@ -105,6 +118,27 @@ public static class MongolianJoining
 
     /// <summary>表裡一個字的鍵。</summary>
     public static string Key(int cp, int form) => $"{cp},{form}";
+
+    /// <summary>
+    /// 夾在蒙古文裡的標點、符號在表裡的鍵。WPF 把它們跟旁邊的蒙古文排成同一段、套蒙古文的排版規則：
+    /// Mongolian Baiti 的 <c>rclt</c> 無條件把 60 個標點換成另一個字形（《 1026 → 1116、「 749 → 949 單位）；
+    /// 單獨的標點不套。表裡只記比原本寬的。鍵是「1,碼位」（度量檔的表只存數字；其他鍵的第一個數是 2 或蒙古文的碼位）。
+    /// </summary>
+    public static string CommonKey(int cp) => $"1,{cp}";
+
+    /// <summary>不屬於哪種文字、會併進旁邊蒙古文那一段的字：標點、符號、空白、數字。</summary>
+    public static bool IsCommon(int cp)
+    {
+        if (IsMongolian(cp) || cp > 0xFFFF && !System.Text.Rune.IsValid(cp)) return false;
+        var category = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(cp);
+        return category is System.Globalization.UnicodeCategory.DecimalDigitNumber && cp is (>= '0' and <= '9') or (>= 0xFF10 and <= 0xFF19)
+            || category is System.Globalization.UnicodeCategory.ConnectorPunctuation or System.Globalization.UnicodeCategory.DashPunctuation
+                or System.Globalization.UnicodeCategory.OpenPunctuation or System.Globalization.UnicodeCategory.ClosePunctuation
+                or System.Globalization.UnicodeCategory.InitialQuotePunctuation or System.Globalization.UnicodeCategory.FinalQuotePunctuation
+                or System.Globalization.UnicodeCategory.OtherPunctuation or System.Globalization.UnicodeCategory.MathSymbol
+                or System.Globalization.UnicodeCategory.CurrencySymbol or System.Globalization.UnicodeCategory.ModifierSymbol
+                or System.Globalization.UnicodeCategory.OtherSymbol or System.Globalization.UnicodeCategory.SpaceSeparator;
+    }
 
     /// <summary>
     /// 字型會連成一個字形的字母對（子音 + 母音的合字）在表裡的記號鍵。量的時候由左往右，遇到這種對就整對一起查表（<see cref="SegmentKey"/>）：

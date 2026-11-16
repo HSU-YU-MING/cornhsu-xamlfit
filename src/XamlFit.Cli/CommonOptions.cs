@@ -262,9 +262,8 @@ internal sealed class CommonOptions
         }
         else
         {
-            // 找 xamlfit.fonts.json，沒有再找壓縮過的 xamlfit.fonts.json.gz（先 <root> 旁邊、再目前的資料夾）
-            path = new[] { Path.Combine(o.Root ?? ".", "xamlfit.fonts.json"), Path.Combine(o.Root ?? ".", "xamlfit.fonts.json.gz"), "xamlfit.fonts.json", "xamlfit.fonts.json.gz" }
-                .FirstOrDefault(File.Exists) ?? "xamlfit.fonts.json";
+            // 找 xamlfit.fonts.json.gz 或 xamlfit.fonts.json（先 <root> 旁邊、再目前的資料夾；兩個都有用比較新的）
+            path = MetricsFile.Find(o.Root ?? ".", ".") ?? MetricsFile.DefaultFileName;
         }
 
         if (!File.Exists(path))
@@ -272,7 +271,7 @@ internal sealed class CommonOptions
             // 沒有度量檔不是致命錯誤 —— 所有位置會變成 unmeasurable，
             // 可解析率歸零，然後 exit 3。使用者看到的是「結果不可信」而不是一堆假的零。
             Console.Error.WriteLine(
-                "no metrics file found (looked for xamlfit.fonts.json and xamlfit.fonts.json.gz); run 'xamlfit fonts export' first");
+                "no metrics file found (looked for xamlfit.fonts.json.gz and xamlfit.fonts.json); run 'xamlfit fonts export' first");
             return new FontResolver([], o.AbsentFonts);
         }
 

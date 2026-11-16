@@ -146,13 +146,15 @@ internal sealed class LayoutEngine
     /// <summary>
     /// 套用 lookups。形狀特性（isol／init／medi／fina）只套在 Form 相符的字符上，其他特性套在所有字符上。
     /// </summary>
-    public List<Glyph> Shape(List<Glyph> buffer, SortedDictionary<int, HashSet<string>> lookups, IReadOnlySet<string> formFeatures)
+    /// <param name="noSingle">GPOS：這些字形不套「沒有上下文的單一調整」lookup（上下文規則裡巢狀呼叫的照套）。</param>
+    public List<Glyph> Shape(List<Glyph> buffer, SortedDictionary<int, HashSet<string>> lookups, IReadOnlySet<string> formFeatures, Func<Glyph, bool>? noSingle = null)
     {
         var buf = new List<Glyph>(buffer);
         foreach (var (li, tags) in lookups)
         {
             var global = tags.Any(t => !formFeatures.Contains(t));
-            bool Applies(Glyph g) => global || (g.Form is { } f && tags.Contains(f));
+            var single = noSingle is not null && LookupOffset(li) is var lo and >= 0 && Subtables(lo).All(s => s.Type == 1);
+            bool Applies(Glyph g) => (global || (g.Form is { } f && tags.Contains(f))) && !(single && noSingle!(g));
             ApplyLookup(li, buf, Applies);
         }
         return buf;

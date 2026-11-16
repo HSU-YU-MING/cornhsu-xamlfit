@@ -63,6 +63,11 @@ public static class IndicClusters
         /// （Leelawadee UI 的 វ្ច្ឌី，ី 讓 វ 寬 150 單位），匯出時每個第一子音都要試。
         /// </summary>
         public bool BaseIsFirst { get; init; }
+        /// <summary>
+        /// 這些字的字形 WPF 不吃「沒有上下文的單一定位調整」（緬甸文的 ြ：Myanmar Text 的 dist 給它無條件加 440 單位，WPF 畫出來沒有 ——
+        /// 套了的話單獨一個音節就偏寬 5%；但疊字上下文規則加的 350 照吃，整個 dist 都不套又會少掉 ျ 的 380 單位，偏窄 24%）。
+        /// </summary>
+        public HashSet<int> NoDistOn { get; init; } = [];
         /// <summary>疊在下面的子音（藏文 ྐ…）：子音後面最多接 <see cref="MaxSubjoined"/> 個；第二個以後只能是 <see cref="LaterSubjoined"/> 裡的（藏文的 ya、ra、la、wa）。</summary>
         public HashSet<int> Subjoined { get; init; } = [];
         public int MaxSubjoined { get; init; }
@@ -350,6 +355,7 @@ public static class IndicClusters
         Droppable = [0x1036],   // ံ 跟 ့ 一起時這支引擎沒把 ့ 移開（ဆွှူံ့ 窄 0.4 px；WPF 跟 ဆွှူ့ 一樣寬）
         Interacting = true,
         BoundaryTail = 2,
+        NoDistOn = [0x103C],
     };
 
     /// <summary>藏文：子音下面最多疊兩個子音（第二個只有 ya、ra、la、wa），母音符號可以接在 a-chung（ཱ）後面。</summary>

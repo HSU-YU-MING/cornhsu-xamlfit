@@ -306,7 +306,7 @@ public sealed class MetricsFile
 
     /// <summary>
     /// 讀度量檔：開頭是 gzip 的標記（1F 8B）就先解壓縮。完整的度量檔（37 個家族加緬甸、藏、蒙古文字型）是 30 MB 的 JSON，gzip 之後約 5 MB ——
-    /// 要放進 repo 的話用 <c>fonts export --out xamlfit.fonts.json.gz</c>。
+    /// <c>fonts export</c> 預設就寫壓縮的 <c>xamlfit.fonts.json.gz</c>。
     /// </summary>
     public static MetricsFile Load(string path) => Parse(ReadText(path));
 
@@ -322,6 +322,24 @@ public sealed class MetricsFile
         }
         using var text = new StreamReader(new MemoryStream(bytes), System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
         return text.ReadToEnd();
+    }
+
+    /// <summary>預設的度量檔名（<c>fonts export</c> 寫壓縮的）與找度量檔時認得的兩個名字。</summary>
+    public const string DefaultFileName = "xamlfit.fonts.json.gz";
+    public static readonly string[] FileNames = ["xamlfit.fonts.json.gz", "xamlfit.fonts.json"];
+
+    /// <summary>
+    /// 在這些資料夾裡找度量檔（依序；同一個資料夾兩個名字都有時用比較新的 —— 舊的 .json 留在 repo 裡、新匯出的是 .gz 時不會拿到舊的）。
+    /// 都沒有回 null。
+    /// </summary>
+    public static string? Find(params string[] folders)
+    {
+        foreach (var folder in folders)
+        {
+            var found = FileNames.Select(n => Path.Combine(folder, n)).Where(File.Exists).OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault();
+            if (found is not null) return found;
+        }
+        return null;
     }
 
     /// <summary>寫度量檔：路徑結尾是 .gz 就壓縮。</summary>

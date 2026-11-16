@@ -4,8 +4,8 @@ namespace XamlFit.Tests;
 
 /// <summary>
 /// 蒙古文：每一段（一個字，或字型連成合字的一對字母）照形狀查匯出時算好的「最寬會多寬」相加。
-/// WpfOracle --scripts（Mongolian Baiti）：產生的字三組各 4,000 個平均偏寬約 4%、偏窄最多 0.04%；
-/// Windows 地區設定裡的月份、星期等 32 句平均偏寬 5.2%、偏窄最多 0.01%。這裡用假字型驗證拼法。
+/// WpfOracle --scripts（Mongolian Baiti）：產生的字三組各 4,000 個平均偏寬約 2.7%、偏窄最多 0.04%；
+/// Windows 地區設定裡的月份、星期等 32 句平均偏寬 2.4%、真實的 312 句 1.45%，偏窄最多 0.02%。這裡用假字型驗證拼法。
 /// </summary>
 public class MongolianTests
 {
@@ -48,7 +48,7 @@ public class MongolianTests
         Family = "Mong",
         UnitsPerEm = 1000,
         DefaultAdvance = 500,
-        Ranges = [new AdvanceRange(0x20, 0x7E, 300), new AdvanceRange(0x1800, 0x18AF, 900), new AdvanceRange(0x202F, 0x202F, 300)],
+        Ranges = [new AdvanceRange(0x20, 0x7E, 300), new AdvanceRange(0x1800, 0x18AF, 900), new AdvanceRange(0x202F, 0x202F, 300), new AdvanceRange(0x300A, 0x300B, 800)],
         Indic = new Dictionary<string, IReadOnlyDictionary<string, int>> { [MongolianJoining.DataKey] = table },
     };
 
@@ -88,6 +88,22 @@ public class MongolianTests
     }
 
     [Fact]
+    public void Punctuation_next_to_mongolian_takes_its_width_in_a_mongolian_run()
+    {
+        // Mongolian Baiti 的 rclt 把夾在蒙古文裡的《換成比較寬的字形；單獨的《 WPF 不套
+        int[] word = [A];
+        var table = new Dictionary<string, int>
+        {
+            [MongolianJoining.SegmentKey(word, 0, 1, MongolianJoining.FormsOf(word))] = 500,
+            [MongolianJoining.CommonKey(0x300A)] = 900,
+        };
+        var face = Face(table);
+        Assert.Equal((500 + 300 + 900) / 100.0, TextMeasure.Measure(S(A, 0x20, 0x300A), [face], 10).WidthPx, 3);
+        Assert.Equal((800 + 300) / 100.0, TextMeasure.Measure(S(0x300A, 0x20), [face], 10).WidthPx, 3);
+        Assert.Equal((500 + 300 + 800) / 100.0, TextMeasure.Measure(S(A, 0x20, 0x300B), [face], 10).WidthPx, 3);   // 表裡沒有：原本的寬度
+    }
+
+    [Fact]
     public void The_table_survives_the_metrics_file()
     {
         int[] word = [Ba, A, Nnbsp, E];
@@ -98,6 +114,7 @@ public class MongolianTests
             [MongolianJoining.SegmentKey(word, 0, 2, forms)] = 700,
             [MongolianJoining.SegmentKey(word, 2, 1, forms)] = 205,
             [MongolianJoining.SegmentKey(word, 3, 1, forms, coarse: true)] = 454,
+            [MongolianJoining.CommonKey(0x300A)] = 900,
         };
         var back = MetricsFile.Parse(MetricsFile.FromMetrics([Face(table)], "test", new DateOnly(2026, 11, 16)).ToJson()).ToMetrics().Single();
         Assert.Equal(table, back.Indic![MongolianJoining.DataKey]);

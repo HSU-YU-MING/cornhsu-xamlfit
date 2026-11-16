@@ -16,7 +16,7 @@ inputs:
     required: false
     default: 'false'
   metrics:
-    description: 'Path to xamlfit.fonts.json'
+    description: 'Path to the metrics file (xamlfit.fonts.json.gz or xamlfit.fonts.json)'
     required: false
   baseline:
     description: 'Path to a baseline file'
