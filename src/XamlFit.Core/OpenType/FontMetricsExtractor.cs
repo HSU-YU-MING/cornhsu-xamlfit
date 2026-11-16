@@ -56,6 +56,10 @@ public static class FontMetricsExtractor
                 Ranges = inst.IsDefault ? m.Ranges : BuildRanges(cmap, inst.Advances),
                 Kerning = inst.IsDefault ? m.Kerning : GposKerning.Read(r, GlyphToCodepoints(cmap), inst.Normalized),
                 Arabic = inst.IsDefault ? m.Arabic : null,
+                // 其他實例：哪些字會換照預設的，寬度用這個實例的（記 0：量的時候取兩個裡寬的，字距照樣只套會變寬的）
+                MarkedWidths = inst.IsDefault ? m.MarkedWidths : m.MarkedWidths?.ToDictionary(kv => kv.Key, _ => 0),
+                LanguageGlyphs = inst.IsDefault ? m.LanguageGlyphs
+                    : m.LanguageGlyphs?.ToDictionary(kv => kv.Key, kv => (IReadOnlyDictionary<int, int>)kv.Value.ToDictionary(x => x.Key, _ => 0)),
                 Indic = inst.IsDefault ? m.Indic : null,
                 Hinted = inst.IsDefault ? m.Hinted : null,
             });
@@ -147,6 +151,8 @@ public static class FontMetricsExtractor
             DefaultAdvance = advances.Length > 0 ? advances[0] : unitsPerEm / 2,
             Ranges = BuildRanges(cmap, advances),
             Kerning = GposKerning.Read(r, GlyphToCodepoints(cmap)),
+            LanguageGlyphs = LanguageGlyphExport.Read(r, cmap, advances),
+            MarkedWidths = LanguageGlyphExport.MarkedWidths(r, cmap, advances),
             Arabic = ArabicExport.Read(r, cmap, advances),
             Hinted = ReadHdmx(r, cmap, advances, unitsPerEm, numGlyphs),
             Indic = WithMongolian(IndicExport.Read(r, cmap, advances), MongolianExport.Read(r, cmap, advances)),

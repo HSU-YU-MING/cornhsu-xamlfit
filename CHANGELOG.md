@@ -217,6 +217,27 @@ that over-estimated the available width.
   differs). Average over-estimate on random words: Kannada 1.8–1.9% (was 2.7–2.9%), Odia 1.5–1.8%
   (1.6–2.0%), Bengali 0.6% (0.8%), Marathi 0.3% (0.4%), Gujarati 1.3% (1.4%); Malayalam 1.1% (1.0%:
   its signed chains are now tried with every first consonant). Exhaustively still ≤ 0.03% narrow.
+- **Kerning follows WPF's runs and languages.** The metrics file records which script and language
+  system uses each kerning lookup (`kernSystems`, `kernLookupSystems`) and the letters each language
+  draws as another glyph (`languageGlyphs`, from `locl`). Kerning applies only within a run of one
+  script and only with that script's lookups (Calibri kerned `",` with its Arabic lookups in Latin
+  text, 3.6% narrow), uses the element language's system (Segoe UI's Turkish has no "Ta"/"Te"
+  kerning), only widens next to a letter the language swaps (Arial's Turkish *i*), and never narrows
+  across WPF's 100-character chunks. Older metrics files keep applying every lookup.
+- **Combining marks** are drawn with no width; text is also measured composed (NFC) and the wider
+  is used; a letter followed by a mark kerns only to widen; a mark the font cannot draw makes the
+  text not measurable (WPF draws a missing-glyph box). Decomposed Vietnamese was up to 6% narrow.
+- **Checked against WPF**: Russian, Ukrainian, Bulgarian, Serbian, Greek, Turkish and Vietnamese
+  (300 real strings each, seven fonts): worst under-estimate 0.03%; Amharic (Ebrima, locale strings
+  and 2,000 generated words and sentences): 0.02%, 1.4% wide on average.
+- **Hebrew points and cross-font Arabic joins**: Hebrew vowel points take no width and the letter
+  before one takes the widest glyph the font composes for it (`markedWidths`; Arial's ע + ִ was 0.55%
+  narrow); an Arabic letter joined to one drawn by another font is not measurable (Dubai lacks ؿ;
+  measured as joined, 41% narrow).
+- **Not measurable instead of guessed**: scripts that need shaping and are not modelled (Javanese,
+  Balinese, Adlam, conjoining Hangul jamo…); Nastaliq fonts (cursive attachment on at least 100
+  glyphs, mostly anchored away from the edges — inferred, no such font to check; Dubai is not
+  affected); Display mode with combining marks or language-swapped letters.
 - **Bare three-consonant chains are kept net of the first join**: when the last consonant has no
   sign, the chain value excludes the first two consonants' own join (added back when measuring), plus
   the most a following letter widens the chain; the first consonant had swung chains by 5–15 px.

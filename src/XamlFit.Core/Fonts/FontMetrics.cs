@@ -66,12 +66,23 @@ public sealed class FontMetrics
     /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyDictionary<string, int>>? Indic { get; init; }
 
+    /// <summary>
+    /// 依語言換成另一個字形的字（OpenType 'locl'；鍵是語言系統「TRK」「ROM」…）：碼位 → 換過的字形寬度。
+    /// Arial 的土耳其文把 i 換成另一個字形，「Ti」的字距就沒了（照原本的字距量偏窄 4.5%）。量的時候：寬度取兩個裡寬的，
+    /// 跟它相鄰的字距只套會變寬的。
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyDictionary<int, int>>? LanguageGlyphs { get; init; }
+
+    /// <summary>後面接組合符號時字形會換成比較寬的字（GSUB 'ccmp'）：碼位 → 最寬的那個字形的寬度（Arial 的 ע + ִ）。</summary>
+    public IReadOnlyDictionary<int, int>? MarkedWidths { get; init; }
+
     /// <summary>同一個字面，換上另一組 hinting 寬度（<c>fonts export --hinted</c> 補上 GDI 算的）。</summary>
     public FontMetrics WithHinted(IReadOnlyDictionary<int, IReadOnlyDictionary<int, int>> hinted) => new()
     {
         Family = Family, Weight = Weight, Style = Style, Stretch = Stretch, LegacyFamily = LegacyFamily, Aliases = Aliases,
         Variable = Variable, UnitsPerEm = UnitsPerEm, Ascender = Ascender, Descender = Descender, LineGap = LineGap,
         DefaultAdvance = DefaultAdvance, Ranges = Ranges, Kerning = Kerning, Arabic = Arabic, Indic = Indic, Hinted = hinted,
+        LanguageGlyphs = LanguageGlyphs, MarkedWidths = MarkedWidths,
     };
 
     /// <summary>Display 模式下這個字在 ppem 像素大小時的寬度（整數像素）。這個 ppem 沒有 hinting 資料回 false。</summary>
@@ -173,11 +184,18 @@ public static class TextMeasure
             else pixelSizes.Add((scale, RoundHalfUp(px), [RoundHalfUp(px)]));
         }
 
+        var displayCps = new List<int>(text.Length);
+        foreach (var rune in text.EnumerateRunes()) displayCps.Add(rune.Value);
+        var runs = ScriptRuns(displayCps);
+        var otLanguage = OpenTypeLanguage.Tag(lookup.Language);
         foreach (var (scale, ppem, kernSizes) in pixelSizes)
         {
             var total = 0;
             FontMetrics? prevFace = null;
             var prevCp = -1;
+            var prevSwapped = false;
+            var index = -1;          // 第幾個字（碼位）
+            var offset = 0;          // UTF-16 位置（WPF 每 100 個字一段，字距不跨段）
             var pending = double.NaN;   // 可變字型上一個字還沒進位的寬度（像素）
             missing = 0;
             void Flush()
@@ -190,9 +208,15 @@ public static class TextMeasure
             foreach (var rune in text.EnumerateRunes())
             {
                 var cp = rune.Value;
+                index++;
+                var chunkStart = offset > 0 && offset % ChunkLength == 0;
+                offset += rune.Utf16SequenceLength;
                 if (IsDefaultIgnorable(cp)) { Flush(); prevFace = null; continue; }
                 if (IsComplexScript(cp) || ArabicJoining.IsArabic(cp))
                     return new Measurement(0, 0, true) { Unsupported = "TextFormattingMode=\"Display\" with a script that needs shaping" };
+                // 組合符號：WPF 可能把它跟前一個字組成另一個字形，hinting 寬度不知道
+                if (IsCombiningMark(cp))
+                    return new Measurement(0, 0, true) { Unsupported = "TextFormattingMode=\"Display\" with combining marks" };
 
                 FontMetrics? face = null;
                 foreach (var f in lookup.Chain)
@@ -213,12 +237,20 @@ public static class TextMeasure
                     continue;
                 }
 
-                var kerned = ReferenceEquals(face, prevFace) && face.Kerning is { } kern && kern.Adjust(prevCp, cp) is var units && units != 0 ? units : 0;
+                var swappedAdvance = 0;
+                var swapped = otLanguage is not null && face.LanguageGlyphs is { } languageGlyphs && languageGlyphs.TryGetValue(otLanguage, out var swaps)
+                              && swaps.TryGetValue(cp, out swappedAdvance);
+                if (swapped && !face.Variable)
+                    return new Measurement(0, 0, false) { Unsupported = "TextFormattingMode=\"Display\" with a letter the element's language draws differently" };
+                var kerned = ReferenceEquals(face, prevFace) && face.Kerning is { } kern
+                             && kern.Adjust(prevCp, cp, kern.SystemFor(OpenTypeScript(runs[index]), otLanguage)) is var units && units != 0 ? units : 0;
+                if (swapped || prevSwapped || chunkStart || index > 0 && runs[index - 1] != runs[index]) kerned = Math.Max(kerned, 0);
+                prevSwapped = swapped;
                 // 可變字型：WPF 的 Display 寬度是每個字的線性寬度四捨五入（不是 GDI 的 hinting 寬度；15 個實例 × 34 個字 × 8～24 px 實測）。
                 // 小數點後 .49x 的有時進位（WPF 的前進寬度有小數，度量檔存的是進位後的整數）：多加 0.015 再進位
                 Flush();
                 if (face.Variable && face.TryAdvance(cp, out var linearAdvance))
-                    pending = linearAdvance * ppem / (double)face.UnitsPerEm;
+                    pending = Math.Max(linearAdvance, swapped ? swappedAdvance : 0) * ppem / (double)face.UnitsPerEm;
                 else if (!face.TryHintedAdvance(cp, ppem, out var px))
                     return new Measurement(0, 0, false)
                     {
@@ -255,7 +287,7 @@ public static class TextMeasure
     public static Measurement Measure(string text, FontLookup lookup, double fontSizePx)
     {
         if (string.IsNullOrEmpty(text) || lookup.Chain.Count == 0) return new Measurement(0, 0, false);
-        return WithDigits(text, t => Core(t, lookup.Chain, lookup.Fallback, fontSizePx, int.MaxValue, lookup.Language), lookup.Language);
+        return WithComposed(text, x => WithDigits(x, t => Core(t, lookup.Chain, lookup.Fallback, fontSizePx, int.MaxValue, lookup.Language), lookup.Language));
     }
 
     public static Measurement Measure(
@@ -264,7 +296,86 @@ public static class TextMeasure
     {
         if (string.IsNullOrEmpty(text) || fallbackChain.Count == 0)
             return new Measurement(0, 0, false);
-        return WithDigits(text, t => Core(t, fallbackChain, null, fontSizePx, declaredCount, language), language);
+        return WithComposed(text, x => WithDigits(x, t => Core(t, fallbackChain, null, fontSizePx, declaredCount, language), language));
+    }
+
+    /// <summary>
+    /// 字母加組合符號（越南文常見的分解寫法「e + ̂ + ̣」）：WPF 用字型的 ccmp 把有合成字的組回一個字形（Arial 的「T + e + ̂」
+    /// 畫成 T + ê，字距是 T–ê 的，不是 T–e 的）。照原樣量時，後面接符號的字跟前一個字的字距只套會變寬的（見 Core），
+    /// 再組回 NFC 量一次（組回的字形可能比原本的字寬），取寬的；globalization-invariant 模式不能正規化，只照原樣量。
+    /// 原樣量不到（符號不在字型裡：WPF 畫缺字方框）就是量不到。
+    /// </summary>
+    private static Measurement WithComposed(string text, Func<string, Measurement> measure)
+    {
+        var plain = measure(text);
+        if (!plain.IsReliable || !text.EnumerateRunes().Any(r => IsCombiningMark(r.Value))) return plain;
+        string composed;
+        try { composed = text.Normalize(NormalizationForm.FormC); }
+        catch (Exception e) when (e is ArgumentException or PlatformNotSupportedException) { return plain; }   // 不成對的代理字元；globalization-invariant 模式不能正規化
+        if (composed == text) return plain;
+        var other = measure(composed);
+        return other.IsReliable && other.WidthPx > plain.WidthPx ? other : plain;
+    }
+
+    /// <summary>
+    /// 通用的組合符號（拉丁、希臘、西里爾字母上加的重音、聲調）。WPF 一律畫寬度 0（Segoe UI 的 U+0323 在 hmtx 寫 682，畫出來是 0）。
+    /// 阿拉伯、印度系、泰文…的符號各自處理，不在這裡。
+    /// </summary>
+    public static bool IsCombiningMark(int cp) =>
+        cp is (>= 0x0300 and <= 0x036F) or (>= 0x1AB0 and <= 0x1AFF) or (>= 0x1DC0 and <= 0x1DFF) or (>= 0x20D0 and <= 0x20FF) or (>= 0xFE20 and <= 0xFE2F)
+            // 希伯來文的點（不含 05BE、05C0、05C3、05C6 這些標點）
+            or (>= 0x0591 and <= 0x05BD) or 0x05BF or 0x05C1 or 0x05C2 or 0x05C4 or 0x05C5 or 0x05C7;
+
+    /// <summary>
+    /// 字的文字系統（解析過「共用」的字）：WPF 依文字系統把一行切成好幾段，字距不跨段套。空白、標點、數字跟著前一個有文字系統的字
+    /// （開頭的跟著後一個），組合符號跟著前一個字。希臘文後面的「 A」：空白在希臘文那段、A 在拉丁文那段，WPF 不套「空白–A」的字距
+    /// （Arial 的「κλειδί API」偏窄 1.3%）。
+    /// </summary>
+    internal static int[] ScriptRuns(IReadOnlyList<int> cps)
+    {
+        var ids = new int[cps.Count];
+        for (var i = 0; i < cps.Count; i++) ids[i] = ScriptId(cps[i]);
+        var last = -1;
+        for (var i = 0; i < ids.Length; i++)
+        {
+            if (ids[i] == -2) ids[i] = i > 0 ? ids[i - 1] : -1;   // 組合符號：跟著前一個字
+            if (ids[i] >= 0) last = ids[i]; else ids[i] = last;
+        }
+        var next = -1;
+        for (var i = ids.Length - 1; i >= 0; i--)
+            if (ids[i] >= 0) next = ids[i]; else ids[i] = next;
+        return ids;
+    }
+
+    /// <summary>WPF 每這麼多個字（UTF-16）一段排版：字距不跨段（WpfOracle --glyphs：第 99、199 個字跟後一個字之間不套字距）。</summary>
+    private const int ChunkLength = 100;
+
+    // ScriptRuns 的編號 → OpenType 的文字系統；只有共用字的一段當拉丁文（WPF 量 Calibri 的「",」不套阿拉伯文 lookup 的字距）。
+    // 其他文字系統回 null：照舊每個 lookup 都套
+    private static string? OpenTypeScript(int run) => run switch
+    {
+        1 or -1 => "latn", 2 => "grek", 3 => "cyrl", 4 => "armn", 5 => "hebr", 6 => "arab", 7 => "thai", 8 => "geor", _ => null,
+    };
+
+    // -1 = 共用（空白、標點、數字、符號、修飾字母），-2 = 組合符號，其他 = 文字系統
+    private static int ScriptId(int cp)
+    {
+        var category = CharUnicodeInfo.GetUnicodeCategory(cp);
+        if (category is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.EnclosingMark) return -2;
+        if (category is not (UnicodeCategory.UppercaseLetter or UnicodeCategory.LowercaseLetter or UnicodeCategory.TitlecaseLetter or UnicodeCategory.OtherLetter)) return -1;
+        return cp switch
+        {
+            <= 0x024F or (>= 0x0250 and <= 0x02AF) or (>= 0x1D00 and <= 0x1DBF) or (>= 0x1E00 and <= 0x1EFF) or (>= 0x2C60 and <= 0x2C7F)
+                or (>= 0xA720 and <= 0xA7FF) or (>= 0xAB30 and <= 0xAB6F) or (>= 0xFF21 and <= 0xFF5A) => 1,   // 拉丁
+            (>= 0x0370 and <= 0x03FF) or (>= 0x1F00 and <= 0x1FFF) => 2,                                       // 希臘
+            (>= 0x0400 and <= 0x052F) or (>= 0x1C80 and <= 0x1C8F) or (>= 0x2DE0 and <= 0x2DFF) or (>= 0xA640 and <= 0xA69F) => 3,   // 西里爾
+            >= 0x0530 and <= 0x058F => 4,                                                                                         // 亞美尼亞
+            (>= 0x0590 and <= 0x05FF) or (>= 0xFB1D and <= 0xFB4F) => 5,                                                          // 希伯來
+            (>= 0x0600 and <= 0x06FF) or (>= 0x0750 and <= 0x077F) or (>= 0x08A0 and <= 0x08FF) or (>= 0xFB50 and <= 0xFDFF) or (>= 0xFE70 and <= 0xFEFF) => 6,   // 阿拉伯
+            >= 0x0E00 and <= 0x0E7F => 7,                                                                                         // 泰文
+            (>= 0x10A0 and <= 0x10FF) or (>= 0x2D00 and <= 0x2D2F) or (>= 0x1C90 and <= 0x1CBF) => 8,                             // 喬治亞
+            _ => 1000 + (cp >> 7),   // 其他：依 128 字的區塊粗分
+        };
     }
 
     /// <summary>
@@ -331,6 +442,15 @@ public static class TextMeasure
         // 有右到左文字時，空白、標點這類中性字可能跟旁邊的字分在不同方向的段落裡，WPF 不跨段套字距
         // （Arial 的「L 空白」-76：阿拉伯文句子裡的「URL 」量出來沒套）。這種位置只套會變寬的字距。
         var bidi = cps.Exists(IsRightToLeft);
+        var runs = ScriptRuns(cps);
+        var offsets = new int[cps.Count];   // UTF-16 位置
+        for (int k = 0, o = 0; k < cps.Count; o += cps[k] > 0xFFFF ? 2 : 1, k++) offsets[k] = o;
+        var otLanguage = OpenTypeLanguage.Tag(language);
+        var prevSwapped = false;           // 前一個字依語言換了字形（字距只套會變寬的）
+        var prevIndex = -1;
+        var markSinceBase = false;         // 前一個字之後夾過組合符號
+        FontMetrics? lastFace = null;      // 最後一個畫出來的字的字型（組合符號要在它裡面）
+        FontMetrics? lastArabicFace = null; // 上一個阿拉伯字母的字型
 
         double totalUnits = 0;
         var missing = 0;
@@ -371,6 +491,15 @@ public static class TextMeasure
                 continue;
             }
             if (IsDefaultIgnorable(cp)) { prevFace = null; prevShapes = null; continue; }   // 先判斷：U+FEFF 落在阿拉伯表現形式的範圍裡
+            // 通用的組合符號：寬 0；前一個字的字型裡沒有它，WPF 畫缺字方框（Verdana 的 U+031B：1 em 寬），量不到
+            if (IsCombiningMark(cp))
+            {
+                if (lastFace is null || !lastFace.TryAdvance(cp, out _)) { missing++; if (firstMissing < 0) firstMissing = cp; }
+                markSinceBase = true;
+                continue;
+            }
+            var afterMark = markSinceBase;
+            markSinceBase = false;
             if (prevShapes is not null && ArabicJoining.TypeOf(cp) != ArabicJoining.Type.Transparent && !(forms is not null && forms[i] >= 0))
                 prevShapes = null;
 
@@ -398,8 +527,10 @@ public static class TextMeasure
                 missing++;
                 if (firstMissing < 0) firstMissing = cp;
                 prevFace = null;
+                lastFace = null;
                 continue;
             }
+            lastFace = face;
 
             // 阿拉伯文的附加符號（母音記號、hamza…）：WPF 給它寬度 0，不管字型的 hmtx 寫多少
             // （Tahoma 的 U+0654 在 hmtx 有寬度，WPF 量出來是 0；WpfOracle --scripts 實測）
@@ -414,6 +545,11 @@ public static class TextMeasure
             if (forms is not null && forms[i] >= 0)
             {
                 prevFace = null;   // 字距是對基本字形的，形狀換過之後不套
+                // 跟前一個字母連寫、卻是別支字型畫的（Dubai 沒有 ؿ，後備字型補）：WPF 每支字型各排一段，兩邊接不起來 —— 量不到
+                // （照連寫的形狀量偏窄到 41%）
+                var joinsPrevious = forms[i] is ArabicJoining.Medial or ArabicJoining.Final;
+                if (joinsPrevious && lastArabicFace is not null && !ReferenceEquals(lastArabicFace, face)) complex = true;
+                lastArabicFace = face;
                 if (face.ArabicFor(language) is not { } shapes || !shapes.Forms.TryGetValue(cp, out var formAdvances))
                 {
                     complex = true;
@@ -546,15 +682,33 @@ public static class TextMeasure
 
             if (IsComplexScript(cp) && !IsArabicPlain(cp)) complex = true;
 
+            // 元素語言把這個字換成另一個字形（Arial 土耳其文的 i）：寬度取兩個裡寬的，前後的字距只套會變寬的
+            var swappedAdvance = 0;
+            var swapped = otLanguage is not null && face.LanguageGlyphs is { } languageGlyphs && languageGlyphs.TryGetValue(otLanguage, out var swaps)
+                          && swaps.TryGetValue(cp, out swappedAdvance);
+            if (swapped && swappedAdvance > advance) advance = swappedAdvance;
+            // 後面接組合符號：字型可能把這個字換成比較寬的字形
+            if (i + 1 < cps.Count && IsCombiningMark(cps[i + 1]) && face.MarkedWidths is { } marked && marked.TryGetValue(cp, out var markedAdvance) && markedAdvance > advance)
+                advance = markedAdvance;
             totalUnits += advance * scale;
             if (ReferenceEquals(face, prevFace) && face.Kerning is { } kern && scale == prevScale)
             {
-                var adjust = kern.Adjust(prevCp, cp);
+                // 只套這一段文字的文字系統（與元素語言的語言系統）掛的 lookup
+                var adjust = kern.Adjust(prevCp, cp, kern.SystemFor(OpenTypeScript(runs[i]), otLanguage));
+                if (swapped || prevSwapped) adjust = Math.Max(adjust, 0);
                 if (bidi && (!Rune.IsLetterOrDigit(new Rune(prevCp)) || !Rune.IsLetterOrDigit(new Rune(cp)))) adjust = Math.Max(adjust, 0);
+                // 跨文字系統（WPF 分段，不套字距）、中間夾組合符號（字型的 lookup 不一定跳過符號）：只套會變寬的
+                if (afterMark || prevIndex >= 0 && runs[prevIndex] != runs[i]) adjust = Math.Max(adjust, 0);
+                // 後面接組合符號：這個字可能跟符號組成另一個字形（T + e + ̂ 畫成 T + ê），跟前一個字的字距只套會變寬的
+                if (i + 1 < cps.Count && IsCombiningMark(cps[i + 1])) adjust = Math.Max(adjust, 0);
+                // WPF 每 100 個字（UTF-16）一段排，字距不跨段（「…процедуру.」的 у 剛好是第 99 個字：「у.」沒套字距）
+                if (offsets[i] > 0 && offsets[i] % ChunkLength == 0) adjust = Math.Max(adjust, 0);
                 totalUnits += adjust * scale;
             }
             prevFace = face;
             prevCp = cp;
+            prevIndex = i;
+            prevSwapped = swapped;
             prevScale = scale;
         }
 
@@ -638,5 +792,22 @@ public static class TextMeasure
            or (>= 0x1780 and <= 0x17FF)   // 高棉文
            or (>= 0x1800 and <= 0x18AF)   // 蒙古文
            or (>= 0xFB50 and <= 0xFDFF)   // 阿拉伯表現形式 A
-           or (>= 0xFE70 and <= 0xFEFF);  // 阿拉伯表現形式 B
+           or (>= 0xFE70 and <= 0xFEFF)   // 阿拉伯表現形式 B
+           // 也要組字、這支工具沒建模（也沒拿 WPF 對照過）的文字系統：量不到，不拿 advance 相加充數
+           or (>= 0x1100 and <= 0x11FF) or (>= 0xA960 and <= 0xA97F) or (>= 0xD7B0 and <= 0xD7FF)   // 韓文的組合字母（不是組好的音節）
+           or (>= 0x1900 and <= 0x194F)   // 林布文
+           or (>= 0x1980 and <= 0x19DF)   // 新傣仂文
+           or (>= 0x1A00 and <= 0x1AAF)   // 布吉文、老傣文
+           or (>= 0x1B00 and <= 0x1C4F)   // 峇里文、巽他文、巴塔克文、絨巴文
+           or (>= 0x1CD0 and <= 0x1CFF)   // 吠陀擴充符號
+           or (>= 0xA800 and <= 0xA82F)   // 錫爾赫特文
+           or (>= 0xA840 and <= 0xA87F)   // 八思巴文
+           or (>= 0xA880 and <= 0xA8FF)   // 索拉什特拉文、天城文擴充
+           or (>= 0xA900 and <= 0xA95F)   // 克耶文、勒姜文
+           or (>= 0xA980 and <= 0xAADF)   // 爪哇文、緬甸文擴充 B、占文、緬甸文擴充 A、傣越文
+           or (>= 0xAAE0 and <= 0xAAFF) or (>= 0xABC0 and <= 0xABFF)   // 曼尼普爾文
+           or (>= 0x10A00 and <= 0x10A5F) // 佉盧文
+           or (>= 0x10D00 and <= 0x10D3F) // 哈乃斐羅興亞文（連寫）
+           or (>= 0x11000 and <= 0x11DAF) // 婆羅米文以後的印度系擴充（凱提、查克馬、夏拉達、格蘭塔、莫迪…）
+           or (>= 0x1E900 and <= 0x1E95F);// 阿德拉姆文（連寫）
 }

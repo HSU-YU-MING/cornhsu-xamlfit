@@ -58,6 +58,17 @@ public sealed class MetricsFile
         /// <summary>GPOS 'kern' 的成對調整：lookup 的陣列，每個 lookup 是子表的陣列（見 <see cref="KerningTable"/>）。</summary>
         [JsonPropertyName("kerning")] public List<List<KernEntry>>? Kerning { get; set; }
 
+        /// <summary>字型裡的文字系統與語言系統（「latn」「latn/TRK」）；kernLookupSystems 跟 kerning 一個 lookup 一列，列出掛它的系統。
+        /// 沒有這兩個欄位的舊度量檔：每個 lookup 都套。</summary>
+        [JsonPropertyName("kernSystems")] public List<string>? KernSystems { get; set; }
+        [JsonPropertyName("kernLookupSystems")] public List<List<string>>? KernLookupSystems { get; set; }
+
+        /// <summary>依語言換字形的字：語言系統 → [碼位, 寬度] 的陣列（見 <see cref="FontMetrics.LanguageGlyphs"/>）。</summary>
+        [JsonPropertyName("languageGlyphs")] public Dictionary<string, List<int[]>>? LanguageGlyphs { get; set; }
+
+        /// <summary>後面接組合符號時換成比較寬的字形：[碼位, 寬度] 的陣列（見 <see cref="FontMetrics.MarkedWidths"/>）。</summary>
+        [JsonPropertyName("markedWidths")] public List<int[]>? MarkedWidths { get; set; }
+
         /// <summary>阿拉伯字母的寬度，依 OpenType 語言系統："dflt"、"ARA "…。字母與形狀合成一個數：碼位 × 4 + 形狀（0 獨立、1 字首、2 字中、3 字尾）。
         /// forms＝[碼位, 獨立, 字首, 字中, 字尾]；
         /// pairs＝每個前一個字一列 [前一個字, 這個字, 改變量, 這個字, 改變量, …]（只列非零）；
@@ -122,6 +133,16 @@ public sealed class MetricsFile
         },
         _ => throw new NotSupportedException(),
     }).ToList()).ToList();
+
+    private static KerningTable? WithSystems(KerningTable? table, List<string>? systems, List<List<string>>? perLookup)
+    {
+        if (table is null || systems is null || perLookup is null || perLookup.Count != table.Lookups.Count) return table;
+        return new KerningTable
+        {
+            Systems = systems.ToHashSet(StringComparer.Ordinal),
+            Lookups = [.. table.Lookups.Select((l, i) => new KerningLookup { Subtables = l.Subtables, Systems = perLookup[i].ToHashSet(StringComparer.Ordinal) })],
+        };
+    }
 
     private static KerningTable? FromEntries(List<List<KernEntry>>? entries)
     {
@@ -231,6 +252,12 @@ public sealed class MetricsFile
                 DefaultAdvance = m.DefaultAdvance,
                 Ranges = [.. m.Ranges.Select(r => new[] { r.Start, r.End, r.Advance })],
                 Kerning = ToEntries(m.Kerning),
+                KernSystems = m.Kerning?.Systems is { } ks ? [.. ks.Order(StringComparer.Ordinal)] : null,
+                KernLookupSystems = m.Kerning is { } kt && kt.Lookups.All(l => l.Systems is not null)
+                    ? [.. kt.Lookups.Select(l => l.Systems!.Order(StringComparer.Ordinal).ToList())] : null,
+                MarkedWidths = m.MarkedWidths is { Count: > 0 } mw ? [.. mw.OrderBy(x => x.Key).Select(x => new[] { x.Key, x.Value })] : null,
+                LanguageGlyphs = m.LanguageGlyphs is { Count: > 0 } lg
+                    ? lg.ToDictionary(kv => kv.Key, kv => kv.Value.OrderBy(x => x.Key).Select(x => new[] { x.Key, x.Value }).ToList()) : null,
                 Arabic = ToArabicEntries(m.Arabic),
                 Indic = m.Indic is { Count: > 0 } indic
                     ? indic.ToDictionary(kv => kv.Key, kv => EncodeIndic(kv.Key.Contains('/') && indic.TryGetValue(kv.Key[..kv.Key.IndexOf('/')], out var baseTable)
@@ -291,6 +318,10 @@ public sealed class MetricsFile
             }
             sb.Append(']');
             if (f.Kerning is { Count: > 0 }) sb.Append(",\n      \"kerning\": ").Append(JsonSerializer.Serialize(f.Kerning, Compact));
+            if (f.KernSystems is { Count: > 0 }) sb.Append(",\n      \"kernSystems\": ").Append(JsonSerializer.Serialize(f.KernSystems, Compact));
+            if (f.KernLookupSystems is { Count: > 0 }) sb.Append(",\n      \"kernLookupSystems\": ").Append(JsonSerializer.Serialize(f.KernLookupSystems, Compact));
+            if (f.LanguageGlyphs is { Count: > 0 }) sb.Append(",\n      \"languageGlyphs\": ").Append(JsonSerializer.Serialize(f.LanguageGlyphs, Compact));
+            if (f.MarkedWidths is { Count: > 0 }) sb.Append(",\n      \"markedWidths\": ").Append(JsonSerializer.Serialize(f.MarkedWidths, Compact));
             if (f.Arabic is { Count: > 0 }) sb.Append(",\n      \"arabic\": ").Append(JsonSerializer.Serialize(f.Arabic, Compact));
             if (f.Hinted is { Count: > 0 }) sb.Append(",\n      \"hinted\": ").Append(JsonSerializer.Serialize(f.Hinted, Compact));
             if (f.Indic is { Count: > 0 }) sb.Append(",\n      \"indic\": ").Append(JsonSerializer.Serialize(f.Indic, Compact));
@@ -388,7 +419,11 @@ public sealed class MetricsFile
                 LineGap = e.LineGap,
                 DefaultAdvance = e.DefaultAdvance,
                 Ranges = ranges,
-                Kerning = FromEntries(e.Kerning),
+                Kerning = WithSystems(FromEntries(e.Kerning), e.KernSystems, e.KernLookupSystems),
+                MarkedWidths = e.MarkedWidths is { Count: > 0 } mwe ? mwe.Where(x => x.Length >= 2).ToDictionary(x => x[0], x => x[1]) : null,
+                LanguageGlyphs = e.LanguageGlyphs is { Count: > 0 } lge
+                    ? lge.ToDictionary(kv => kv.Key, kv => (IReadOnlyDictionary<int, int>)kv.Value.Where(x => x.Length >= 2).ToDictionary(x => x[0], x => x[1]))
+                    : null,
                 Arabic = FromArabicEntries(e.Arabic),
                 Indic = e.Indic is { Count: > 0 } indicEntries ? DecodeIndic(indicEntries) : null,
                 Hinted = e.Hinted is { Count: > 0 } hinted

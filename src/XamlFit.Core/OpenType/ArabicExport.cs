@@ -39,6 +39,79 @@ internal static class ArabicExport
 
     private const int SelfCheckWords = 20000;
 
+    // GPOS 的阿拉伯文文字系統（任何語言系統）掛的 'curs' 至少 100 個字，錨點不在字的兩邊（入口在右緣、出口在左緣，或沒有）的超過一半
+    private static bool CursiveMovesLetters(SfntReader r, int[] advances)
+    {
+        var gpos = r.TableOffset("GPOS");
+        var scriptList = gpos + r.U16(gpos + 4);
+        var featureList = gpos + r.U16(gpos + 6);
+        var lookupList = gpos + r.U16(gpos + 8);
+        var features = new HashSet<int>();
+        void Collect(int langSys)
+        {
+            var count = r.U16(langSys + 4);
+            for (var i = 0; i < count; i++)
+            {
+                var fi = r.U16(langSys + 6 + i * 2);
+                if (r.AsciiString(featureList + 2 + fi * 6, 4) == "curs") features.Add(fi);
+            }
+        }
+        var scripts = r.U16(scriptList);
+        for (var s = 0; s < scripts; s++)
+        {
+            if (r.AsciiString(scriptList + 2 + s * 6, 4) != "arab") continue;
+            var script = scriptList + r.U16(scriptList + 2 + s * 6 + 4);
+            if (r.U16(script) != 0) Collect(script + r.U16(script));
+            var langs = r.U16(script + 2);
+            for (var l = 0; l < langs; l++) Collect(script + r.U16(script + 4 + l * 6 + 4));
+        }
+        if (features.Count == 0) return false;
+        int total = 0, moved = 0;
+        foreach (var fi in features)
+        {
+            var feature = featureList + r.U16(featureList + 2 + fi * 6 + 4);
+            for (var k = 0; k < r.U16(feature + 2); k++)
+            {
+                var lookup = lookupList + r.U16(lookupList + 2 + r.U16(feature + 4 + k * 2) * 2);
+                var type = r.U16(lookup);
+                for (var st = 0; st < r.U16(lookup + 4); st++)
+                {
+                    var sub = lookup + r.U16(lookup + 6 + st * 2);
+                    if (type == 9) { if (r.U16(sub + 2) != 3) continue; sub += (int)r.U32(sub + 4); }
+                    else if (type != 3) continue;
+                    var glyphs = CoverageGlyphs(r, sub + r.U16(sub + 2));
+                    var count = r.U16(sub + 4);
+                    for (var g = 0; g < count && g < glyphs.Count; g++)
+                    {
+                        var advance = glyphs[g] < advances.Length ? advances[glyphs[g]] : 0;
+                        int entry = r.U16(sub + 6 + g * 4), exit = r.U16(sub + 8 + g * 4);
+                        var entryX = entry == 0 ? (int?)null : r.S16(sub + entry + 2);
+                        var exitX = exit == 0 ? (int?)null : r.S16(sub + exit + 2);
+                        total++;
+                        if (entryX is { } en && en != advance || exitX is { } ex && ex != 0) moved++;
+                    }
+                }
+            }
+        }
+        return total >= 100 && moved * 2 > total;
+    }
+
+    private static List<int> CoverageGlyphs(SfntReader r, int offset)
+    {
+        var glyphs = new List<int>();
+        var format = r.U16(offset);
+        var count = r.U16(offset + 2);
+        if (format == 1)
+            for (var i = 0; i < count; i++) glyphs.Add(r.U16(offset + 4 + i * 2));
+        else if (format == 2)
+            for (var i = 0; i < count; i++)
+            {
+                var rec = offset + 4 + i * 6;
+                for (var g = r.U16(rec); g <= r.U16(rec + 2); g++) glyphs.Add(g);
+            }
+        return glyphs;
+    }
+
     public static Dictionary<string, ArabicShapes>? Read(SfntReader r, SortedDictionary<int, int> cmap, int[] advances)
     {
         if (!r.Has("GSUB")) return null;
@@ -47,6 +120,12 @@ internal static class ArabicExport
             var engine = new LayoutEngine(r);
             var positioner = r.Has("GPOS") ? new LayoutEngine(r, "GPOS") : null;
             if (!cmap.ContainsKey(0x0640)) return null;   // 沒有延長線就沒辦法單獨量出每種形狀
+            // 靠草寫連接（GPOS 'curs'）把字母接起來的字型（Urdu Typesetting 這類 Nastaliq 懸掛體）：錨點不在字的兩邊，字母互相疊進去，
+            // 這支引擎不做草寫連接，算出來的寬度不能信 —— 不匯出，這支字型的阿拉伯字母量不到。
+            // 只看「草寫連接的字至少 100 個、錨點不在邊上的超過一半」：Dubai 也有 'curs'（48 個字；Light 有一半以上錨點不在邊上），
+            // 不理它量出來偏窄最多 0.03%（WpfOracle --scripts，四個字重）。Nastaliq 幾百個字形都靠草寫連接。
+            // 沒有 Nastaliq 字型可以實測（Windows 的選用功能，沒裝）：這條是依字型結構推的
+            if (positioner is not null && CursiveMovesLetters(r, advances)) return null;
             const int tatweel = 0x0640;
 
             var letters = cmap.Keys.Where(cp => ArabicJoining.IsArabic(cp)

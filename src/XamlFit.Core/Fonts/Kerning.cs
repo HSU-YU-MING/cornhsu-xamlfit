@@ -13,20 +13,48 @@ public sealed class KerningTable
 {
     public required IReadOnlyList<KerningLookup> Lookups { get; init; }
 
+    /// <summary>
+    /// 字型裡有的文字系統與語言系統（「latn」、「latn/TRK」…，有沒有掛 kern 都算）。null = 舊的度量檔，不分：每個 lookup 都套。
+    /// WPF 只套這一段文字的文字系統（與元素語言的語言系統）掛的 lookup：Calibri 的阿拉伯文 lookup 裡有「" ,」的字距，
+    /// 拉丁文不套（全部套的話「"{0}",」偏窄 3.6%）；Segoe UI 的土耳其文語言系統不套「Ta」「Te」的字距。
+    /// </summary>
+    public IReadOnlySet<string>? Systems { get; init; }
+
     /// <summary>a 後面接 b 時，寬度的改變量（字型單位）。</summary>
-    public int Adjust(int a, int b)
+    public int Adjust(int a, int b) => Adjust(a, b, null);
+
+    /// <summary>只套 <paramref name="system"/>（<see cref="SystemFor"/> 挑的）掛的 lookup；null = 全部。</summary>
+    public int Adjust(int a, int b, string? system)
     {
         var total = 0;
         foreach (var lookup in Lookups)
+        {
+            if (system is not null && lookup.Systems is { } systems && !systems.Contains(system)) continue;
             foreach (var sub in lookup.Subtables)
                 if (sub.TryAdjust(a, b, out var delta)) { total += delta; break; }
+        }
         return total;
+    }
+
+    /// <summary>
+    /// 這段文字用哪個系統：有「文字系統/語言」用它，否則文字系統的預設，否則 DFLT；都沒有回 ""（不套任何字距）。
+    /// 舊的度量檔或認不得的文字系統回 null（全部套，跟以前一樣）。
+    /// </summary>
+    public string? SystemFor(string? script, string? language)
+    {
+        if (Systems is null || script is null) return null;
+        if (language is not null && Systems.Contains($"{script}/{language}")) return $"{script}/{language}";
+        if (Systems.Contains(script)) return script;
+        if (language is not null && Systems.Contains($"DFLT/{language}")) return $"DFLT/{language}";
+        return Systems.Contains("DFLT") ? "DFLT" : "";
     }
 }
 
 public sealed class KerningLookup
 {
     public required IReadOnlyList<KerningSubtable> Subtables { get; init; }
+    /// <summary>掛這個 lookup 的文字系統與語言系統（見 <see cref="KerningTable.Systems"/>）；null = 不分。</summary>
+    public IReadOnlySet<string>? Systems { get; init; }
 }
 
 public abstract class KerningSubtable

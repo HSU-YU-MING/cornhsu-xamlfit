@@ -220,7 +220,26 @@ under-estimate **0.05%**. Before writing a font's Arabic data the exporter check
 against its own full shaping on 20,000 random words. Letters that would come out narrow are left
 out (13 rare letters in Segoe UI) and are reported as not measurable next to other letters; a
 font where that would be most of the alphabet gets no Arabic data at all (Calibri 6.27, whose
-contextual rules span whole words).
+contextual rules span whole words). An Arabic letter joined to one drawn by another font (Dubai
+has no ؿ, so a fallback font draws it) is not measurable: WPF shapes each font's run on its own and
+the join breaks (measured as joined, such words came out 41% narrow). Hebrew vowel points take no
+width, and a letter followed by one takes the widest glyph the font composes for it (Arial draws ע
+followed by ִ as a wider ע) — about 0.5% wide with points.
+
+**Cyrillic, Greek, Turkish, Vietnamese and Amharic, against `FormattedText`.** 300 real
+translations each from Playnite (Russian, Ukrainian, Bulgarian, Serbian, Greek, Turkish,
+Vietnamese — and the Vietnamese again in decomposed form, letters plus combining marks), in Segoe
+UI, Arial, Tahoma, Times New Roman, Calibri, Verdana and Microsoft Sans Serif: worst under-estimate
+0.03%. Getting there took five rules WPF follows: kerning applies only within a run of one script
+(after Greek text, the space before "API" belongs to the Greek run, so space–A is not kerned), and
+only with the lookups that script uses (Calibri's Arabic lookups kern `",`, its Latin ones do not);
+a language can swap letters for other glyphs (Arial draws Turkish *i* differently, and that glyph
+has no T–i kerning) or use fewer kerning lookups (Segoe UI's Turkish drops "Ta" and "Te"); WPF
+composes a letter and its combining marks into one glyph when the font has it, and draws marks
+with no width; and it lays text out in chunks of 100 characters, with no kerning across them.
+Amharic — Windows' am-ET locale strings, 1,500 generated words and 500 sentences in Ebrima, also
+through font fallback from Segoe UI: worst under-estimate 0.02%, 1.4% wide on average (Ebrima
+kerns Ethiopic with lookups the export does not read).
 
 **Layout, against real WPF windows.** `prototype/LayoutOracle` feeds 228 XAML snippets to an
 actual off-screen `Window` and to the resolver, and compares what is really visible:
@@ -517,6 +536,9 @@ fail a build, because a guess should not block someone's pull request.
 | Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala), Khmer, Myanmar, Tibetan | measured as the sum of grapheme clusters, erring wide (Odia and Kannada by up to 2%, Myanmar's generated words by 4.2%, real Burmese by 0.9%); never more than 0.18% narrow in the comparisons, including every two-consonant join of the Indic scripts and Khmer |
 | `TextFormattingMode="Display"` | measured from the font's hinted widths at every scaling in `displayScales` (variable fonts: rounded linear widths); a pixel size a static font does not list is not measurable |
 | Arabic-script fonts whose contextual rules reach further than three letters | the letters involved, or the whole font, are reported as not measurable (see above) |
+| Nastaliq fonts (Urdu Typesetting) | letters joined by cursive attachment are not modelled: a font with at least 100 cursively attached glyphs, most of them anchored away from the glyph edges, gets no Arabic data (not measurable). Inferred from the font structure only: no Nastaliq font was available to check against WPF. Dubai, which uses cursive attachment lightly, measures within 0.03% |
+| Scripts that need shaping and are not modelled (Javanese, Balinese, Sundanese, Batak, Tai Tham, Cham, Meetei Mayek, Adlam, Hanifi Rohingya, Brahmi-derived scripts outside the ten Indic ones, conjoining Hangul jamo…) | not measurable, rather than a sum of advance widths |
+| `TextFormattingMode="Display"` with combining marks, or with a letter the element's language draws as another glyph | not measurable |
 | Native digits | WPF swaps 0–9 for Arabic-Indic digits in Arabic text, and always when the element's language is Burmese, Dzongkha, Nepali (India), Pashto, Sindhi, Kashmiri, Urdu (India), Punjabi or Uzbek in Arabic script, Mazanderani or Northern Luri (Myanmar Text's ၀ is 17% wider than 0); both are measured and the wider one is used. In `Display` mode the swapped digits are not measurable |
 | Ligatures other than Arabic (`fi`, `ffl`…) | not applied; covered by the text-width comparison above (worst under-estimate 0.025%) |
 | Vertical clipping | only when the text element itself declares `Height`/`MaxHeight` |

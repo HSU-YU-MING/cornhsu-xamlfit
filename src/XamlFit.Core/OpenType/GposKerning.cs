@@ -30,13 +30,9 @@ internal static class GposKerning
             var kernFeatures = KernFeatureIndices(r, scriptList, featureList);
             if (kernFeatures.Count == 0) return null;
 
-            var lookupIndices = new SortedSet<int>();
-            foreach (var fi in kernFeatures)
-            {
-                var feature = featureList + r.U16(featureList + 2 + fi * 6 + 4);
-                var count = r.U16(feature + 2);
-                for (var i = 0; i < count; i++) lookupIndices.Add(r.U16(feature + 4 + i * 2));
-            }
+            // 每個 lookup 掛在哪些文字系統、語言系統（量的時候只套這一段文字用的）
+            var (systems, bySystem) = KernSystems(r, scriptList, featureList, kernFeatures);
+            var lookupIndices = new SortedSet<int>(bySystem.Keys);
 
             var lookupCount = r.U16(lookupList);
             var lookups = new List<KerningLookup>();
@@ -65,14 +61,53 @@ internal static class GposKerning
                     };
                     if (parsed is not null) subs.Add(parsed);
                 }
-                if (subs.Count > 0) lookups.Add(new KerningLookup { Subtables = subs });
+                if (subs.Count > 0) lookups.Add(new KerningLookup { Subtables = subs, Systems = bySystem[li] });
             }
-            return lookups.Count > 0 ? new KerningTable { Lookups = lookups } : null;
+            return lookups.Count > 0 ? new KerningTable { Lookups = lookups, Systems = systems } : null;
         }
         catch (Exception e) when (e is IndexOutOfRangeException or ArgumentOutOfRangeException)
         {
             return null;   // 壞掉的 GPOS：當成沒有字距（偏寬，保守）
         }
+    }
+
+    /// <summary>每個文字系統（預設語言系統記成「latn」）與語言系統（「latn/TRK」）掛的 kern lookup。</summary>
+    private static (HashSet<string> Systems, Dictionary<int, HashSet<string>> ByLookup) KernSystems(SfntReader r, int scriptList, int featureList, HashSet<int> kern)
+    {
+        var systems = new HashSet<string>(StringComparer.Ordinal);
+        var byLookup = new Dictionary<int, HashSet<string>>();
+        void Add(int langSys, string key)
+        {
+            systems.Add(key);
+            var features = new List<int>();
+            var required = r.U16(langSys + 2);
+            if (required != 0xFFFF) features.Add(required);
+            var count = r.U16(langSys + 4);
+            for (var i = 0; i < count; i++) features.Add(r.U16(langSys + 6 + i * 2));
+            foreach (var fi in features.Where(kern.Contains))
+            {
+                var feature = featureList + r.U16(featureList + 2 + fi * 6 + 4);
+                var lookups = r.U16(feature + 2);
+                for (var i = 0; i < lookups; i++)
+                {
+                    var li = r.U16(feature + 4 + i * 2);
+                    if (!byLookup.TryGetValue(li, out var set)) byLookup[li] = set = new HashSet<string>(StringComparer.Ordinal);
+                    set.Add(key);
+                }
+            }
+        }
+        var scriptCount = r.U16(scriptList);
+        for (var s = 0; s < scriptCount; s++)
+        {
+            var tag = r.AsciiString(scriptList + 2 + s * 6, 4).TrimEnd();
+            var script = scriptList + r.U16(scriptList + 2 + s * 6 + 4);
+            var defaultLang = r.U16(script);
+            if (defaultLang != 0) Add(script + defaultLang, tag);
+            var langCount = r.U16(script + 2);
+            for (var l = 0; l < langCount; l++)
+                Add(script + r.U16(script + 4 + l * 6 + 4), tag + "/" + r.AsciiString(script + 4 + l * 6, 4).TrimEnd());
+        }
+        return (systems, byLookup);
     }
 
     private static HashSet<int> KernFeatureIndices(SfntReader r, int scriptList, int featureList)

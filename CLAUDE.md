@@ -216,6 +216,12 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 136 | **「母音符號搬到第一個子音後面」那種排法不能隨便拿掉** | 泰盧固文、奧里亞文照原本的順序排跟 WPF 一樣寬的組合佔九成以上（只差拆成兩段的母音），看起來這種排法是多餘的。只對拆成兩段的母音搬：泰盧固文平均一點沒變，奧里亞文帶 ya 的連寫偏窄到 40%（WPF 真的會搬）。撤掉 | 窮舉 |
 | 137 | **緬甸文交界依兩邊記會偏窄** | 真實的緬甸文多算的 0.87 個百分點都在交界（不加交界時平均 0.03%、最窄 −1.99%）。依「前一個叢集的符號 + 後一個叢集的種類（第一個字 + 上方符號）」記：平均降到 0.04%，但每一種後一個叢集只拿最短的一個試，帶 ့、ွ、ှ 的撐得更開，產生的字偏窄 12%。要全部試是 4 萬 × 4 萬，撤掉 | WpfOracle --scripts |
 | 138 | **匯出慢在總工作量，不在哪一段單執行緒** | 迴圈改平行沒有變快（Nirmala UI 36 個字面 × 文字系統的工作已經佔滿 20 核）。真正有用的是排版引擎：每個 lookup 先記「可能從哪些字開始」，其他位置直接跳過 —— 輸出逐位元組一樣，Nirmala UI 534 → 316 秒、Myanmar Text 488 → 108 秒。`XAMLFIT_DEBUG=1` 匯出時印每支字型、每段花的時間 | — |
+| 139 | **字距要照 WPF 的段與語言套，不能把全部 lookup 取聯集** | 字距原本是所有文字系統、語言系統的 lookup 聯集，依碼位查。三個錯：(1) 跨文字系統：希臘文後面「 API」的空白在希臘文那段、A 在拉丁文那段，WPF 不套（Arial 偏窄 1.3%）；(2) 別的文字系統的 lookup：Calibri 阿拉伯文的 lookup 有「",」（拉丁文偏窄 3.6%）、Tahoma 跟 Ebrima 的拉丁文根本沒掛 kern；(3) 語言：Segoe UI 的 latn/TRK 少了「Ta」「Te」的 lookup（土耳其文偏窄 2.9%），Arial 的土耳其文用 locl 把 i 換成沒有字距的字形（−0.5%）。度量檔記每個 lookup 掛在哪些系統、每個語言換了哪些字；共用字跟著前一個有文字系統的字，只有共用字的一段當拉丁文 | WpfOracle --scripts（XF_SCRIPT_SET 七支字型 × 八種語言） |
+| 140 | **WPF 每 100 個字一段排，字距不跨段** | 俄文長句「…процедуру.」偏窄 0.19%：「у.」剛好在第 99、100 個字（UTF-16），WPF 沒套字距；第 199／200 個也一樣。阿拉伯文的連寫、印度系的連寫會跨段（只有 GPOS 字距不跨） | WpfOracle --glyphs |
+| 141 | **組合符號：WPF 畫寬度 0，有合成字就組起來** | 分解寫法的越南文偏窄到 6%、偏寬到 64%：Segoe UI 的 U+0323 在 hmtx 寫 682、WPF 畫 0；「T + e + ̂」WPF 畫成 T + ê（字距是 T–ê 的）。照原樣量（符號 0、後面接符號的字跟前一個的字距只套會變寬的）與 NFC 各量一次取寬的；字型沒有那個符號 WPF 畫缺字方框（Verdana 的 U+031B 1 em）→ 量不到。globalization-invariant 模式不能正規化（PlatformNotSupportedException），只照原樣量 | WpfOracle --glyphs / --scripts |
+| 142 | **Nastaliq 的判斷是推的，不是量的** | 匯出引擎不做草寫連接（GPOS 'curs'）。這台機器沒有 Nastaliq 字型（Urdu Typesetting 是 Windows 的選用功能）。有 'curs' 的 Dubai 不理它量出來 0.03% 以內（Light 有一半以上錨點不在邊上也是）—— 所以只對「草寫連接至少 100 個字、大多數錨點不在邊上」的字型不匯出阿拉伯文。拿到 Nastaliq 字型要先對照 | WpfOracle --scripts（XF_SCRIPT_FONTS=Dubai） |
+| 143 | **希伯來文的點也會換掉前面的字** | Arial 的「ע + ִ」WPF 畫成另一個 ע（1096，原本 1084 單位）：ccmp 換的。匯出時每個字母接每種符號跑一次 ccmp，取最寬的換過的字形（`markedWidths`，希伯來文的點與拉丁、希臘、西里爾的組合符號）；量的時候後面接符號的字用它。取各種符號裡最寬的，帶點的希伯來文偏寬約 0.5% | WpfOracle --scripts（he 帶點） |
+| 144 | **阿拉伯字母跨字型連寫量不到** | 拿 Dubai 量隨機的阿拉伯字：度量檔裡有別的字型時，Dubai 沒有的字母（ؿ）由後備字型補，照連寫的形狀量偏窄 41%。WPF 每支字型各排一段，兩邊不連。跟前一個字母連寫、但是別支字型畫的 → 量不到（只有 Dubai 一支的度量檔時這些字母本來就缺字，看不出來） | WpfOracle --scripts（XF_SCRIPT_FONTS=Dubai，完整度量檔） |
 | 109 | **產生測試字串時順序寫錯，WPF 會畫虛線圓圈** | 緬甸文「်」寫在「့」前面、寮文聲調寫在 ະ 後面：WPF 畫虛線圓圈（寬很多），看起來像工具偏窄 18%。先確認字串本身合法；工具這邊對不合法的順序報量不到（InvalidPairs） | WpfOracle --scripts |
 | 104 | **古吉拉特文、泰盧固文的叢集會互相影響** | WPF 套字距時**跳過**附加符號：「દૃં」+「ડ」照「દૃ」+「ડ」撐開；這支匯出引擎不處理 LookupFlag，量不到。改成每個交界加「這個叢集或它任何前綴接任何叢集時最多變寬多少」；泰盧固文另外不用連寫值（ళ్కి 偏窄 2.8%）（偏寬 1.9%／7.9%，偏窄 ≤0.03%） | WpfOracle --scripts |
 | 105 | **佈景的範本裡可能有 UseLayoutRounding** | 控制項本身沒設，範本裡的元素設了：內容寬度帶小數時控制項寬度被捨入到像素（HandyControl、WPF-UI 幾乎每個控制項）。用小數寬度的內容在真的視窗裡量才看得出來；當鄰居時多留 1 DIP | LayoutOracle --theme |
@@ -236,7 +242,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 717 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 726 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 42 條 CLI 路徑的退出碼
