@@ -431,6 +431,33 @@ WPF 排水平的 `StackPanel`、`DockPanel` 就是這樣，`check` 報的也是�
 `--sarif` 寫出 SARIF 2.1.0（GitHub code scanning）。`--msbuild` 在 stdout 印 MSBuild 診斷，
 Visual Studio 的錯誤清單就看得到：`XF0001`（擋下的）、`XF0002`（警告）、`XF0003`（結果不可信）。
 
+### GitHub Action
+
+```yaml
+permissions:
+  contents: read
+  security-events: write          # 只有上傳 SARIF 才需要
+steps:
+  - uses: actions/checkout@v4
+  - uses: actions/setup-dotnet@v4
+    with:
+      dotnet-version: '10.0.x'
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.1.0
+    with:
+      root: src/MyApp
+      resx: src/MyApp/Resources
+      version: 0.1.0              # 工具的版本也要釘
+      sarif: xamlfit.sarif
+  - uses: github/codeql-action/upload-sarif@v3
+    if: always()
+    with:
+      sarif_file: xamlfit.sarif
+```
+
+輸入：`root`（必填）、`resx`、`metrics`、`pseudo`、`baseline`、`fail-on`（`fail` 或 `warn`）、
+`min-coverage`（預設 60）、`json`、`sarif`、`version`。沒給 `version` 會裝最新版：工具一發新版，沒人動過的 build 也可能變紅，
+所以要釘。路徑放在 `--` 後面傳，資料夾名字長得像旗標也照樣當資料夾掃。度量檔照平常的規則在 `root` 旁邊找（repo 裡的 `xamlfit.fonts.json.gz`）。
+
 壓掉單一位置要寫理由 —— 理由必填，而且被壓掉的會計數：
 
 ```xml

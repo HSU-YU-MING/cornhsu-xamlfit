@@ -32,14 +32,33 @@ inputs:
   json:
     description: 'Write the full report here'
     required: false
+  sarif:
+    description: 'Write a SARIF 2.1.0 report to this path (for github/codeql-action/upload-sarif)'
+    required: false
+  version:
+    description: 'Version of Cornhsu.XamlFit to install, such as 0.1.0 (default: the latest). Pin it so a new release cannot change your build without a commit'
+    required: false
 
 runs:
   using: composite
   steps:
-    - shell: bash
-      # ⚠ 輸入一律走 env:，不要用 ${{ inputs.x }} 直接插進 run: 的腳本裡。
-      #   那是文字替換 —— 帶引號或 $(…) 的輸入會變成可執行的程式碼（腳本注入）。
-      #   GitHub 自己的文件就是這樣要求的。
+    # ⚠ 輸入一律走 env:，不要用 ${{ inputs.x }} 直接插進 run: 的腳本裡。
+    #   那是文字替換 —— 帶引號或 $(…) 的輸入會變成可執行的程式碼（腳本注入）。
+    #   GitHub 自己的文件就是這樣要求的。
+    - name: Install XamlFit
+      shell: bash
+      env:
+        XF_VERSION: ${{ inputs.version }}
+      run: |
+        if [ -n "$XF_VERSION" ]; then
+          dotnet tool install -g Cornhsu.XamlFit --version "$XF_VERSION"
+        else
+          dotnet tool install -g Cornhsu.XamlFit
+        fi
+        echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+    - name: Run XamlFit
+      shell: bash
       env:
         XF_ROOT: ${{ inputs.root }}
         XF_RESX: ${{ inputs.resx }}
@@ -49,12 +68,14 @@ runs:
         XF_FAIL_ON: ${{ inputs.fail-on }}
         XF_MIN_COVERAGE: ${{ inputs.min-coverage }}
         XF_JSON: ${{ inputs.json }}
+        XF_SARIF: ${{ inputs.sarif }}
       run: |
-        dotnet tool install -g Cornhsu.XamlFit
-        args=(check "$XF_ROOT" --fail-on "$XF_FAIL_ON" --min-coverage "$XF_MIN_COVERAGE")
+        args=(check --fail-on "$XF_FAIL_ON" --min-coverage "$XF_MIN_COVERAGE")
         [ -n "$XF_RESX" ]     && args+=(--resx "$XF_RESX")
         [ "$XF_PSEUDO" = "true" ] && args+=(--pseudo)
         [ -n "$XF_METRICS" ]  && args+=(--metrics "$XF_METRICS")
         [ -n "$XF_BASELINE" ] && args+=(--baseline "$XF_BASELINE")
         [ -n "$XF_JSON" ]     && args+=(--json "$XF_JSON")
-        xamlfit "${args[@]}"
+        [ -n "$XF_SARIF" ]    && args+=(--sarif "$XF_SARIF")
+        # ⚠ 路徑放在 -- 後面：叫 --version 的資料夾不會被當成旗標
+        xamlfit "${args[@]}" -- "$XF_ROOT"

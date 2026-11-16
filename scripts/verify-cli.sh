@@ -66,6 +66,10 @@ run 3 "budget, nothing to scan"    budget "$TMP"
 
 # ===== check（閘門）=====
 run 1 "check --resx"               check "$DEMO" --resx "$RESX"
+# GitHub Action 把路徑放在 -- 後面；路徑看起來像旗標時不能被當成旗標（印版本、exit 0、什麼都沒稽核）
+run 1 "check, path after --"       check --resx "$RESX" -- "$DEMO"
+run 2 "check, path looks like a flag" check --version
+run 2 "check, two paths after --"  check -- "$DEMO" "$DEMO"
 run 1 "check --fail-on warn"       check "$DEMO" --resx "$RESX" --fail-on warn
 run 1 "check --culture de"         check "$DEMO" --resx "$RESX" --culture de
 # 指定了一個沒有字串表的語言是輸入錯誤，不是「結果不可信」

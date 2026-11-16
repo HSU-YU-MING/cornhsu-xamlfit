@@ -14,6 +14,7 @@ internal static class Usage
               xamlfit fonts list [--metrics <f>]  List the families a metrics file covers
               xamlfit budget <root> [options]     Export per-string pixel budgets (before translation)
               xamlfit check  <root> [options]     Measure real translations, gate CI (after translation)
+                                                  `--` ends the options: the next argument is <root> even if it starts with -
 
             FONTS EXPORT
               --from <path>        A font file (.ttf/.otf/.ttc) or a directory of them.

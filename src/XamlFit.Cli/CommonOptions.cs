@@ -82,9 +82,17 @@ internal sealed class CommonOptions
         var o = new CommonOptions();
         string? err = null;   // out 參數不能被區域函式捕捉，所以先用區域變數
 
+        var endOfOptions = false;   // 「--」之後的都是路徑（GitHub Action 把路徑放在 -- 後面：叫 --version 的資料夾也不會被當成旗標）
         for (var i = 0; i < args.Length; i++)
         {
             var a = args[i];
+            if (!endOfOptions && a == "--") { endOfOptions = true; continue; }
+            if (endOfOptions)
+            {
+                if (o.Root is not null) { error = $"unexpected extra argument: {a}"; return o; }
+                o.Root = a;
+                continue;
+            }
             if (a.StartsWith("--", StringComparison.Ordinal)) o._explicitFlags.Add(a);
 
             string? Next(string flag)

@@ -583,6 +583,35 @@ on stdout, so a build that runs the tool via `Exec` surfaces them in the Visual 
 List: `XF0001` for gated findings, `XF0002` for warnings, `XF0003` when the result is not
 trustworthy.
 
+### GitHub Action
+
+```yaml
+permissions:
+  contents: read
+  security-events: write          # only needed to upload SARIF
+steps:
+  - uses: actions/checkout@v4
+  - uses: actions/setup-dotnet@v4
+    with:
+      dotnet-version: '10.0.x'
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.1.0
+    with:
+      root: src/MyApp
+      resx: src/MyApp/Resources
+      version: 0.1.0              # pin the tool too
+      sarif: xamlfit.sarif
+  - uses: github/codeql-action/upload-sarif@v3
+    if: always()
+    with:
+      sarif_file: xamlfit.sarif
+```
+
+Inputs: `root` (required), `resx`, `metrics`, `pseudo`, `baseline`, `fail-on` (`fail` or `warn`),
+`min-coverage` (default 60), `json`, `sarif`, and `version`. Without `version` the action installs
+the latest release, so a new release can change a build that nobody touched; pin it. The path is
+passed after `--`, so a folder named like a flag is still scanned as a folder. The metrics file is
+found next to `root` as usual (`xamlfit.fonts.json.gz` committed to the repository).
+
 Suppress a single slot with a reason — the reason is required, and suppressed slots are counted:
 
 ```xml

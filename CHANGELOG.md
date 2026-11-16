@@ -11,6 +11,11 @@ that over-estimated the available width.
 
 ### Added
 
+- **GitHub Action inputs `version` and `sarif`**: pin the tool version the action installs (it
+  installed the latest, so a new release could change an untouched build) and write SARIF for
+  code scanning. The path is now passed after `--`, and `check`/`budget` accept `--` to end the
+  options, so a folder named like a flag is scanned rather than parsed.
+
 - **`xamlfit fonts export`** — extracts advance widths from font files into
   `xamlfit.fonts.json`. Pure managed code, no native dependencies. The file contains numbers
   only: no glyph outlines, no font software. Family names are taken in English, with other
