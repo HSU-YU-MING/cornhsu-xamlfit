@@ -85,29 +85,47 @@ internal static class FontsCommand
 
         // 每支字型檔各自獨立（阿拉伯文、印度系文字的形狀表要跑幾十萬次替換規則），平行處理；結果照檔案順序放回去
         var perFile = new List<FontMetrics>?[files.Count];
+        var debug = Environment.GetEnvironmentVariable("XAMLFIT_DEBUG") is not null;   // 印每支字型花的時間
+        // GDI 的 hinting 寬度：哪支字型的形狀表算完就排進去，一支一支在另一條執行緒做，跟還在算的形狀表重疊（原本全部算完才開始，多 4 分鐘）。
+        // 同時只做一支：同名字型同時註冊到 GDI，會選到別支檔案的字面
+        var hintedPerFile = new List<FontMetrics>?[files.Count];
+        var hintSkippedPerFile = new List<string>?[files.Count];
+        using var gdiQueue = new System.Collections.Concurrent.BlockingCollection<int>();
+        var gdiTask = hinted && OperatingSystem.IsWindows()
+            ? Task.Run(() =>
+            {
+                foreach (var i in gdiQueue.GetConsumingEnumerable())
+                {
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    var (withHints, skipped) = GdiHinting.Add(files[i], perFile[i]!);
+                    (hintedPerFile[i], hintSkippedPerFile[i]) = ([.. withHints], [.. skipped]);
+                    if (debug) Console.Error.WriteLine($"[time] {Path.GetFileName(files[i])} gdi {sw.Elapsed.TotalSeconds:F1}s");
+                }
+            })
+            : null;
         // 掃過的每支字型的家族名（含沒匯出的）：讓解析時能照 WPF 把「Segoe UI Variable」拆成 Segoe UI + 字面名稱
         var installed = new System.Collections.Concurrent.ConcurrentDictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         Parallel.For(0, files.Count, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, i =>
         {
             var f = files[i];
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             // 先只讀名稱就知道要不要：沒在 --family 裡的字型不跑形狀表
             IReadOnlyList<FontMetrics> got;
             try { got = FontMetricsExtractor.FromFile(f, m => { installed.TryAdd(m, true); return wanted.Count == 0 || wanted.Contains(m); }); }
             catch (Exception e) { if (Environment.GetEnvironmentVariable("XAMLFIT_DEBUG") is not null) Console.Error.WriteLine($"{f}: {e}"); return; }   // 一個資料夾裡有壞字型是常態，不要整批失敗
 
             foreach (var m in got) installed.TryAdd(m.Family, true);
+            if (debug && got.Count > 0) Console.Error.WriteLine($"[time] {Path.GetFileName(f)} shapes {sw.Elapsed.TotalSeconds:F1}s");
             perFile[i] = [.. got];   // 已經在讀的時候篩過（可變字型的實例家族名 Segoe UI Variable Text 也算 --family "Segoe UI Variable"）
+            if (gdiTask is not null && got.Count > 0) gdiQueue.Add(i);
         });
+        gdiQueue.CompleteAdding();
+        gdiTask?.Wait();
         for (var i = 0; i < files.Count; i++)
         {
             if (perFile[i] is not { } picked) { unreadable++; continue; }
-            // GDI 這段一支一支來：同名字型同時註冊到 GDI，會選到別支檔案的字面
-            if (hinted && picked.Count > 0 && OperatingSystem.IsWindows())
-            {
-                var (withHints, skipped) = GdiHinting.Add(files[i], picked);
-                picked = withHints;
-                hintSkipped.AddRange(skipped);
-            }
+            if (hintedPerFile[i] is { } withHints) picked = withHints;
+            if (hintSkippedPerFile[i] is { } skipped) hintSkipped.AddRange(skipped);
             metrics.AddRange(picked);
         }
 

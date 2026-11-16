@@ -21,6 +21,8 @@ internal static class IndicExport
     // 不套的話奧里亞文三子音連寫偏窄到 27%）。這支引擎只做會改寬度的單一／成對／上下文定位，附加符號的對齊不影響寬度
     private static readonly HashSet<string> Position = ["kern", "dist", "abvm", "blwm", "mark", "mkmk"];
     private static readonly HashSet<string> NoForms = [];
+    // 除錯：XAMLFIT_DEBUG 時印每個文字系統各段花的時間
+    private static readonly System.Collections.Concurrent.ConcurrentBag<string>? Timing = Environment.GetEnvironmentVariable("XAMLFIT_DEBUG") is not null ? [] : null;
     // reph（rphf）只套在音節開頭的「ra + virama」（WPF、HarfBuzz 的特性遮罩）：連寫中間的 ra 不變成 reph
     private static readonly HashSet<string> RephMasked = ["rphf"];
     // 除錯：XAMLFIT_INDIC_TRACE="09B9,09CD,09AF,09C3;…" 印出這些序列排出來的字形（跟 WpfOracle --glyphs 比）
@@ -49,6 +51,8 @@ internal static class IndicExport
                 var (script, tag, lang) = job;
                 var gsub = new LayoutEngine(r);
                 var gpos = r.Has("GPOS") ? new LayoutEngine(r, "GPOS") : null;
+                // 平行算的時候每條執行緒自己的引擎（LayoutEngine 有快取，不能共用）
+                using var perThread = new ThreadLocal<(LayoutEngine Gsub, LayoutEngine? Gpos)>(() => (new LayoutEngine(r), r.Has("GPOS") ? new LayoutEngine(r, "GPOS") : null));
                 {
                 var langSys = gsub.LangSys(tag, lang is null ? "dflt" : lang.PadRight(4));
                 var full = Full.Select(stage => gsub.Lookups(langSys, stage.ToHashSet())).Where(l => l.Count > 0).ToList();
@@ -58,12 +62,9 @@ internal static class IndicExport
                 var pos = posLangSys >= 0 ? gpos!.Lookups(posLangSys, Position) : null;
 
                 // moveFront：形狀換完之後，把從這個位置來的字符搬到最前面再套字距（WPF 把前置形 —— 泰盧固文、馬拉雅拉姆文的 ra —— 畫在主子音前面）
-                int Width(IReadOnlyList<int> cps, List<SortedDictionary<int, HashSet<string>>> stages, int moveFront = -1, int before = -1,
-                    (LayoutEngine Gsub, LayoutEngine? Gpos)? engines = null)
+                int Width(IReadOnlyList<int> cps, List<SortedDictionary<int, HashSet<string>>> stages, int moveFront = -1, int before = -1)
                 {
-                    // engines：平行算的時候每條執行緒自己的引擎（LayoutEngine 有快取，不能共用）
-                    var gsub_ = engines?.Gsub ?? gsub;
-                    var gpos_ = engines is { } e ? e.Gpos : gpos;
+                    var (gsub_, gpos_) = perThread.Value;
                     var input = cps.Select((cp, i) => new LayoutEngine.Glyph(cmap.TryGetValue(cp, out var g) ? g : 0, i, RephAt(cps, i) ? "rphf" : null)).ToList();
                     var shaped = input;
                     for (var k = 0; k < stages.Count; k++)
@@ -112,6 +113,7 @@ internal static class IndicExport
                     while (mods < next.Length - core && script.Modifiers.Contains(next[^(mods + 1)])) mods++;
                     var signs = next[core..^mods];
                     if (signs.Length == 0 || signs.Contains(script.Virama)) return null;
+                    // （試過只對拆成兩段的母音搬：奧里亞文帶 ya 的連寫 WPF 真的會把符號搬過去，窮舉偏窄到 40%，撤掉）
                     return [heads[0], .. signs, .. heads.Skip(1), .. next[..core], .. next[^mods..]];
                 }
                 int[]? ModifiersMoved(IReadOnlyList<int> heads, int[] next)
@@ -152,6 +154,7 @@ internal static class IndicExport
                 var preBaseForm = compact ? [] : script.Consonants.Where(c => Changes(c, "pref")).ToHashSet();
                 if (Trace is not null)
                     Console.Error.WriteLine($"[trace] {tag}/{lang ?? "dflt"} nonBase={string.Join(",", nonBase.Select(c => c.ToString("X4")))} preBase={string.Join(",", preBaseForm.Select(c => c.ToString("X4")))}");
+                var sw = System.Diagnostics.Stopwatch.StartNew();
                 foreach (var cluster in all)
                 {
                     var endsInVirama = cluster[^1] == script.Virama && !script.VisibleVirama;
@@ -190,11 +193,14 @@ internal static class IndicExport
                     if (widest > 0) deltas[IndicClusters.ModifierKey] = widest;
                 }
 
+                if (Timing is not null) { Timing.Add($"{script.Tag}/{lang} clusters {sw.Elapsed.TotalSeconds:F1}s"); sw.Restart(); }
                 // 子音 + virama 後面接子音（半形、合字、下加形、reph）：比兩個叢集各自量窄多少。
                 // 依「前一個子音, 後一個子音」記：後一個叢集帶什麼母音符號都試，取改變**最少**的 —— 錯在寬的那邊
                 // 每一組先依後一個叢集的母音符號分開記（-1 = 沒有母音符號）
                 var pairs = new List<(int First, int Second, Dictionary<int, int> BySign)>();
-                foreach (var head in all.Where(c => script.Conjuncts && c.Length == 2 && c[1] == script.Virama))
+                // 每個前一個子音平行算（緬甸文 2 分鐘 → 十幾秒）
+                Parallel.ForEach(all.Where(c => script.Conjuncts && c.Length == 2 && c[1] == script.Virama), head =>
+                {
                     foreach (var group in all.Where(c => script.Consonants.Contains(c[0])).GroupBy(c => c[0]))
                     {
                         var bySign = new Dictionary<int, int>();
@@ -239,8 +245,9 @@ internal static class IndicExport
                             if (sign >= 0 && change < -widths[IndicClusters.Key(head)]) change = -widths[IndicClusters.Key(head)];
                             if (!bySign.TryGetValue(sign, out var old) || change > old) bySign[sign] = change;
                         }
-                        if (bySign.Count > 0) pairs.Add((head[0], group.Key, bySign));
+                        if (bySign.Count > 0) lock (pairs) pairs.Add((head[0], group.Key, bySign));
                     }
+                });
                 // 一個母音符號在超過四分之一的組裡都是「變窄最少」的那個（卡納達文 ೌ、奧里亞文 ୁ）：它每一組另外記（0 也記），
                 // 不要拖累其他形式（卡納達文原本平均偏寬 8.4%：ಗ್ಘ 這種連寫被算成幾乎不變窄）
                 // 「比沒有母音符號時變窄得少」的組超過四分之一的符號都另外記（奧里亞文 ୁ ୂ ୃ େ、nukta 好幾個一起都是 0，不能只挑一個）
@@ -265,6 +272,7 @@ internal static class IndicExport
                         if (bySign.TryGetValue(sign, out var change) && (rest.Count == 0 || change > rest.Max()))
                             deltas[IndicClusters.ConjunctKey(first, second, sign)] = change;
                 }
+                if (Timing is not null) { Timing.Add($"{script.Tag}/{lang} conjuncts {sw.Elapsed.TotalSeconds:F1}s"); sw.Restart(); }
                 // 叢集後面接標點或空白：WPF 把它們併進同一段，字型的字距會套上去（坦米爾文的「ல்:」寬 0.08 px）。
                 // 記全部叢集、全部標點裡**變寬最多**的那個，量的時候只要後面接的不是同一個文字系統的字就加上去
                 var trailing = 0;
@@ -284,6 +292,7 @@ internal static class IndicExport
                     }
                 if (trailing > 0) deltas[IndicClusters.TrailingKey] = trailing;
 
+                if (Timing is not null) { Timing.Add($"{script.Tag}/{lang} trailing {sw.Elapsed.TotalSeconds:F1}s"); sw.Restart(); }
                 // 三個子音連寫（C1 + virama + C2 + virama + C3）：量的時候各叢集直接相加（不套連寫），再加「整串比相加最多寬多少」。
                 // 依後兩個子音（C2, C3）記，取所有 C1 裡最寬的：只記一個總的最大值時，卡納達文、泰盧固文的下加形全部被算成全寬
                 // （三個子音的字平均偏寬 40～60%）。總的最大值留給四個以上子音的連寫
@@ -329,9 +338,17 @@ internal static class IndicExport
                     // 第一個子音是 ra 的另外記（見 IndicClusters.RaChainKey3）
                     var raSplit = script.Ra >= 0 && heads.Any(h => h[0] == script.Ra) && heads.Any(h => h[0] != script.Ra);
                     if (raSplit) deltas[IndicClusters.RaChainMarker] = 1;
-                    foreach (var h2 in heads)
-                        foreach (var forms in lasts)
+                    // 每一組（C2, C3）平行算，寫進表的時候鎖住（馬拉雅拉姆文帶前置母音時每個 C1 都試，單執行緒要 6 分鐘）
+                    var gate = new object();
+                    // 最後一個子音不帶符號的三子音連寫另外記一個「扣掉 C1 + C2 連寫值」的值（見 IndicClusters.ChainBareKey3）：
+                    // 第一個子音不同時整串差到 5～15 px，扣掉 C1 + C2 的連寫值後只差 1～4 px（卡納達文 WPF 實測）
+                    var conjModel = !compact;
+                    var conjSnapshot = new Dictionary<string, int>(deltas, StringComparer.Ordinal);   // 平行算的時候 deltas 會被寫
+                    // 後面接一個字（子音、獨立母音）時連寫被撐開多少：扣掉連寫值之後就沒有空間蓋住它（卡納達文 ತ್ಥ್ಯ + ಶ 寬 0.06 px，偏窄 0.13%）
+                    var followers = all.Where(c => c.Length == 1).ToList();
+                    Parallel.ForEach(heads.SelectMany(h2 => lasts.Select(forms => (H2: h2, Forms: forms))), item =>
                         {
+                            var (h2, forms) = item;
                             var bare = forms.MinBy(f => f.Length)!;
                             // 不帶符號：每一個 C1 都試
                             var all3 = heads.Select(h1 => (Head: h1, Change: Residual(h1, h2, bare))).ToList();
@@ -375,6 +392,25 @@ internal static class IndicExport
                                     foreach (var sign in bySign.Keys.Where(k => k >= 0).ToList())
                                         if (others.TryGetValue(sign, out var o) && o > bySign[sign]) bySign[sign] = o;
                                 if (!ra) others = bySign;
+                                // 不帶符號的：每個 C1 都試過（all3），扣掉各自的 C1 + C2 連寫值取最寬。帶符號的不這樣記：
+                                // 帶符號時多寬多少是從幾個 C1 取樣的，扣掉連寫值之後蓋不住沒取樣的（窮舉抓到馬拉地文 −6%、奧里亞文帶 nukta 的 −4.6%）。
+                                // 也有別的形式算「不帶符號」時（SignOf 是 -1）不記
+                                int? bareRelative = null;
+                                if (conjModel && !ra && !Special(h2[0]) && forms.All(f => ReferenceEquals(f, bare) || IndicClusters.SignOf(script, f, 0) >= 0))
+                                {
+                                    var relative = residuals.Select(x => (x.Head, Value: x.Change - IndicClusters.ConjunctBare(conjSnapshot, x.Head[0], h2[0]))).ToList();
+                                    var follow = 0;
+                                    foreach (var (h1, _) in relative.OrderByDescending(x => x.Value).Take(2))
+                                    {
+                                        var chainOrder = IndicClusters.VisualOrder(script, [.. h1, .. h2, .. bare]);
+                                        var alone = Width(chainOrder, full);
+                                        foreach (var next in followers)
+                                            follow = Math.Max(follow, Width([.. chainOrder, .. IndicClusters.VisualOrder(script, next)], full) - alone - widths[IndicClusters.Key(next)]);
+                                    }
+                                    bareRelative = relative.Max(x => x.Value) + follow;
+                                }
+                                lock (gate)
+                                {
                                 chain = Math.Max(chain, bySign.Values.Max());
                                 string Key(int sign) => ra
                                     ? sign < 0 ? IndicClusters.RaChainKey3(h2[0], forms.Key) : IndicClusters.RaChainKey3(h2[0], forms.Key, sign)
@@ -408,9 +444,11 @@ internal static class IndicExport
                                     if (general != 0) deltas[Key(-1)] = general;
                                     foreach (var (sign, v) in bySign)
                                         if (sign >= 0 && v > general) deltas[Key(sign)] = v;
+                                    if (bareRelative is { } relative) deltas[IndicClusters.ChainBareKey3(h2[0], forms.Key)] = relative;
+                                }
                                 }
                             }
-                        }
+                        });
                     if (chain > 0)
                     {
                         deltas[IndicClusters.ChainKey] = chain;
@@ -426,40 +464,59 @@ internal static class IndicExport
                     }
                 }
 
+                if (Timing is not null) { Timing.Add($"{script.Tag}/{lang} chains {sw.Elapsed.TotalSeconds:F1}s"); sw.Restart(); }
                 // 叢集會影響下一個叢集的文字系統：每個叢集接「每一種開頭」的叢集時最多變寬多少（開頭 = 畫出來的前兩個字）
                 if (script.Interacting && script.BoundaryByMarks)
                 {
                     // 依符號記：每個叢集接「每一種開頭」（畫出來的第一個字）時最多變寬多少，同一個結尾取最大
                     // 後一個叢集依「畫出來的第一個字 + 帶哪些上方符號」各挑最短的一個：ပေါ် 接 ရိ 撐開 4.69 px，接 ရ、ကိ 都不撐開
                     // （只依第一個字挑時，依符號記的鍵在真實的緬甸文偏窄 0.21%）
-                    var firsts = all.GroupBy(c => (IndicClusters.VisualOrder(script, c)[0], string.Join(",", c.Where(script.UpperMarks.Contains).Order())))
+                    var firsts = all.GroupBy(c => IndicClusters.Key(IndicClusters.NextClass(script, c)))
                         .Select(g => g.OrderBy(c => c.Length).First()).ToList();
                     // （試過另外依「下一個叢集畫出來的第一個字」分開記：撐寬還看下一個叢集後面的符號，用最短的代表字試會偏窄 12%，撤掉）
                     // 4 萬個叢集 × 約 360 個開頭：平行算（每條執行緒自己開引擎），一支字型 9 分鐘 → 1 分鐘
                     var boundary = new System.Collections.Concurrent.ConcurrentDictionary<string, int>(StringComparer.Ordinal);
                     var firstsVisual = firsts.Select(b => (Visual: IndicClusters.VisualOrder(script, b), Width: widths[IndicClusters.Key(b)])).ToList();
-                    Parallel.ForEach(all.Where(c => c[^1] != script.Virama),
-                        () => (Gsub: new LayoutEngine(r), Gpos: r.Has("GPOS") ? new LayoutEngine(r, "GPOS") : null),
-                        (a, _, engines) =>
+                    Parallel.ForEach(all.Where(c => c[^1] != script.Virama), a =>
                         {
                             var visualA = IndicClusters.VisualOrder(script, a);
-                            var alone = Width(visualA, full, engines: engines);
+                            var alone = Width(visualA, full);
                             var widest = 0;
                             foreach (var (visualB, widthB) in firstsVisual)
                             {
-                                var change = Width([.. visualA, .. visualB], full, engines: engines) - alone - widthB;
+                                var change = Width([.. visualA, .. visualB], full) - alone - widthB;
                                 if (change > widest) widest = change;
                             }
                             if (widest > 0) boundary.AddOrUpdate(IndicClusters.BoundaryKey(script, a), widest, (_, old) => Math.Max(old, widest));
-                            return engines;
-                        },
-                        _ => { });
+                        });
                     deltas[IndicClusters.BoundaryMarksMarker] = 1;
                     foreach (var (key, widest) in boundary)
                         if (!deltas.TryGetValue(key, out var known) || widest > known) deltas[key] = widest;
                 }
                 else if (script.Interacting)
                 {
+                    // 兩個子音的連寫後面接字（見 IndicClusters.ConjunctTrailKey）
+                    if (script.Conjuncts)
+                    {
+                        var singles = all.Where(c => c.Length == 1).Select(c => (Order: IndicClusters.VisualOrder(script, c), Width: widths[IndicClusters.Key(c)])).ToList();
+                        var trails = new System.Collections.Concurrent.ConcurrentDictionary<string, int>(StringComparer.Ordinal);
+                        var groups = all.Where(c => script.Consonants.Contains(c[0]) && c[^1] != script.Virama).GroupBy(c => c[0]).ToList();
+                        Parallel.ForEach(all.Where(c => c.Length == 2 && c[1] == script.Virama).SelectMany(h => groups.Select(g => (Head: h, Group: g))), item =>
+                        {
+                            var widest = 0;
+                            // 每一種（符號, 最後一個字）挑最短的一個：撐開多少看連寫的最後一個字與後面的字（全部形式都試，匯出慢一倍）
+                            foreach (var form in item.Group.GroupBy(f => (IndicClusters.SignOf(script, f, 0), f[^1])).Select(g => g.MinBy(f => f.Length)!))
+                            {
+                                var order = IndicClusters.VisualOrder(script, [.. item.Head, .. form]);
+                                var alone = Width(order, full);
+                                foreach (var (next, width) in singles)
+                                    widest = Math.Max(widest, Width([.. order, .. next], full) - alone - width);
+                            }
+                            if (widest > 0) trails[IndicClusters.ConjunctTrailKey(item.Head[0], item.Group.Key)] = widest;
+                        });
+                        deltas[IndicClusters.ConjunctTrailMarker] = 1;
+                        foreach (var (key, value) in trails) deltas[key] = value;
+                    }
                     var starts = all.GroupBy(c => string.Join(",", IndicClusters.VisualOrder(script, c).Take(2)))
                         .Select(g => g.OrderBy(c => c.Length).First()).ToList();
                     // WPF 套字距時跳過附加符號（「દૃં」+「ડ」照「દૃ」+「ડ」撐開）：叢集的每一個前綴都試，取最寬的
@@ -487,10 +544,12 @@ internal static class IndicExport
                         if (widest > 0) deltas[IndicClusters.BoundaryKey(a)] = widest;
                     }
                 }
+                if (Timing is not null) { Timing.Add($"{script.Tag}/{lang} boundary {sw.Elapsed.TotalSeconds:F1}s"); sw.Restart(); }
                 result[IndicClusters.DataKey(script, lang)] = deltas;
                 }
             });
             // 順序固定（度量檔每次匯出要一樣）
+            if (Timing is not null) while (Timing.TryTake(out var line)) Console.Error.WriteLine("[indic] " + line);
             return result.Count > 0 ? result.OrderBy(kv => kv.Key, StringComparer.Ordinal).ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal) : null;
         }
         catch (Exception e) when (e is IndexOutOfRangeException or ArgumentOutOfRangeException

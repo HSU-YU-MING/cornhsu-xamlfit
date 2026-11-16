@@ -346,6 +346,7 @@ public static class TextMeasure
         var prevArabic = -1;
         var prevForm = -1;
         var afterConjunctHead = false;     // 前一個印度系叢集是「子音 + virama」
+        var conjunctFirst = -1;            // 這個叢集是兩個子音連寫的後一個：前一個子音（交界改用 ConjunctTrailKey）
         var prev2Arabic = -1;              // 再前一個字母（同一串裡），三字改變量用
         var prev2Form = -1;
         var markBeforePrev = false;        // prev2 與前一個字母之間夾過附加符號
@@ -354,7 +355,7 @@ public static class TextMeasure
         for (var i = 0; i < cps.Count; i++)
         {
             var cp = cps[i];
-            if (IndicClusters.Of(cp) is null) afterConjunctHead = false;
+            if (IndicClusters.Of(cp) is null) { afterConjunctHead = false; conjunctFirst = -1; }
             // 蒙古文：每個字照形狀查匯出時算好的「最寬會多寬」相加（MVS、FVS 也在表裡：MVS 在字中間 WPF 畫 205 單位寬，不是看不見的字）
             if (mongolian is not null && MongolianJoining.Handles(cp) && MongolianWidth(i, mongolian[i]) is { } mongol)
             {
@@ -500,7 +501,11 @@ public static class TextMeasure
                         var sign = IndicClusters.SignOf(indic, cps, third);
                         // 第一個子音是 ra：先查另外記的值（只記跟一般的不一樣的），沒有再查一般的
                         var raFirst = indic.Ra >= 0 && cps[i] == indic.Ra && clusters.ContainsKey(IndicClusters.RaChainMarker);
-                        if (!(raFirst && sign >= 0 && clusters.TryGetValue(IndicClusters.RaChainKey3(cps[i + length], cps[third], sign), out var three))
+                        // 最後一個子音不帶符號：扣掉 C1 + C2 連寫值記的，加回這個字串的
+                        int three;
+                        if (!raFirst && sign < 0 && clusters.TryGetValue(IndicClusters.ChainBareKey3(cps[i + length], cps[third]), out var relative))
+                            three = relative + IndicClusters.ConjunctBare(clusters, head, cps[i + length]);
+                        else if (!(raFirst && sign >= 0 && clusters.TryGetValue(IndicClusters.RaChainKey3(cps[i + length], cps[third], sign), out three))
                             && !(raFirst && clusters.TryGetValue(IndicClusters.RaChainKey3(cps[i + length], cps[third]), out three))
                             && !(sign >= 0 && clusters.TryGetValue(IndicClusters.ChainKey3(cps[i + length], cps[third], sign), out three))
                             && !clusters.TryGetValue(IndicClusters.ChainKey3(cps[i + length], cps[third]), out three)) three = 0;
@@ -514,13 +519,21 @@ public static class TextMeasure
                         || clusters.TryGetValue(IndicClusters.ConjunctKey(head, cps[i + length]), out conjunct)))
                     totalUnits += conjunct * scale;
                 // 叢集會影響下一個叢集的文字系統：後面接同一個文字系統的叢集時，加上匯出時量到的最大變寬
-                if (indic.Interacting && i + length < cps.Count && IndicClusters.Of(cps[i + length]) == indic && !indic.Plain.Contains(cps[i + length]))
+                // 「子音 + virama」後面接子音（兩個子音的連寫）：連寫的值已經是整段的寬度差，交界不另外加（泰盧固文 హ్ + ణ：交界 +1576、連寫 −1877，
+                // 兩個都加的話 హ్ణ 偏寬 71%）。三個子音以上的連寫照舊加：拿掉的話窮舉偏窄到 2.6%（連寫後面接的字撐開的量，原本靠這個蓋住）
+                var trailFirst = conjunctFirst;
+                conjunctFirst = head >= 0 && !chained && !nextIsHead && i + length < cps.Count && indic.Consonants.Contains(cps[i + length]) ? head : -1;
+                if (indic.Interacting && i + length < cps.Count && IndicClusters.Of(cps[i + length]) == indic && !indic.Plain.Contains(cps[i + length])
+                    && !(head >= 0 && !chained && !nextIsHead && indic.Consonants.Contains(cps[i + length])))
                 {
                     int Get(string key) => clusters.TryGetValue(key, out var v) ? v : 0;   // 沒有鍵 = 不撐開
-                    totalUnits += (!indic.BoundaryByMarks ? Get(IndicClusters.BoundaryKey(cluster))
-                        // 依符號記；舊的度量檔是依最後兩個字記的
-                        : clusters.ContainsKey(IndicClusters.BoundaryMarksMarker) ? Get(IndicClusters.BoundaryKey(indic, cluster))
-                        : Get(IndicClusters.BoundaryKey(cluster.TakeLast(2)))) * scale;
+                    if (trailFirst >= 0 && !indic.BoundaryByMarks && clusters.ContainsKey(IndicClusters.ConjunctTrailMarker))
+                        totalUnits += Get(IndicClusters.ConjunctTrailKey(trailFirst, cps[i])) * scale;
+                    else
+                        totalUnits += (!indic.BoundaryByMarks ? Get(IndicClusters.BoundaryKey(cluster))
+                            // 依符號記；舊的度量檔是依最後兩個字記的
+                            : clusters.ContainsKey(IndicClusters.BoundaryMarksMarker) ? Get(IndicClusters.BoundaryKey(indic, cluster))
+                            : Get(IndicClusters.BoundaryKey(cluster.TakeLast(2)))) * scale;
                 }
                 // 後面接的不是同一個文字系统的字（標點、空白…）：字型可能把它們之間撐開，加上匯出時量到的最大值
                 if (i + length < cps.Count && (IndicClusters.Of(cps[i + length]) != indic || indic.Plain.Contains(cps[i + length]))

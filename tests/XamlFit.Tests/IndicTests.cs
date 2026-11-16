@@ -365,6 +365,46 @@ public class IndicTests
     }
 
     [Fact]
+    public void A_bare_three_consonant_chain_adds_back_the_join_of_its_first_two_consonants()
+    {
+        // 最後一個子音不帶符號：存的是扣掉 C1 + C2 連寫值的，量的時候加回這個字串的連寫值
+        var data = new Dictionary<string, int>
+        {
+            [IndicClusters.ConjunctKey(Ka, Ssa)] = -300,
+            [IndicClusters.ChainKey3(Ssa, Ra)] = -500,
+            [IndicClusters.ChainBareKey3(Ssa, Ra)] = 100,
+        };
+        var face = Face(new() { ["deva"] = data });
+        Assert.Equal((400 * 5 + 100 - 300) / 100.0, M(face, S(Ka, Virama, Ssa, Virama, Ra)).WidthPx, 3);
+        Assert.Equal((400 * 6 - 500) / 100.0, M(face, S(Ka, Virama, Ssa, Virama, Ra, AaSign)).WidthPx, 3);   // 帶符號：一般的鍵
+        Assert.Equal((400 * 5 + 100) / 100.0, M(face, S(Ssa, Virama, Ssa, Virama, Ra)).WidthPx, 3);          // 這兩個子音沒有連寫值 = 0
+    }
+
+    [Fact]
+    public void After_a_two_consonant_join_the_boundary_is_the_one_kept_for_the_join()
+    {
+        // 古吉拉特文（叢集會互相影響）：「子音 + virama」接子音時交界不另外加；連寫後面再接字時用依兩個子音記的值，不用後一個叢集自己的
+        const int GKa = 0x0A95, GTa = 0x0AA4, GMa = 0x0AAE, GVirama = 0x0ACD;
+        var data = new Dictionary<string, int>
+        {
+            [IndicClusters.ConjunctKey(GKa, GTa)] = -200,
+            [IndicClusters.BoundaryKey([GKa, GVirama])] = 900,
+            [IndicClusters.BoundaryKey([GTa])] = 500,
+            [IndicClusters.ConjunctTrailMarker] = 1,
+            [IndicClusters.ConjunctTrailKey(GKa, GTa)] = 60,
+        };
+        FontMetrics Gujr() => new()
+        {
+            Family = "Gujr", UnitsPerEm = 1000, DefaultAdvance = 500,
+            Ranges = [new AdvanceRange(0x0A80, 0x0AFF, 400)],
+            Indic = new Dictionary<string, IReadOnlyDictionary<string, int>> { ["gujr"] = data },
+        };
+        Assert.Equal((800 + 400 + 400 - 200 + 60) / 100.0, TextMeasure.Measure(S(GKa, GVirama, GTa, GMa), [Gujr()], 10).WidthPx, 3);
+        data.Remove(IndicClusters.ConjunctTrailMarker);   // 舊的度量檔：後一個叢集自己的交界值
+        Assert.Equal((800 + 400 + 400 - 200 + 500) / 100.0, TextMeasure.Measure(S(GKa, GVirama, GTa, GMa), [Gujr()], 10).WidthPx, 3);
+    }
+
+    [Fact]
     public void The_new_keys_survive_the_metrics_file()
     {
         var table = new Dictionary<string, int>

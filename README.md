@@ -125,7 +125,9 @@ narrowing any form of the second one produces, with a separate value for vowel s
 that narrow less than the bare consonant (Odia ୁ, Kannada ೃ), never narrower than the second cluster
 alone; a chain of exactly three consonants adds a value kept per last two consonants and the sign on
 the last (the widest over every first one — with a chain that starts with ra, whose reph WPF moves to
-the end, kept separately), longer chains the largest any chain showed; and the largest
+the end, kept separately; when the last consonant has no sign, the value is kept net of the first two
+consonants' own join and that join is added back, since the first consonant otherwise swings the chain
+by 5–15 px), longer chains the largest any chain showed; and the largest
 kerning seen before punctuation. The export engine applies the shaping features in stages, as Windows
 does, honours lookup flags — without them Nirmala UI's Odia conjuncts never narrowed — and applies the
 mark-positioning features too, since a below-base form can widen there (Nirmala UI's `blwm` spaces two
@@ -137,14 +139,16 @@ syllable the way WPF does, so where WPF would — a below-base vowel sign moves 
 consonant, Odia's candrabindu attaches to the first consonant — each join is also shaped that way and
 the widest kept. In Gujarati and Telugu a cluster changes its neighbour (WPF kerns across a trailing
 anusvara or vowel sign), so every cluster boundary also adds the largest widening that cluster — or
-any prefix of it — produces before any other cluster.
+any prefix of it — produces before any other cluster; a two-consonant join adds nothing between its
+halves (the join value already covers them — adding both made Telugu హ్ణ 71% wide) and, after it, the
+largest widening that join showed before any letter.
 Against Nirmala UI, **every** two-consonant join with every vowel sign, nukta and mark, every bare
 three-consonant chain and 20,000 chains with signs — about 2.4 million strings over the ten scripts
 (`WpfOracle --indic-gen` with `XF_GEN_EXHAUSTIVE=1`): worst under-estimate 0.03%. That check found
 rare joins the previous version measured up to 35% narrow (Odia ଧ୍ଯି, Malayalam യ്യൢ, Bengali হ্যৃ,
 Kannada ಜ್ಞು); random sampling had missed them twice. On realistic random words (two independent sets)
-text measures on average 0.3% wide in Marathi, 0.6% Bengali, 0.8% Gurmukhi, 1.1% Malayalam, 1.3%
-Gujarati, 1.5–1.8% Odia, 1.7–1.8% Telugu, 1.8–1.9% Kannada; 290 Marathi and 300 Tamil strings from
+text measures on average 0.2% wide in Marathi, 0.6% Bengali, 0.8% Gurmukhi, 1.0–1.1% Malayalam, 1.2%
+Gujarati, 1.4% Telugu, 1.5–1.7% Kannada, 1.5–1.8% Odia; 290 Marathi and 300 Tamil strings from
 Playnite and ScreenToGif stay within 0.18%. Not measured: the vocalic-L signs of Odia, Kannada and
 Telugu, Telugu's lone length mark ౖ, and the obsolete ఴ — WPF draws them in ways the export engine
 does not.
@@ -510,7 +514,7 @@ fail a build, because a guess should not block someone's pull request.
 | Text set through properties not scanned (`ToolTip`, `Title`, watermark/hint attached properties, `Hyperlink`/`Span` content) | not seen at all |
 | Resource dictionaries merged in code at run time | every dictionary file is assumed merged; conflicting definitions make the value unknown |
 | Mongolian | the sum of the widest width each letter or ligature pair took in the same situation at export time, erring wide (about 2.5%); a letter in a situation the export never saw is not measurable; checked against generated words, 32 strings from Windows' locale data and 312 real translations |
-| Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala), Khmer, Myanmar, Tibetan | measured as the sum of grapheme clusters, erring wide (Kannada by up to 2%, Myanmar's generated words by 4.2%, real Burmese by 0.9%); never more than 0.18% narrow in the comparisons, including every two-consonant join of the Indic scripts and Khmer |
+| Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala), Khmer, Myanmar, Tibetan | measured as the sum of grapheme clusters, erring wide (Odia and Kannada by up to 2%, Myanmar's generated words by 4.2%, real Burmese by 0.9%); never more than 0.18% narrow in the comparisons, including every two-consonant join of the Indic scripts and Khmer |
 | `TextFormattingMode="Display"` | measured from the font's hinted widths at every scaling in `displayScales` (variable fonts: rounded linear widths); a pixel size a static font does not list is not measurable |
 | Arabic-script fonts whose contextual rules reach further than three letters | the letters involved, or the whole font, are reported as not measurable (see above) |
 | Native digits | WPF swaps 0–9 for Arabic-Indic digits in Arabic text, and always when the element's language is Burmese, Dzongkha, Nepali (India), Pashto, Sindhi, Kashmiri, Urdu (India), Punjabi or Uzbek in Arabic script, Mazanderani or Northern Luri (Myanmar Text's ၀ is 17% wider than 0); both are measured and the wider one is used. In `Display` mode the swapped digits are not measurable |

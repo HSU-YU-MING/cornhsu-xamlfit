@@ -217,12 +217,24 @@ that over-estimated the available width.
   differs). Average over-estimate on random words: Kannada 1.8–1.9% (was 2.7–2.9%), Odia 1.5–1.8%
   (1.6–2.0%), Bengali 0.6% (0.8%), Marathi 0.3% (0.4%), Gujarati 1.3% (1.4%); Malayalam 1.1% (1.0%:
   its signed chains are now tried with every first consonant). Exhaustively still ≤ 0.03% narrow.
+- **Bare three-consonant chains are kept net of the first join**: when the last consonant has no
+  sign, the chain value excludes the first two consonants' own join (added back when measuring), plus
+  the most a following letter widens the chain; the first consonant had swung chains by 5–15 px.
+- **Telugu and Gujarati joins are no longer counted twice**: a two-consonant join added both its join
+  value and the boundary widening of its first half (హ్ణ measured 71% wide); after a join, the
+  boundary is now the most that join widens before any letter. Average over-estimate on random words:
+  Telugu 1.4% (was 1.7–1.8%), Gujarati 1.2% (1.3%), Marathi 0.2% (0.3%), Kannada 1.5–1.7%
+  (1.8–1.9%). Exhaustively still ≤ 0.04% narrow.
+- **Faster export engine**: each lookup records which glyphs can start it, and positions that cannot
+  are skipped; output is byte-identical (Nirmala UI 534 s → 316 s, Myanmar Text 488 s → 108 s alone).
+  `XAMLFIT_DEBUG=1 fonts export` prints the time per font file and per script section. With `--hinted`, GDI
+  hinting now runs for each font file as soon as its shapes are done (still one file at a time)
+  instead of after all of them.
 - **Myanmar**: a stacked consonant (ဎ္ဘ) narrows by a value kept per medial or vowel sign on the
   stacked consonant, and a syllable boundary is keyed by the marks of the first cluster instead of its
   last two characters, with every next cluster tried by its first drawn character and its upper marks.
   Generated words 4.2% wide on average (was 7.7%), real Burmese 0.90% (was 0.79%, the price of
-  trying more next clusters). The boundary search runs in parallel; a full export takes about 26
-  minutes instead of 20.
+  trying more next clusters). The boundary search runs in parallel.
 - **Variable fonts in Display mode** are measured: WPF rounds each glyph's linear width instead of
   hinting it (rounded up from 0.485), and the tool rounds kerning toward zero.
 - **A family name WPF reads as family plus face name** (`Segoe UI Variable` → Segoe UI,

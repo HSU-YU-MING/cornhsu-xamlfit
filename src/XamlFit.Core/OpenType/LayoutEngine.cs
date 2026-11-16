@@ -22,6 +22,10 @@ internal sealed class LayoutEngine
     private readonly bool _gpos;
     private readonly Dictionary<int, Dictionary<int, int>> _coverage = [];
     private readonly Dictionary<int, Dictionary<int, int>> _classes = [];
+    // 每個 lookup 的子表、旗標，與「可能從這個字開始」的字符（子表第一個覆蓋表的聯集；null = 不知道，每個位置都試）。
+    // 一個字串要跑幾百個 lookup，大部分只管幾個字：先看第一個字在不在裡面，匯出快很多
+    private readonly Dictionary<int, LookupInfo?> _lookups = [];
+    private sealed record LookupInfo(List<(int Type, int Offset)> Subs, Filter Filter, bool[]? First);
     private readonly int _glyphClassDef, _markAttachClassDef, _markGlyphSets;
 
     /// <summary>一個 lookup 的 LookupFlag 與附加符號集合（UseMarkFilteringSet 時）。</summary>
@@ -153,7 +157,7 @@ internal sealed class LayoutEngine
         foreach (var (li, tags) in lookups)
         {
             var global = tags.Any(t => !formFeatures.Contains(t));
-            var single = noSingle is not null && LookupOffset(li) is var lo and >= 0 && Subtables(lo).All(s => s.Type == 1);
+            var single = noSingle is not null && Info(li) is { } info && info.Subs.All(s => s.Type == 1);
             bool Applies(Glyph g) => (global || (g.Form is { } f && tags.Contains(f))) && !(single && noSingle!(g));
             ApplyLookup(li, buf, Applies);
         }
@@ -174,22 +178,63 @@ internal sealed class LayoutEngine
         }
     }
 
+    private LookupInfo? Info(int lookupIndex)
+    {
+        if (_lookups.TryGetValue(lookupIndex, out var info)) return info;
+        var lookup = LookupOffset(lookupIndex);
+        if (lookup < 0) return _lookups[lookupIndex] = null;
+        var subs = Subtables(lookup).ToList();
+        var glyphs = new List<int>();
+        var known = true;
+        foreach (var (type, sub) in subs)
+        {
+            var coverage = FirstCoverage(type, sub);
+            if (coverage == -2) continue;   // 這支引擎不套的子表
+            if (coverage < 0) { known = false; break; }
+            glyphs.AddRange(CoverageMap(coverage).Keys);
+        }
+        bool[]? first = null;
+        if (known)
+        {
+            first = new bool[glyphs.Count == 0 ? 0 : glyphs.Max() + 1];
+            foreach (var g in glyphs) first[g] = true;
+        }
+        return _lookups[lookupIndex] = new LookupInfo(subs, FilterOf(lookup), first);
+    }
+
+    // 子表的第一個字的覆蓋表；-1 = 讀不出來（每個位置都試），-2 = 這支引擎不套這種子表
+    private int FirstCoverage(int type, int sub)
+    {
+        int Context(bool chain)
+        {
+            var format = _r.U16(sub);
+            if (format is 1 or 2) return sub + _r.U16(sub + 2);
+            if (format != 3) return -1;
+            if (!chain) return _r.U16(sub + 2) == 0 ? -1 : sub + _r.U16(sub + 6);
+            var input = sub + 4 + _r.U16(sub + 2) * 2;
+            return _r.U16(input) == 0 ? -1 : sub + _r.U16(input + 2);
+        }
+        if (_gpos)
+            return type switch { 1 or 2 => sub + _r.U16(sub + 2), 7 => Context(false), 8 => Context(true), _ => -2 };
+        return type switch { 1 or 2 or 4 or 8 => sub + _r.U16(sub + 2), 5 => Context(false), 6 => Context(true), _ => -2 };
+    }
+
     private void ApplyLookup(int lookupIndex, List<Glyph> buf, Func<Glyph, bool> applies)
     {
-        var lookup = LookupOffset(lookupIndex);
-        if (lookup < 0) return;
-        var subs = Subtables(lookup).ToList();
-        var filter = FilterOf(lookup);
+        if (Info(lookupIndex) is not { } info) return;
+        var (subs, filter, first) = (info.Subs, info.Filter, info.First);
+        bool Starts(int glyph) => first is null || glyph < first.Length && first[glyph];
+        if (first is not null && !buf.Exists(g => Starts(g.Id))) return;
         if (!_gpos && subs.Count > 0 && subs[0].Type == 8)
         {
             for (var i = buf.Count - 1; i >= 0; i--)
-                if (applies(buf[i]) && !Skip(buf[i].Id, filter)) foreach (var (_, sub) in subs) if (ReverseChain(sub, buf, i, filter)) break;
+                if (Starts(buf[i].Id) && applies(buf[i]) && !Skip(buf[i].Id, filter)) foreach (var (_, sub) in subs) if (ReverseChain(sub, buf, i, filter)) break;
             return;
         }
         var pos = 0;
         while (pos < buf.Count)
         {
-            if (applies(buf[pos]) && !Skip(buf[pos].Id, filter) && ApplyAt(subs, buf, pos, filter, out var next)) pos = Math.Max(next, pos + 1);
+            if (Starts(buf[pos].Id) && applies(buf[pos]) && !Skip(buf[pos].Id, filter) && ApplyAt(subs, buf, pos, filter, out var next)) pos = Math.Max(next, pos + 1);
             else pos++;
         }
     }
@@ -197,10 +242,8 @@ internal sealed class LayoutEngine
     /// <summary>在一個位置套一個 lookup（巢狀呼叫也用它）。</summary>
     private bool ApplyAt(int lookupIndex, List<Glyph> buf, int pos)
     {
-        var lookup = LookupOffset(lookupIndex);
-        if (lookup < 0 || pos < 0 || pos >= buf.Count) return false;
-        var filter = FilterOf(lookup);
-        return !Skip(buf[pos].Id, filter) && ApplyAt(Subtables(lookup).ToList(), buf, pos, filter, out _);
+        if (pos < 0 || pos >= buf.Count || Info(lookupIndex) is not { } info) return false;
+        return !Skip(buf[pos].Id, info.Filter) && ApplyAt(info.Subs, buf, pos, info.Filter, out _);
     }
 
     private bool ApplyAt(List<(int Type, int Offset)> subs, List<Glyph> buf, int pos, Filter filter, out int next)
@@ -321,7 +364,9 @@ internal sealed class LayoutEngine
 
     // ── 表格讀取 ──
 
-    private int CoverageIndex(int offset, int glyph)
+    private int CoverageIndex(int offset, int glyph) => CoverageMap(offset).TryGetValue(glyph, out var idx) ? idx : -1;
+
+    private Dictionary<int, int> CoverageMap(int offset)
     {
         if (!_coverage.TryGetValue(offset, out var map))
         {
@@ -339,7 +384,7 @@ internal sealed class LayoutEngine
                 }
             _coverage[offset] = map;
         }
-        return map.TryGetValue(glyph, out var idx) ? idx : -1;
+        return map;
     }
 
     private int ClassOf(int offset, int glyph)

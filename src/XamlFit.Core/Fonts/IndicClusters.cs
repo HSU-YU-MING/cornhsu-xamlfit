@@ -133,8 +133,17 @@ public static class IndicClusters
     public static string BoundaryKey(IEnumerable<int> cluster) => ">" + Key(cluster);
 
     /// <summary>這個叢集的交界變寬量的鍵（見 <see cref="Script.BoundaryByMarks"/>）。</summary>
-    public static string BoundaryKey(Script s, IReadOnlyList<int> cluster) =>
-        BoundaryKey(s.BoundaryByMarks && cluster.Count > 2 ? cluster.Where(cp => !s.Consonants.Contains(cp)) : cluster);
+    public static string BoundaryKey(Script s, IReadOnlyList<int> cluster) => BoundaryKey(BoundaryOf(s, cluster));
+
+    private static IEnumerable<int> BoundaryOf(Script s, IReadOnlyList<int> cluster) =>
+        s.BoundaryByMarks && cluster.Count > 2 ? cluster.Where(cp => !s.Consonants.Contains(cp)) : cluster;
+
+    /// <summary>後一個叢集的種類：畫出來的第一個字 + 帶哪些上方符號（匯出時每一種挑最短的一個試）。</summary>
+    public static int[] NextClass(Script s, IReadOnlyList<int> cluster) =>
+        [VisualOrder(s, cluster)[0], .. cluster.Where(s.UpperMarks.Contains).Distinct().Order()];
+
+    // （試過交界依兩邊記：前一個叢集的符號 + 後一個叢集的種類。真實文字的多算 0.87 個百分點都在交界，依兩邊記會降到 0.04%，
+    // 但每一種後一個叢集只拿最短的一個試，同一種裡帶 ့、ွ、ှ 的撐得更開：產生的字偏窄 12%。要全部試是 4 萬 × 4 萬，撤掉）
 
     /// <summary>表是依符號記的。沒有這個記號的舊度量檔：交界照最後兩個字記。</summary>
     public static readonly string BoundaryMarksMarker = BoundaryKey([1]);
@@ -162,6 +171,23 @@ public static class IndicClusters
     public static string RaChainKey3(int second, int third) => $"+4,{second},{third}";
     public static string RaChainKey3(int second, int third, int sign) => $"+4,{second},{third},{sign}";
     public const string RaChainMarker = "+4";
+
+    /// <summary>
+    /// 最後一個子音不帶符號的三子音連寫（第一個子音不是 ra）：扣掉「C1 + C2 的連寫值」（<see cref="ConjunctBare"/>）之後、所有 C1 裡最寬的；
+    /// 量的時候加回這個字串的 C1 + C2 連寫值。卡納達文：第一個子音不同時整串差 5～15 px，扣掉之後只差 1～4 px。沒有這個鍵就照一般的鍵。
+    /// </summary>
+    public static string ChainBareKey3(int second, int third) => $"+6,{second},{third}";
+
+    /// <summary>
+    /// 兩個子音的連寫後面接字時最多被撐開多少（會互相影響的文字系統，依兩個子音記；後一個子音的各種形式、後面接每一個單獨的字裡最寬的）。
+    /// 量的時候取代後一個叢集自己的交界值：泰盧固文 హ్భ + క 寬 0.17 px，భ + క 不撐開。表裡有 <see cref="ConjunctTrailMarker"/> 才有這種鍵，沒有鍵 = 0。
+    /// </summary>
+    public static string ConjunctTrailKey(int first, int second) => $"+7,{first},{second}";
+    public const string ConjunctTrailMarker = "+7";
+
+    /// <summary>「C1 + virama」接不帶符號的 C2 時的連寫值（匯出與量的時候同一個查法）。</summary>
+    public static int ConjunctBare(IReadOnlyDictionary<string, int> table, int first, int second) =>
+        table.TryGetValue(ConjunctKey(first, second, -1), out var v) || table.TryGetValue(ConjunctKey(first, second), out v) ? v : 0;
 
     /// <summary>「鼻化／送氣符號最多讓疊字變寬多少」的鍵（只有 <see cref="Script.StackKeyed"/> 的文字系統有）。</summary>
     public const string ModifierKey = "+2";   // 存成 [改變量, -2]，跟 TrailingKey 同一種寫法
