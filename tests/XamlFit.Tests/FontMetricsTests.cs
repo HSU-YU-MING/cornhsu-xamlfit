@@ -322,4 +322,48 @@ public class FontResolverTests
         }
         finally { Directory.Delete(dir, true); }
     }
+
+    private static FontMetrics Plain(string family, int weight) => new()
+    {
+        Family = family, Weight = weight, UnitsPerEm = 1000, DefaultAdvance = 500,
+        Ranges = [new AdvanceRange(0x20, 0x7E, weight == 700 ? 600 : 500)],
+    };
+
+    [Fact]
+    public void A_name_that_is_not_an_installed_family_is_read_as_family_plus_face_name_like_wpf()
+    {
+        // WPF：「Segoe UI Variable」畫 Segoe UI、「Times New Roman Italic」是斜體、「Arial Foo Bar」照 XAML 的字重
+        FontMetrics[] faces = [Plain("Segoe UI", 400), Plain("Segoe UI", 700)];
+        var resolver = new FontResolver(faces, installedFamilies: ["Segoe UI", "Segoe UI Historic", "Segoe UI Variable Text"]);
+        Assert.Equal(700, resolver.Resolve("Segoe UI Variable", 700, FontStyleKind.Normal, "Segoe UI").Chain[0].Weight);
+        Assert.Equal(400, resolver.Resolve("Segoe UI Variable", 400, FontStyleKind.Normal, "Segoe UI").Chain[0].Weight);
+        Assert.Equal(700, resolver.Resolve("Segoe UI Bold", 400, FontStyleKind.Normal, "Segoe UI").Chain[0].Weight);
+        Assert.Empty(resolver.Resolve("Segoe UI Historic", 400, FontStyleKind.Normal, "Segoe UI").Chain);       // 真的另一支字型，只是沒匯出
+        Assert.Empty(resolver.Resolve("Segoe UI Variable Text", 400, FontStyleKind.Normal, "Segoe UI").Chain);  // 同上
+        Assert.Empty(resolver.Resolve("Segoe UI Foo Bold", 400, FontStyleKind.Normal, "Segoe UI").Chain);       // 混著：不知道 WPF 怎麼讀
+        // 舊的度量檔沒記裝了哪些家族：不拆
+        Assert.Empty(new FontResolver(faces).Resolve("Segoe UI Variable", 400, FontStyleKind.Normal, "Segoe UI").Chain);
+    }
+
+    [Fact]
+    public void Language_system_tables_are_stored_as_differences_and_read_back_whole()
+    {
+        var face = Plain("Indic", 400);
+        face = new FontMetrics
+        {
+            Family = face.Family, Weight = 400, UnitsPerEm = 1000, DefaultAdvance = 500, Ranges = face.Ranges,
+            Indic = new Dictionary<string, IReadOnlyDictionary<string, int>>
+            {
+                ["deva"] = new Dictionary<string, int> { ["2325"] = 10, ["2326"] = 20, ["+2325,2359"] = -300 },
+                ["deva/MAR"] = new Dictionary<string, int> { ["2325"] = 10, ["2326"] = 25, ["+2325,2359"] = -300, ["2400"] = 5 },
+                ["deva/HIN"] = new Dictionary<string, int> { ["2325"] = 10 },
+            },
+        };
+        var json = MetricsFile.FromMetrics([face], "test", new DateOnly(2026, 11, 16)).ToJson();
+        var back = MetricsFile.Parse(json).ToMetrics().Single().Indic!;
+        foreach (var key in face.Indic!.Keys) Assert.Equal(face.Indic[key], back[key]);
+        var raw = System.Text.Json.JsonDocument.Parse(json).RootElement.GetProperty("fonts")[0].GetProperty("indic");
+        Assert.Equal(2, raw.GetProperty("deva/MAR").GetArrayLength());   // 只有不一樣的兩項
+        Assert.Equal(2, raw.GetProperty("deva/HIN").GetArrayLength());   // 兩項「沒有」
+    }
 }

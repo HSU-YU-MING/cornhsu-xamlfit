@@ -101,4 +101,20 @@ public class DisplayModeTests
         Assert.True(back.TryHintedAdvance('a', 12, out var a) && a == 7);      // 0.55 × 12 = 6.6 → 7
         Assert.False(back.TryHintedAdvance('a', 11, out _));
     }
+
+    [Fact]
+    public void A_variable_font_rounds_each_linear_width_and_kerning_toward_zero()
+    {
+        // WPF 對可變字型的 Display 寬度：每個字的線性寬度四捨五入（.49x 也可能進位：多加 0.015），字距往零的方向取整
+        var face = new FontMetrics
+        {
+            Family = "Var", UnitsPerEm = 1000, DefaultAdvance = 500, Variable = true,
+            Ranges = [new AdvanceRange('A', 'A', 600), new AdvanceRange('B', 'B', 649), new AdvanceRange('V', 'V', 640)],
+            Kerning = new KerningTable { Lookups = [new KerningLookup { Subtables = [new KerningPairs { Pairs = new Dictionary<long, int> { [KerningPairs.Key('A', 'V')] = -160 } }] }] },
+        };
+        var lookup = new FontResolver([face]).Resolve("Var", 400, FontStyleKind.Normal, "Var");
+        Assert.Equal(6 + 7, TextMeasure.MeasureDisplay("AB", lookup, 10, [1.0]).WidthPx, 3);       // 6.0 → 6、6.49 → 7
+        Assert.Equal(6 + 6 - 1, TextMeasure.MeasureDisplay("AV", lookup, 10, [1.0]).WidthPx, 3);   // 6.4 → 6，字距 -1.6 → -1
+        Assert.True(TextMeasure.MeasureDisplay("AV", lookup, 10, [1.0]).IsReliable);
+    }
 }

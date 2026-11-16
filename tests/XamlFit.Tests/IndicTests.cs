@@ -88,6 +88,16 @@ public class IndicTests
     }
 
     [Fact]
+    public void A_three_consonant_chain_uses_the_value_kept_for_the_sign_on_its_last_consonant()
+    {
+        // 帶母音符號的三子音連寫另外記（不分的話卡納達、泰盧固、奧里亞文三子音的字平均偏寬 35～46%）
+        var data = new Dictionary<string, int> { [IndicClusters.ChainKey3(Ssa, Ra)] = -500, [IndicClusters.ChainKey3(Ssa, Ra, AaSign)] = -200 };
+        var face = Face(new() { ["deva"] = data });
+        Assert.Equal((400 * 6 - 200) / 100.0, M(face, S(Ka, Virama, Ssa, Virama, Ra, AaSign)).WidthPx, 3);
+        Assert.Equal((400 * 6 - 500) / 100.0, M(face, S(Ka, Virama, Ssa, Virama, Ra, ISign)).WidthPx, 3);   // 這個符號沒有自己的值：用一般的
+    }
+
+    [Fact]
     public void A_three_consonant_chain_whose_last_consonant_has_a_nukta_uses_its_own_change()
     {
         // 奧里亞文 ନ୍ଫ୍ଯ଼：WPF 三個 virama 都看得見（不連寫），帶 nukta 的另外記

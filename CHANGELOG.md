@@ -193,8 +193,20 @@ that over-estimated the available width.
   the font's family or an instance family. `--hinted` leaves variable fonts out: WPF's Display-mode
   widths for them are not GDI's.
 - **Gzipped metrics files**: `fonts export --out xamlfit.fonts.json.gz` writes the file gzipped (a
-  20 MB file becomes about 4 MB); every command reads either, and the default lookup also tries
-  `xamlfit.fonts.json.gz`.
+  30 MB file becomes about 5 MB); every command reads either, and the default lookup also tries
+  `xamlfit.fonts.json.gz`. Schema version 2 stores an Indic language system's table as its
+  differences from the script's default table (about 1 MB less); version 1 files still read.
+- **Three-consonant chains keep a value per sign on the last consonant**, and the export engine
+  applies the mark-positioning features (`abvm`, `blwm`, `mark`, `mkmk`), where Nirmala UI spaces
+  two stacked below-base forms. Average over-estimate on random words: Kannada 2.7–2.9% (was
+  4.5–5.0%), Telugu 1.7–1.8% (3.6–3.7%), Odia 1.6–2.0% (3.7–4.3%), Malayalam 1.0% (1.7–1.9%), Khmer
+  1.4% (2.5%). A Malayalam pre-base ra after a visible virama is drawn before the second consonant;
+  a Khmer vowel sign over a chain is tried with every first consonant (it changes the base's width).
+- **Variable fonts in Display mode** are measured: WPF rounds each glyph's linear width instead of
+  hinting it (rounded up from 0.485), and the tool rounds kerning toward zero.
+- **A family name WPF reads as family plus face name** (`Segoe UI Variable` → Segoe UI,
+  `Times New Roman Italic` → italic) resolves the same way, when the metrics file lists the families
+  installed where it was exported (`installedFamilies`, written by every new export).
 
 ### Verified
 
@@ -222,7 +234,8 @@ that over-estimated the available width.
   of 4,000 words and sentences): worst under-estimate 0.04%, about 4% wide on average; the 32 strings
   of Windows' mn-Mong locale data: 0.01% and 5.2%.
 - **Variable fonts** against `FormattedText` (Segoe UI Variable, 15 named instances, 2,415 comparisons):
-  mean error 0.016%, worst under-estimate 0.029%, worst over-estimate 0.09%.
+  mean error 0.016%, worst under-estimate 0.029%, worst over-estimate 0.09%. Display mode: 9,900
+  widths over 15 instances, eleven sizes and five scalings, none narrower.
 - **Display mode** against `FormattedText` (`prototype/WpfOracle --display` / `--display-check`; 13,200
   widths over ten fonts, eleven sizes, five scalings): with `--hinted`, all 13,200 measurable, 13,036
   exact, none narrower (with `hdmx` alone: 2,781 measurable, the rest reported as not measurable).

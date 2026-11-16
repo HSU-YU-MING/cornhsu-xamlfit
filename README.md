@@ -123,12 +123,14 @@ and श differently for Marathi), with pre-base vowel signs drawn first and two-
 Text is the sum of its clusters, plus — for each pair of consonants joined by a virama — the smallest
 narrowing any form of the second one produces, with a separate value for vowel signs and nukta forms
 that narrow less than the bare consonant (Odia ୁ, Kannada ೃ), never narrower than the second cluster
-alone; a chain of exactly three consonants adds a value kept per last two consonants (the widest over
-every first one), longer chains the largest any chain showed; and the largest kerning seen before
-punctuation. The export engine applies the shaping features in stages, as Windows does, and honours
-lookup flags — without them Nirmala UI's Odia conjuncts never narrowed. It does not reorder a
+alone; a chain of exactly three consonants adds a value kept per last two consonants and the sign on
+the last (the widest over every first one), longer chains the largest any chain showed; and the largest
+kerning seen before punctuation. The export engine applies the shaping features in stages, as Windows
+does, honours lookup flags — without them Nirmala UI's Odia conjuncts never narrowed — and applies the
+mark-positioning features too, since a below-base form can widen there (Nirmala UI's `blwm` spaces two
+stacked below-base forms by 550 units). It does not reorder a
 syllable the way WPF does, so where WPF would — a below-base vowel sign moves next to the base
-(হ্যৃ: ৃ joins হ), a pre-base form (Telugu and Malayalam ra) is drawn first, a reph goes after its
+(হ্যৃ: ৃ joins হ), a pre-base form (Telugu and Malayalam ra) is drawn before its base, a reph goes after its
 consonant, Odia's candrabindu attaches to the first consonant — each join is also shaped that way and
 the widest kept. In Gujarati and Telugu a cluster changes its neighbour (WPF kerns across a trailing
 anusvara or vowel sign), so every cluster boundary also adds the largest widening that cluster — or
@@ -138,8 +140,8 @@ three-consonant chain and 20,000 chains with signs — about 2.4 million strings
 (`WpfOracle --indic-gen` with `XF_GEN_EXHAUSTIVE=1`): worst under-estimate 0.03%. That check found
 rare joins the previous version measured up to 35% narrow (Odia ଧ୍ଯି, Malayalam യ്യൢ, Bengali হ্যৃ,
 Kannada ಜ್ಞು); random sampling had missed them twice. On realistic random words (two independent sets)
-text measures on average 0.4% wide in Marathi, 1.0% Bengali and Gurmukhi, 1.5% Gujarati, 1.7–1.9%
-Malayalam, 3.6–3.7% Telugu, 3.7–4.3% Odia, 4.5–5.0% Kannada; 290 Marathi and 300 Tamil strings from
+text measures on average 0.4% wide in Marathi, 0.8% Bengali and Gurmukhi, 1.0% Malayalam, 1.4% Gujarati,
+1.6–2.0% Odia, 1.7–1.8% Telugu, 2.7–2.9% Kannada; 290 Marathi and 300 Tamil strings from
 Playnite and ScreenToGif stay within 0.18%. Not measured: the vocalic-L signs of Odia, Kannada and
 Telugu, Telugu's lone length mark ౖ, and the obsolete ఴ — WPF draws them in ways the export engine
 does not.
@@ -184,8 +186,11 @@ exact, the rest wider, none narrower. The tool measures every scaling in `displa
 100–200%) and keeps the widest; a pixel size the file has no hinted widths for is reported as not
 measurable, because hinting can widen a glyph by several pixels (Yu Gothic UI says hinting never
 changes widths and still does). An app that only supports some scalings can say so. Variable fonts
-are not measured in Display mode: WPF's widths for them are not GDI's (Segoe UI Variable Small at
-10 px: WPF draws an `i` 3 px wide, GDI hints it to 2 px) and not rounded linear widths either.
+are different: WPF does not hint them, it rounds each glyph's linear width (Segoe UI Variable Small at
+10 px draws an `i` 3 px wide where GDI hints it to 2 px). The tool rounds the same way — a width just
+under half a pixel may round either way, so it rounds up from 0.485 — and rounds kerning toward zero,
+since WPF's own rounding of it follows no rule found: all 15 named instances, 9,900 widths, none
+narrower.
 
 **Right-to-left and Thai text, against `FormattedText`.** Hebrew, Thai and Lao add up like Latin
 (≤ 0.02%). Arabic, Persian and Urdu letters change shape with their neighbours, so
@@ -343,8 +348,8 @@ xamlfit fonts export --family "Segoe UI" --family "Microsoft JhengHei UI"
 git add xamlfit.fonts.json
 ```
 
-A file with many families is large (37 families with complex-script fonts: about 20 MB); written as
-`--out xamlfit.fonts.json.gz` it is gzipped to about a fifth, and every command reads either (the
+A file with many families is large (37 families with complex-script fonts: about 30 MB); written as
+`--out xamlfit.fonts.json.gz` it is gzipped to about a sixth, and every command reads either (the
 default lookup tries `xamlfit.fonts.json`, then `xamlfit.fonts.json.gz`).
 
 `xamlfit.fonts.json` contains **numbers only** — advance widths, kerning adjustments, and the widths
@@ -360,9 +365,11 @@ It will not substitute a font it has for one it lacks:
 - a variable font answers for its named instances only, under the family names WPF uses —
   Segoe UI Variable becomes `Segoe UI Variable Text`, `Small` and `Display`, each with its Light,
   Semilight, Regular, Semibold and Bold widths from the font's `HVAR` and kerning variations.
-  `Segoe UI Variable` itself is not a family to WPF: it reads the name as Segoe UI plus a face name
-  and draws Segoe UI. The tool reports it as a font not in the file (declare it in `absentFonts`,
-  or write the name WPF knows);
+  `Segoe UI Variable` itself is not a family to WPF: it reads a name that is not an installed family
+  as the longest installed family it starts with plus a face name — Segoe UI, Bold if `FontWeight`
+  says so; `Times New Roman Italic` is italic, an unknown word is ignored. The tool does the same when
+  the file lists the families installed where it was exported (new exports do), so that a real font
+  missing from the file — `Segoe UI Historic` — is never measured as Segoe UI;
 - `TextFormattingMode="Display"` text is not measured with linear widths (measured against WPF:
   −37% to +45%); it needs hinted widths for its pixel size (`fonts export --hinted`).
 
@@ -489,8 +496,8 @@ fail a build, because a guess should not block someone's pull request.
 | Text set through properties not scanned (`ToolTip`, `Title`, watermark/hint attached properties, `Hyperlink`/`Span` content) | not seen at all |
 | Resource dictionaries merged in code at run time | every dictionary file is assumed merged; conflicting definitions make the value unknown |
 | Mongolian | the sum of the widest width each letter or ligature pair took in the same situation at export time, erring wide (about 4%); a letter in a situation the export never saw is not measurable; checked against generated words and 32 strings from Windows' locale data only |
-| Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala), Khmer, Myanmar, Tibetan | measured as the sum of grapheme clusters, erring wide (Kannada by up to 5%, Myanmar's generated words by 12%, real Burmese by 1.4%); never more than 0.18% narrow in the comparisons, including every two-consonant join of the Indic scripts and Khmer |
-| `TextFormattingMode="Display"` | measured from the font's hinted widths at every scaling in `displayScales`; a pixel size the font does not list, and any variable font, is not measurable |
+| Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala), Khmer, Myanmar, Tibetan | measured as the sum of grapheme clusters, erring wide (Kannada by up to 3%, Myanmar's generated words by 12%, real Burmese by 1.4%); never more than 0.18% narrow in the comparisons, including every two-consonant join of the Indic scripts and Khmer |
+| `TextFormattingMode="Display"` | measured from the font's hinted widths at every scaling in `displayScales` (variable fonts: rounded linear widths); a pixel size a static font does not list is not measurable |
 | Arabic-script fonts whose contextual rules reach further than three letters | the letters involved, or the whole font, are reported as not measurable (see above) |
 | Arabic digits | WPF swaps 0–9 for Arabic-Indic digits in Arabic text; both are measured and the wider one is used |
 | Ligatures other than Arabic (`fi`, `ffl`…) | not applied; covered by the text-width comparison above (worst under-estimate 0.025%) |

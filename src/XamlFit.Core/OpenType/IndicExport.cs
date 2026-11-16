@@ -17,7 +17,9 @@ internal static class IndicExport
     private static readonly string[][] Full =
         [["ccmp", "locl"], ["nukt"], ["akhn"], ["rphf"], ["rkrf"], ["pref"], ["blwf"], ["abvf"], ["half"], ["pstf"], ["vatu"], ["cjct"], ["cfar"],
          ["init", "pres", "abvs", "blws", "psts", "haln", "calt", "rclt", "liga", "clig"]];
-    private static readonly HashSet<string> Position = ["kern", "dist"];
+    // 定位：字距之外，下加／上加符號的定位特性裡也可能改寬度（Nirmala UI 的 blwm：兩個下加形相連時把前一個撐開 550 單位；
+    // 不套的話奧里亞文三子音連寫偏窄到 27%）。這支引擎只做會改寬度的單一／成對／上下文定位，附加符號的對齊不影響寬度
+    private static readonly HashSet<string> Position = ["kern", "dist", "abvm", "blwm", "mark", "mkmk"];
     private static readonly HashSet<string> NoForms = [];
     // 除錯：XAMLFIT_INDIC_TRACE="09B9,09CD,09AF,09C3;…" 印出這些序列排出來的字形（跟 WpfOracle --glyphs 比）
     private static readonly HashSet<string>? Trace = Environment.GetEnvironmentVariable("XAMLFIT_INDIC_TRACE") is { Length: > 0 } t ? [.. t.Split(';')] : null;
@@ -54,7 +56,7 @@ internal static class IndicExport
                 var pos = posLangSys >= 0 ? gpos!.Lookups(posLangSys, Position) : null;
 
                 // moveFront：形狀換完之後，把從這個位置來的字符搬到最前面再套字距（WPF 把前置形 —— 泰盧固文、馬拉雅拉姆文的 ra —— 畫在主子音前面）
-                int Width(IReadOnlyList<int> cps, List<SortedDictionary<int, HashSet<string>>> stages, int moveFront = -1)
+                int Width(IReadOnlyList<int> cps, List<SortedDictionary<int, HashSet<string>>> stages, int moveFront = -1, int before = -1)
                 {
                     var input = cps.Select((cp, i) => new LayoutEngine.Glyph(cmap.TryGetValue(cp, out var g) ? g : 0, i, null)).ToList();
                     var shaped = input;
@@ -65,7 +67,12 @@ internal static class IndicExport
                         if (moveFront >= 0 && k == stages.Count - 1)
                         {
                             bool Moves(LayoutEngine.Glyph g) => g.Cluster == moveFront || g.Cluster == moveFront - 1 && cps[moveFront - 1] == script.Virama;
-                            shaped = [.. shaped.Where(Moves), .. shaped.Where(g => !Moves(g))];
+                            var moving = shaped.Where(Moves).ToList();
+                            var rest = shaped.Where(g => !Moves(g)).ToList();
+                            // before：搬到這個位置的字形前面（沒有就搬到最前面）
+                            var at = before >= 0 ? rest.FindIndex(g => g.Cluster == before) : 0;
+                            rest.InsertRange(Math.Max(at, 0), moving);
+                            shaped = rest;
                         }
                         shaped = gsub.Shape(shaped, stages[k], NoForms);
                     }
@@ -107,11 +114,13 @@ internal static class IndicExport
                     return false;
                 }
                 // 照 order 排、形狀換完後把 at 那個子音的字形搬到最前面的寬度
-                int Front(IReadOnlyList<int> order, int at)
+                int Front(IReadOnlyList<int> order, int at, int beforeCp = -1)
                 {
                     var i = 1;
                     while (i < order.Count && order[i] != at) i++;
-                    return Width(order, full, i < order.Count ? i : -1);
+                    var b = -1;
+                    if (beforeCp >= 0) for (var k = 0; k < order.Count; k++) if (order[k] == beforeCp) { b = k; break; }
+                    return Width(order, full, i < order.Count ? i : -1, b);
                 }
                 var deltas = new Dictionary<string, int>(StringComparer.Ordinal);
                 var widths = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -258,7 +267,7 @@ internal static class IndicExport
                     // （帶母音符號的也試，只是不帶鼻化符號、介音：高棉文 ស្ត្រី 這種帶母音的三個子音很常見）
                     var lasts = all.Where(c => script.Consonants.Contains(c[0]) && c[^1] != script.Virama
                                                && (!compact || !c.Any(cp => script.Modifiers.Contains(cp) || script.Medials.Any(m => m.Contains(cp))))).GroupBy(c => c[0]).ToList();
-                    int chain = 0, specialMax = 0, specialNuktaMax = 0;
+                    int chain = 0, specialMax = 0;
                     int Residual(int[] h1, int[] h2, int[] c3)
                     {
                         var together = Width(IndicClusters.VisualOrder(script, [.. h1, .. h2, .. c3]), full);
@@ -276,7 +285,12 @@ internal static class IndicExport
                             together = Math.Max(together, Width(IndicClusters.VisualOrder(script, modsMoved), full));
                         // reph 移到後面；前置形移到最前面
                         if (h1[0] == script.Ra) together = Math.Max(together, Width(IndicClusters.VisualOrder(script, [.. h2, .. c3, .. h1]), full));
-                        if (preBaseForm.Contains(c3[0])) together = Math.Max(together, Front(IndicClusters.VisualOrder(script, [.. h1, .. h2, .. c3]), c3[0]));
+                        if (preBaseForm.Contains(c3[0]))
+                        {
+                            together = Math.Max(together, Front(IndicClusters.VisualOrder(script, [.. h1, .. h2, .. c3]), c3[0]));
+                            // 第一個子音的 virama 看得見時音節在那裡斷開：前置形只搬到第二個子音前面（馬拉雅拉姆文 ട്ച്ര）
+                            together = Math.Max(together, Front(IndicClusters.VisualOrder(script, [.. h1, .. h2, .. c3]), c3[0], h2[0]));
+                        }
                         if (preBaseForm.Contains(h2[0])) together = Math.Max(together, Front(IndicClusters.VisualOrder(script, [.. h1, .. h2, .. c3]), h2[0]));
                         return together - widths[IndicClusters.Key(h1)] - widths[IndicClusters.Key(h2)] - widths[IndicClusters.Key(c3)];
                     }
@@ -295,48 +309,52 @@ internal static class IndicExport
                             // 例外：後兩個子音都是下加形／後加形時主子音是 C1，母音符號掛在 C1 上跟它成合字（泰盧固文 ఫ్ఞ్యె 的 ె 跟 ఫ 合成一個字）：
                             // 多寬多少看 C1，每個 C1 都試（不帶鼻化符號的那些）
                             var sample = residuals.OrderByDescending(x => x.Change).Take(2).Concat(residuals.Where(x => x.Head[0] == script.Ra)).ToList();
-                            var signOnFirst = nonBase.Contains(h2[0]) && nonBase.Contains(forms.Key);
-                            int extra = 0, nuktaExtra = 0;
+                            var signOnFirst = script.BaseIsFirst || nonBase.Contains(h2[0]) && nonBase.Contains(forms.Key);
+                            // 依最後一個子音帶的符號分開記（跟兩子音連寫一樣；不分的話卡納達、泰盧固、奧里亞文三子音的字平均偏寬 35～46%）
+                            var bySign = new Dictionary<int, int> { [-1] = widest };
                             foreach (var form in forms)
                             {
                                 if (ReferenceEquals(form, bare)) continue;
                                 var hasNukta = script.Nukta >= 0 && form.Contains(script.Nukta);
+                                var sign = IndicClusters.SignOf(script, form, 0);
+                                var extra = 0;
                                 foreach (var (h1, change) in signOnFirst && !hasNukta && !form.Any(script.Modifiers.Contains) ? residuals : sample)
                                 {
                                     var residual = Residual(h1, h2, form);
-                                    // 最後一個子音帶 nukta：WPF 整串都不連寫（奧里亞文 ନ୍ଫ୍ଯ଼ 三個 virama 都看得見，這支引擎照樣連成合字，窄 30%）——
-                                    // 另外記，不要拖累不帶 nukta 的
-                                    if (hasNukta) nuktaExtra = Math.Max(nuktaExtra, Math.Max(residual, 0) - change);
-                                    else extra = Math.Max(extra, residual - change);
+                                    // 最後一個子音帶 nukta：WPF 整串都不連寫（奧里亞文 ନ୍ଫ୍ଯ଼ 三個 virama 都看得見，這支引擎照樣連成合字，窄 30%）
+                                    if (hasNukta) residual = Math.Max(residual, 0);
+                                    extra = Math.Max(extra, residual - change);
                                 }
+                                bySign[sign] = Math.Max(bySign.GetValueOrDefault(sign, widest), widest + extra);
                             }
-                            var value = widest + extra;
-                            var nuktaValue = widest + Math.Max(extra, nuktaExtra);
-                            chain = Math.Max(chain, nuktaValue);
+                            chain = Math.Max(chain, bySign.Values.Max());
                             if (Special(h2[0]))
                             {
-                                special.Add(IndicClusters.ChainKey3(h2[0], forms.Key));
-                                if (script.Nukta >= 0) special.Add(IndicClusters.ChainKey3(h2[0], forms.Key, script.Nukta));
-                                specialMax = Math.Max(specialMax, value);
-                                specialNuktaMax = Math.Max(specialNuktaMax, nuktaValue);
+                                foreach (var (sign, v) in bySign)
+                                {
+                                    special.Add(sign < 0 ? IndicClusters.ChainKey3(h2[0], forms.Key) : IndicClusters.ChainKey3(h2[0], forms.Key, sign));
+                                    specialMax = Math.Max(specialMax, v);
+                                }
                             }
                             else
                             {
-                                if (value != 0) deltas[IndicClusters.ChainKey3(h2[0], forms.Key)] = value;
-                                if (script.Nukta >= 0 && nuktaValue != value) deltas[IndicClusters.ChainKey3(h2[0], forms.Key, script.Nukta)] = nuktaValue;
+                                var general = bySign[-1];
+                                if (general != 0) deltas[IndicClusters.ChainKey3(h2[0], forms.Key)] = general;
+                                foreach (var (sign, v) in bySign)
+                                    if (sign >= 0 && v > general) deltas[IndicClusters.ChainKey3(h2[0], forms.Key, sign)] = v;
                             }
                         }
                     if (chain > 0)
                     {
                         deltas[IndicClusters.ChainKey] = chain;
                         // 這些組合裡最寬的（不拿全部組合的最大值：會被帶 nukta 的、母音符號掛在 C1 上的撐大，孟加拉文平均偏寬 0.9% → 1.3%）
-                        foreach (var key in special) deltas[key] = key.Count(c => c == ',') == 3 ? specialNuktaMax : specialMax;
+                        foreach (var key in special) deltas[key] = specialMax;
                         if (compact)
                             foreach (var h2 in heads)
                                 foreach (var forms in lasts)
                                 {
                                     deltas[IndicClusters.ChainKey3(h2[0], forms.Key)] = chain;
-                                    if (script.Nukta >= 0) deltas.Remove(IndicClusters.ChainKey3(h2[0], forms.Key, script.Nukta));
+                                    foreach (var key in deltas.Keys.Where(k => k.StartsWith(IndicClusters.ChainKey3(h2[0], forms.Key) + ",", StringComparison.Ordinal)).ToList()) deltas.Remove(key);
                                 }
                     }
                 }

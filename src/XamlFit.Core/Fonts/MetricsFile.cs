@@ -14,14 +14,28 @@ namespace XamlFit.Core.Fonts;
 /// </summary>
 public sealed class MetricsFile
 {
-    public const int CurrentSchemaVersion = 1;
+    /// <summary>
+    /// 2：印度系文字「文字系統/語言系統」的表只存跟預設語言系統不一樣的項目（<see cref="Removed"/> = 預設有、這個語言系統沒有）。
+    /// Nirmala UI 的天城文有六個語言系統，幾乎一模一樣：完整的度量檔少約 1 MB。讀 1 的檔案照舊。
+    /// </summary>
+    public const int CurrentSchemaVersion = 2;
+
+    /// <summary>語言系統的差異表裡「這一項預設有、這個語言系統沒有」。</summary>
+    private const int Removed = int.MinValue;
 
     [JsonPropertyName("schemaVersion")] public int SchemaVersion { get; set; } = CurrentSchemaVersion;
     [JsonPropertyName("generatedBy")] public string GeneratedBy { get; set; } = "xamlfit";
     [JsonPropertyName("generatedOn")] public string GeneratedOn { get; set; } = "";
     [JsonPropertyName("note")] public string Note { get; set; } =
-        "Advance widths, kerning adjustments and Arabic letter-form widths only. Contains no glyph outlines and no font software.";
+        "Advance widths, kerning adjustments and the widths of shaped letters and clusters only. Contains no glyph outlines and no font software.";
     [JsonPropertyName("fonts")] public List<FontEntry> Fonts { get; set; } = [];
+
+    /// <summary>
+    /// 匯出那台機器上裝了哪些家族（掃過的資料夾裡每支字型的家族名，含沒匯出的；只有名字）。
+    /// WPF 遇到不是家族名的名字會拆成「家族 + 字面名稱」（Segoe UI Variable → Segoe UI）；要先知道整個名字不是另一支裝著的字型，才能照做。
+    /// 舊的度量檔沒有這一欄：不拆。
+    /// </summary>
+    [JsonPropertyName("installedFamilies")] public List<string>? InstalledFamilies { get; set; }
 
     public sealed class FontEntry
     {
@@ -150,6 +164,46 @@ public sealed class MetricsFile
     //   這個檔案要進使用者的 repo，大小是設計條件，不是細節。
     //   手寫序列化：外層保持可讀的縮排，ranges 壓成一行。讀取端仍是標準 JSON。
 
+    // 語言系統的表 → 跟預設的差異
+    private static Dictionary<string, int> Diff(IReadOnlyDictionary<string, int> baseTable, IReadOnlyDictionary<string, int> table)
+    {
+        var diff = table.Where(kv => !baseTable.TryGetValue(kv.Key, out var v) || v != kv.Value).ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
+        foreach (var key in baseTable.Keys)
+            if (!table.ContainsKey(key)) diff[key] = Removed;
+        return diff;
+    }
+
+    // 連寫改變量的鍵是「+碼位」：存成 [改變量, -碼位]
+    // 「+a,b」存成 [改變量, -a, -b]；「+1」（後面接標點）存成 [改變量, -1]
+    // 「>碼位,…」（叢集交界）存成 [改變量, 0, 碼位, …]
+    private static List<int[]> EncodeIndic(IReadOnlyDictionary<string, int> table) =>
+        [.. table.OrderBy(c => c.Key, StringComparer.Ordinal)
+            .Select(c => c.Key.StartsWith('>') ? new[] { c.Value, 0 }.Concat(c.Key[1..].Split(',').Select(x => int.Parse(x, System.Globalization.CultureInfo.InvariantCulture))).ToArray()
+                : c.Key.StartsWith(IndicClusters.ConjunctPrefix, StringComparison.Ordinal)
+                ? new[] { c.Value }.Concat(c.Key[1..].Split(',').Select(x => -int.Parse(x, System.Globalization.CultureInfo.InvariantCulture))).ToArray()
+                : new[] { c.Value }.Concat(c.Key.Split(',').Select(x => int.Parse(x, System.Globalization.CultureInfo.InvariantCulture))).ToArray())];
+
+    private static Dictionary<string, int> DecodeIndic(List<int[]> rows) => rows.Where(r => r.Length >= 2)
+        .ToDictionary(r => r[1] == 0 ? IndicClusters.BoundaryKey(r.Skip(2))
+            : r[1] < 0 ? IndicClusters.ConjunctPrefix + string.Join(",", r.Skip(1).Select(x => -x)) : IndicClusters.Key(r.Skip(1)), r => r[0], StringComparer.Ordinal);
+
+    // schemaVersion 2 起，語言系統的表是跟預設的差異：合回去
+    private Dictionary<string, IReadOnlyDictionary<string, int>> DecodeIndic(Dictionary<string, List<int[]>> entries)
+    {
+        var decoded = entries.ToDictionary(kv => kv.Key, kv => DecodeIndic(kv.Value));
+        if (SchemaVersion < 2) return decoded.ToDictionary(kv => kv.Key, kv => (IReadOnlyDictionary<string, int>)kv.Value);
+        var result = new Dictionary<string, IReadOnlyDictionary<string, int>>();
+        foreach (var (key, table) in decoded)
+        {
+            if (!key.Contains('/') || !decoded.TryGetValue(key[..key.IndexOf('/')], out var baseTable)) { result[key] = table; continue; }
+            var merged = new Dictionary<string, int>(baseTable, StringComparer.Ordinal);
+            foreach (var (k, v) in table)
+                if (v == Removed) merged.Remove(k); else merged[k] = v;
+            result[key] = merged;
+        }
+        return result;
+    }
+
     public static MetricsFile FromMetrics(IEnumerable<FontMetrics> metrics, string toolVersion, DateOnly date)
     {
         var f = new MetricsFile
@@ -179,14 +233,8 @@ public sealed class MetricsFile
                 Kerning = ToEntries(m.Kerning),
                 Arabic = ToArabicEntries(m.Arabic),
                 Indic = m.Indic is { Count: > 0 } indic
-                    ? indic.ToDictionary(kv => kv.Key, kv => kv.Value.OrderBy(c => c.Key, StringComparer.Ordinal)
-                        // 連寫改變量的鍵是「+碼位」：存成 [改變量, -碼位]
-                        // 「+a,b」存成 [改變量, -a, -b]；「+1」（後面接標點）存成 [改變量, -1]
-                        // 「>碼位,…」（叢集交界）存成 [改變量, 0, 碼位, …]
-                        .Select(c => c.Key.StartsWith('>') ? new[] { c.Value, 0 }.Concat(c.Key[1..].Split(',').Select(x => int.Parse(x, System.Globalization.CultureInfo.InvariantCulture))).ToArray()
-                            : c.Key.StartsWith(IndicClusters.ConjunctPrefix, StringComparison.Ordinal)
-                            ? new[] { c.Value }.Concat(c.Key[1..].Split(',').Select(x => -int.Parse(x, System.Globalization.CultureInfo.InvariantCulture))).ToArray()
-                            : new[] { c.Value }.Concat(c.Key.Split(',').Select(x => int.Parse(x, System.Globalization.CultureInfo.InvariantCulture))).ToArray()).ToList())
+                    ? indic.ToDictionary(kv => kv.Key, kv => EncodeIndic(kv.Key.Contains('/') && indic.TryGetValue(kv.Key[..kv.Key.IndexOf('/')], out var baseTable)
+                        ? Diff(baseTable, kv.Value) : kv.Value))
                     : null,
                 Hinted = m.Hinted is { Count: > 0 } h
                     ? [.. h.OrderBy(kv => kv.Key).Select(kv =>
@@ -214,6 +262,8 @@ public sealed class MetricsFile
         sb.Append($"  \"generatedBy\": {Quote(GeneratedBy)},\n");
         sb.Append($"  \"generatedOn\": {Quote(GeneratedOn)},\n");
         sb.Append($"  \"note\": {Quote(Note)},\n");
+        if (InstalledFamilies is { Count: > 0 } installed)
+            sb.Append($"  \"installedFamilies\": [{string.Join(", ", installed.Select(Quote))}],\n");
         sb.Append("  \"fonts\": [\n");
 
         for (var i = 0; i < Fonts.Count; i++)
@@ -255,7 +305,7 @@ public sealed class MetricsFile
     private static string Quote(string s) => JsonSerializer.Serialize(s);
 
     /// <summary>
-    /// 讀度量檔：開頭是 gzip 的標記（1F 8B）就先解壓縮。完整的度量檔（37 個家族）是 20 MB 的 JSON，gzip 之後不到 4 MB ——
+    /// 讀度量檔：開頭是 gzip 的標記（1F 8B）就先解壓縮。完整的度量檔（37 個家族加緬甸、藏、蒙古文字型）是 30 MB 的 JSON，gzip 之後約 5 MB ——
     /// 要放進 repo 的話用 <c>fonts export --out xamlfit.fonts.json.gz</c>。
     /// </summary>
     public static MetricsFile Load(string path) => Parse(ReadText(path));
@@ -322,11 +372,7 @@ public sealed class MetricsFile
                 Ranges = ranges,
                 Kerning = FromEntries(e.Kerning),
                 Arabic = FromArabicEntries(e.Arabic),
-                Indic = e.Indic is { Count: > 0 } indicEntries
-                    ? indicEntries.ToDictionary(kv => kv.Key, kv => (IReadOnlyDictionary<string, int>)kv.Value.Where(r => r.Length >= 2)
-                        .ToDictionary(r => r[1] == 0 ? IndicClusters.BoundaryKey(r.Skip(2))
-                            : r[1] < 0 ? IndicClusters.ConjunctPrefix + string.Join(",", r.Skip(1).Select(x => -x)) : IndicClusters.Key(r.Skip(1)), r => r[0], StringComparer.Ordinal))
-                    : null,
+                Indic = e.Indic is { Count: > 0 } indicEntries ? DecodeIndic(indicEntries) : null,
                 Hinted = e.Hinted is { Count: > 0 } hinted
                     ? hinted.Where(r => r.Length >= 1).ToDictionary(r => r[0], r =>
                         {

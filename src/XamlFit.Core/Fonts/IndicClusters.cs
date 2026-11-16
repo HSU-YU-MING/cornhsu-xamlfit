@@ -58,6 +58,11 @@ public static class IndicClusters
         public HashSet<int> BaseOnlyModifiers { get; init; } = [];
         /// <summary>一串連寫裡只能出現一次的下標子音（高棉文的 coeng ro：兩個 ្រ WPF 畫虛線圓圈）；-1 = 沒有。</summary>
         public int SingleSubjoined { get; init; } = -1;
+        /// <summary>
+        /// 主子音一定是第一個（高棉文：coeng 後面的子音都是下標）：三子音連寫帶母音符號時，符號改的是第一個子音的寬度
+        /// （Leelawadee UI 的 វ្ច្ឌី，ី 讓 វ 寬 150 單位），匯出時每個第一子音都要試。
+        /// </summary>
+        public bool BaseIsFirst { get; init; }
         /// <summary>疊在下面的子音（藏文 ྐ…）：子音後面最多接 <see cref="MaxSubjoined"/> 個；第二個以後只能是 <see cref="LaterSubjoined"/> 裡的（藏文的 ya、ra、la、wa）。</summary>
         public HashSet<int> Subjoined { get; init; } = [];
         public int MaxSubjoined { get; init; }
@@ -123,8 +128,8 @@ public static class IndicClusters
     /// </summary>
     public static string ChainKey3(int second, int third) => $"{ChainKey},{second},{third}";
 
-    /// <summary>同上，最後一個子音帶 nukta 的時候（有這個鍵就用它）。</summary>
-    public static string ChainKey3(int second, int third, int nukta) => $"{ChainKey},{second},{third},{nukta}";
+    /// <summary>同上，最後一個子音帶這個符號（nukta、母音符號、鼻化符號，見 <see cref="SignOf"/>）的時候（有這個鍵就用它，沒有用上面那個）。</summary>
+    public static string ChainKey3(int second, int third, int sign) => $"{ChainKey},{second},{third},{sign}";
 
     /// <summary>「鼻化／送氣符號最多讓疊字變寬多少」的鍵（只有 <see cref="Script.StackKeyed"/> 的文字系統有）。</summary>
     public const string ModifierKey = "+2";   // 存成 [改變量, -2]，跟 TrailingKey 同一種寫法
@@ -314,6 +319,7 @@ public static class IndicClusters
         Droppable = [0x17C9, 0x17CA],
         BaseOnlyModifiers = [0x17CC],
         SingleSubjoined = 0x179A,
+        BaseIsFirst = true,
         Split = new() { [0x17BE] = [0x17C1, 0x17BE], [0x17BF] = [0x17C1, 0x17BF], [0x17C0] = [0x17C1, 0x17C0], [0x17C4] = [0x17C1, 0x17C4], [0x17C5] = [0x17C1, 0x17C5] },
         SignSequences = [.. Range(0x17B6, 0x17C5).Order().Select(v => new[] { v }), [0x17C9], [0x17CA],
             .. Range(0x17B6, 0x17C5).Order().SelectMany(v => new[] { new[] { 0x17C9, v }, new[] { 0x17CA, v } })],

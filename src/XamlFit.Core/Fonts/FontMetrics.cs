@@ -178,12 +178,19 @@ public static class TextMeasure
             var total = 0;
             FontMetrics? prevFace = null;
             var prevCp = -1;
+            var pending = double.NaN;   // 可變字型上一個字還沒進位的寬度（像素）
             missing = 0;
+            void Flush()
+            {
+                if (double.IsNaN(pending)) return;
+                total += (int)Math.Floor(pending + 0.5 + 0.015);
+                pending = double.NaN;
+            }
 
             foreach (var rune in text.EnumerateRunes())
             {
                 var cp = rune.Value;
-                if (IsDefaultIgnorable(cp)) { prevFace = null; continue; }
+                if (IsDefaultIgnorable(cp)) { Flush(); prevFace = null; continue; }
                 if (IsComplexScript(cp) || ArabicJoining.IsArabic(cp))
                     return new Measurement(0, 0, true) { Unsupported = "TextFormattingMode=\"Display\" with a script that needs shaping" };
 
@@ -199,25 +206,36 @@ public static class TextMeasure
                 }
                 if (face is null)
                 {
+                    Flush();
                     missing++;
                     if (firstMissing < 0) firstMissing = cp;
                     prevFace = null;
                     continue;
                 }
 
-                if (!face.TryHintedAdvance(cp, ppem, out var px))
+                var kerned = ReferenceEquals(face, prevFace) && face.Kerning is { } kern && kern.Adjust(prevCp, cp) is var units && units != 0 ? units : 0;
+                // 可變字型：WPF 的 Display 寬度是每個字的線性寬度四捨五入（不是 GDI 的 hinting 寬度；15 個實例 × 34 個字 × 8～24 px 實測）。
+                // 小數點後 .49x 的有時進位（WPF 的前進寬度有小數，度量檔存的是進位後的整數）：多加 0.015 再進位
+                Flush();
+                if (face.Variable && face.TryAdvance(cp, out var linearAdvance))
+                    pending = linearAdvance * ppem / (double)face.UnitsPerEm;
+                else if (!face.TryHintedAdvance(cp, ppem, out var px))
                     return new Measurement(0, 0, false)
                     {
                         Unsupported = string.Create(System.Globalization.CultureInfo.InvariantCulture,
                             $"TextFormattingMode=\"Display\": {face.Family} has no hinted widths for {ppem} px ({fontSizePx:0.##} px at {scale * 100:0}% display scaling)"),
                     };
-                total += px;
-                if (ReferenceEquals(face, prevFace) && face.Kerning is { } kern && kern.Adjust(prevCp, cp) is var units && units != 0)
-                    // 剛好 .5 的字距 WPF 往大的進（Calibri 32 px：-1.5 → -1）：0.5 進位，不會比任何一種進位法窄
-                    total += kernSizes.Max(size => RoundHalfUp(units * size / face.UnitsPerEm));
+                else total += px;
+                if (kerned != 0)
+                    // 剛好 .5 的字距 WPF 往大的進（Calibri 32 px：-1.5 → -1）：0.5 進位，不會比任何一種進位法窄。
+                    // 可變字型的字距 WPF 怎麼進位找不到規則（四捨五入在 2,025 個句子裡窄了 75 個）：往零的方向取整，一個都不窄
+                    total += face.Variable
+                        ? (int)Math.Ceiling(kerned * ppem / (double)face.UnitsPerEm - 1e-9)
+                        : kernSizes.Max(size => RoundHalfUp(kerned * size / face.UnitsPerEm));
                 prevFace = face;
                 prevCp = cp;
             }
+            Flush();
             widest = Math.Max(widest, total / scale);
         }
         return new Measurement(widest, missing, false, usedFallback) { FirstMissing = firstMissing };
@@ -443,8 +461,9 @@ public static class TextMeasure
                     if (indic.SingleSubjoined >= 0 && cps[i + length] == indic.SingleSubjoined && thirdLength > 0 && cps[third] == indic.SingleSubjoined) complex = true;
                     if (thirdLength > 0 && cps[third + thirdLength - 1] != indic.Virama)
                     {
-                        var withNukta = indic.Nukta >= 0 && cps.Skip(third).Take(thirdLength).Contains(indic.Nukta);
-                        if (!(withNukta && clusters.TryGetValue(IndicClusters.ChainKey3(cps[i + length], cps[third], indic.Nukta), out var three))
+                        // 最後一個子音帶的符號（nukta、母音符號、鼻化符號）有自己的值就用它
+                        var sign = IndicClusters.SignOf(indic, cps, third);
+                        if (!(sign >= 0 && clusters.TryGetValue(IndicClusters.ChainKey3(cps[i + length], cps[third], sign), out var three))
                             && !clusters.TryGetValue(IndicClusters.ChainKey3(cps[i + length], cps[third]), out three)) three = 0;
                         totalUnits += three * scale;
                     }

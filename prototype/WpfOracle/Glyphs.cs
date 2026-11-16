@@ -18,9 +18,12 @@ internal static class Glyphs
         {
             var text = raw.Contains(',') || raw.All(Uri.IsHexDigit) && raw.Length >= 4
                 ? string.Concat(raw.Split(',').Select(h => char.ConvertFromUtf32(Convert.ToInt32(h, 16)))) : raw;
-            var props = new Props(tf, CultureInfo.GetCultureInfo(culture));
+            // XF_GLYPHS_DISPLAY=10：用 Display 模式、10 px 排（寬度印像素，不換算成字型單位）
+            var display = Environment.GetEnvironmentVariable("XF_GLYPHS_DISPLAY") is { Length: > 0 } px ? double.Parse(px, CultureInfo.InvariantCulture) : 0;
+            var props = new Props(tf, CultureInfo.GetCultureInfo(culture), display > 0 ? display : 100);
             var source = new Source(text, props);
-            using var line = TextFormatter.Create(TextFormattingMode.Ideal).FormatLine(source, 0, 10000, new ParaProps(props), null);
+            using var line = TextFormatter.Create(display > 0 ? TextFormattingMode.Display : TextFormattingMode.Ideal).FormatLine(source, 0, 10000, new ParaProps(props), null);
+            if (display > 0) upem = g0(line);
             var parts = new List<string>();
             foreach (var run in line.GetIndexedGlyphRuns())
             {
@@ -29,16 +32,19 @@ internal static class Glyphs
                 for (var k = 0; k < g.GlyphIndices.Count; k++)
                     parts.Add($"{g.GlyphIndices[k]}:{Math.Round(g.AdvanceWidths[k] * scale)}");
             }
-            Console.WriteLine($"{string.Join(" ", text.EnumerateRunes().Select(r => r.Value.ToString("X4")))}  wpf width {Math.Round(line.WidthIncludingTrailingWhitespace * upem / 100)}  [{string.Join(" ", parts)}]");
+            Console.WriteLine($"{string.Join(" ", text.EnumerateRunes().Select(r => r.Value.ToString("X4")))}  wpf width {(display > 0 ? line.WidthIncludingTrailingWhitespace : Math.Round(line.WidthIncludingTrailingWhitespace * upem / 100))}  [{string.Join(" ", parts)}]");
         }
         return 0;
     }
 
-    private sealed class Props(Typeface tf, CultureInfo culture) : TextRunProperties
+    // Display 模式：寬度直接印像素（把「字型單位」的換算倍數設成跟字級一樣）
+    private static double g0(TextLine line) => line.GetIndexedGlyphRuns().FirstOrDefault()?.GlyphRun.FontRenderingEmSize ?? 100;
+
+    private sealed class Props(Typeface tf, CultureInfo culture, double size) : TextRunProperties
     {
         public override Typeface Typeface => tf;
-        public override double FontRenderingEmSize => 100;
-        public override double FontHintingEmSize => 100;
+        public override double FontRenderingEmSize => size;
+        public override double FontHintingEmSize => size;
         public override TextDecorationCollection? TextDecorations => null;
         public override Brush ForegroundBrush => Brushes.Black;
         public override Brush? BackgroundBrush => null;
@@ -159,5 +165,25 @@ internal static class MongolianAttribution
         public override TextRun GetTextRun(int i) => i < text.Length ? new TextCharacters(text, i, text.Length - i, props) : new TextEndOfParagraph(1);
         public override TextSpan<CultureSpecificCharacterBufferRange> GetPrecedingText(int i) => new(0, new CultureSpecificCharacterBufferRange(props.CultureInfo, CharacterBufferRange.Empty));
         public override int GetTextEffectCharacterIndexFromTextSourceCharacterIndex(int i) => i;
+    }
+}
+
+/// <summary>
+/// --char-display &lt;家族&gt; &lt;字重&gt; &lt;字…&gt;：Display 模式（pixelsPerDip 1）下每個字在 8～24 px 的寬度（同一個字排 10 個、除以 10），
+/// 拿來找 WPF 對可變字型 Display 寬度的算法。輸出 TSV：字、像素大小、寬度。
+/// </summary>
+internal static class CharDisplay
+{
+    public static int Run(string family, int weight, IEnumerable<string> chars)
+    {
+        var tf = new Typeface(new FontFamily(family), FontStyles.Normal, FontWeight.FromOpenTypeWeight(weight), FontStretches.Normal);
+        foreach (var c in chars)
+            for (var px = 8; px <= 24; px++)
+            {
+                var ft = new FormattedText(string.Concat(Enumerable.Repeat(c, 10)), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, tf, px,
+                    Brushes.Black, null, TextFormattingMode.Display, 1.0);
+                Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"{c}\t{px}\t{ft.WidthIncludingTrailingWhitespace / 10:F2}"));
+            }
+        return 0;
     }
 }

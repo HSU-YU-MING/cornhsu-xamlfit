@@ -13,6 +13,7 @@ using XamlFit.Core.Fonts;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 if (args.Length >= 3 && args[0] == "--scripts") return Scripts.Run(args[1], args[2]);
+if (args.Length >= 4 && args[0] == "--char-display") return CharDisplay.Run(args[1], int.Parse(args[2]), args.Skip(3));
 if (args.Length >= 3 && args[0] == "--mong-attr") return MongolianAttribution.Run(args[1], args[2]);
 if (args.Length >= 4 && args[0] == "--glyphs") return Glyphs.Run(args[1], args[2], args.Skip(3));
 if (args.Length >= 2 && args[0] == "--display") return Display.Run(args[1]);

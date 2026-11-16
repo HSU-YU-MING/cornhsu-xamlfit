@@ -280,7 +280,7 @@ internal sealed class CommonOptions
         {
             var mf = MetricsFile.Load(path);
             Console.Error.WriteLine($"metrics: {path} ({mf.Fonts.Count} faces, generated {mf.GeneratedOn})");
-            return new FontResolver(mf.ToMetrics(), o.AbsentFonts);
+            return new FontResolver(mf.ToMetrics(), o.AbsentFonts, mf.InstalledFamilies);
         }
         catch (Exception ex)
         {

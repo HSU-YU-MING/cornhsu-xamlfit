@@ -56,11 +56,10 @@ internal static class GdiHinting
         {
             foreach (var face in faces)
             {
-                // 可變字型：WPF Display 模式的寬度不是 GDI 的 hinting 寬度（Segoe UI Variable Small 10 px 的 i，WPF 3 px、GDI 2 px；
-                // 也不是線性寬度四捨五入）。不寫，Display 模式量不到
+                // 可變字型：WPF Display 模式的寬度不是 GDI 的 hinting 寬度，是線性寬度四捨五入（量的時候直接算，見 TextMeasure.MeasureDisplay）
                 if (face.Variable)
                 {
-                    skipped.Add($"{face.Family} {face.Weight}: variable font (WPF's Display-mode widths are not GDI's)");
+                    skipped.Add($"{face.Family} {face.Weight}: variable font (Display mode uses rounded linear widths, not GDI's)");
                     result.Add(face);
                     continue;
                 }

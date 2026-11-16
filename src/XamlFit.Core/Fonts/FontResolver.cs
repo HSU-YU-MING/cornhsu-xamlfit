@@ -62,9 +62,13 @@ public sealed class FontResolver
     private readonly Dictionary<string, List<FontMetrics>> _byLegacy;
     private readonly HashSet<string> _absent;
 
+    private readonly HashSet<string>? _installed;
+
     /// <param name="absentFamilies">使用者宣告「目標機器上沒有」的家族：出現在後備清單裡時直接跳過。</param>
-    public FontResolver(IEnumerable<FontMetrics> metrics, IEnumerable<string>? absentFamilies = null)
+    /// <param name="installedFamilies">匯出那台機器上裝的家族名（度量檔的 installedFamilies）；有它才照 WPF 拆「家族 + 字面名稱」。</param>
+    public FontResolver(IEnumerable<FontMetrics> metrics, IEnumerable<string>? absentFamilies = null, IEnumerable<string>? installedFamilies = null)
     {
+        _installed = installedFamilies is null ? null : new HashSet<string>(installedFamilies.Select(Normalize), StringComparer.Ordinal);
         _all = [.. metrics];
         _byFamily = _all
             .GroupBy(m => Normalize(m.Family), StringComparer.Ordinal)
@@ -125,6 +129,13 @@ public sealed class FontResolver
                 known = true;
                 if (weight == 400) face = PickStyle(legacy, style)?.FirstOrDefault();
             }
+            else if (SplitFaceName(key, weight, style) is { } split)
+            {
+                // WPF：整個名字不是裝著的家族時，取最長的家族名前綴，剩下的字當字面名稱
+                known = true;
+                face = PickFace(split.Faces, split.Weight, split.Style, strict: true);
+                siblings = split.Faces;
+            }
 
             if (face is not null)
             {
@@ -181,6 +192,40 @@ public sealed class FontResolver
             Language = language,
             FallbackCandidates = cp => FontFallback.For(cp, language).Targets,
         };
+    }
+
+    private static readonly Dictionary<string, int> WeightWords = new(StringComparer.Ordinal)
+    {
+        ["thin"] = 100, ["hairline"] = 100, ["extralight"] = 200, ["ultralight"] = 200, ["light"] = 300, ["semilight"] = 350, ["demilight"] = 350,
+        ["regular"] = 400, ["normal"] = 400, ["book"] = 400, ["medium"] = 500, ["semibold"] = 600, ["demibold"] = 600, ["bold"] = 700,
+        ["extrabold"] = 800, ["ultrabold"] = 800, ["black"] = 900, ["heavy"] = 900,
+    };
+
+    /// <summary>
+    /// WPF 的「家族 + 字面名稱」：<c>FontFamily="Segoe UI Variable"</c> 畫的是 Segoe UI，<c>"Times New Roman Italic"</c> 是斜體，
+    /// <c>"Arial Foo Bar"</c> 照 XAML 的字重畫 Arial（WpfOracle 實測）。剩下的字全是字重／樣式就照用；一個都不是就忽略；混著的不知道 WPF 怎麼讀，不拆。
+    /// 只在度量檔記了匯出機器裝了哪些家族、而且整個名字不在裡面時才拆 —— 否則「Segoe UI Historic」這種真的另一支字型會被當成 Segoe UI。
+    /// </summary>
+    private (List<FontMetrics> Faces, int Weight, FontStyleKind Style)? SplitFaceName(string key, int weight, FontStyleKind style)
+    {
+        if (_installed is null || _installed.Contains(key)) return null;
+        var words = key.Split(' ');
+        for (var k = words.Length - 1; k >= 1; k--)
+        {
+            var family = string.Join(' ', words[..k]);
+            if (!_installed.Contains(family) && !_byFamily.ContainsKey(family)) continue;
+            if (!_byFamily.TryGetValue(family, out var faces)) return null;   // WPF 用的家族不在度量檔裡
+            var rest = words[k..];
+            var styleWords = rest.Count(w => WeightWords.ContainsKey(w) || w is "italic" or "oblique");
+            if (styleWords == 0) return (faces, weight, style);
+            if (styleWords != rest.Length) return null;
+            var w = weight;
+            var st = style;
+            foreach (var word in rest)
+                if (WeightWords.TryGetValue(word, out var ww)) w = ww; else st = FontStyleKind.Italic;
+            return (faces, w, st);
+        }
+        return null;
     }
 
     /// <summary>照 WPF 的複合字型規則補字（見 <see cref="FontFallback"/>）。

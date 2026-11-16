@@ -85,14 +85,17 @@ internal static class FontsCommand
 
         // 每支字型檔各自獨立（阿拉伯文、印度系文字的形狀表要跑幾十萬次替換規則），平行處理；結果照檔案順序放回去
         var perFile = new List<FontMetrics>?[files.Count];
+        // 掃過的每支字型的家族名（含沒匯出的）：讓解析時能照 WPF 把「Segoe UI Variable」拆成 Segoe UI + 字面名稱
+        var installed = new System.Collections.Concurrent.ConcurrentDictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         Parallel.For(0, files.Count, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, i =>
         {
             var f = files[i];
             // 先只讀名稱就知道要不要：沒在 --family 裡的字型不跑形狀表
             IReadOnlyList<FontMetrics> got;
-            try { got = FontMetricsExtractor.FromFile(f, m => wanted.Count == 0 || wanted.Contains(m)); }
+            try { got = FontMetricsExtractor.FromFile(f, m => { installed.TryAdd(m, true); return wanted.Count == 0 || wanted.Contains(m); }); }
             catch (Exception e) { if (Environment.GetEnvironmentVariable("XAMLFIT_DEBUG") is not null) Console.Error.WriteLine($"{f}: {e}"); return; }   // 一個資料夾裡有壞字型是常態，不要整批失敗
 
+            foreach (var m in got) installed.TryAdd(m.Family, true);
             perFile[i] = [.. got];   // 已經在讀的時候篩過（可變字型的實例家族名 Segoe UI Variable Text 也算 --family "Segoe UI Variable"）
         });
         for (var i = 0; i < files.Count; i++)
@@ -125,7 +128,9 @@ internal static class FontsCommand
         {
             try
             {
-                var existing = MetricsFile.Load(outPath).ToMetrics();
+                var existingFile = MetricsFile.Load(outPath);
+                foreach (var name in existingFile.InstalledFamilies ?? []) installed.TryAdd(name, true);
+                var existing = existingFile.ToMetrics();
                 var ids = new HashSet<string>(deduped.Select(m => m.Id), StringComparer.OrdinalIgnoreCase);
                 deduped.AddRange(existing.Where(m => !ids.Contains(m.Id)));
             }
@@ -136,6 +141,7 @@ internal static class FontsCommand
         }
 
         var file = MetricsFile.FromMetrics(deduped, ToolVersion(), DateOnly.FromDateTime(DateTime.Now));
+        file.InstalledFamilies = [.. installed.Keys.Concat(deduped.Select(m => m.Family)).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
         var dir = Path.GetDirectoryName(Path.GetFullPath(outPath));
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         MetricsFile.Save(outPath, file.ToJson());
