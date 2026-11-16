@@ -30,6 +30,25 @@ public static class IndicClusters
         /// 只能當兩個叢集相加（偏寬）。
         /// </summary>
         public bool Conjuncts { get; init; } = true;
+        /// <summary>
+        /// 子音 + virama 不跟後面的子音組成一個音節（坦米爾文：virama 看得見）：後一個叢集的前置母音只移到它自己的子音前面，
+        /// 不移到整串最前面（ன்னோ = ன் + ெ + ன + ா）。
+        /// </summary>
+        public bool SyllableEndsAtVirama { get; init; }
+        /// <summary>
+        /// 前置母音可能讓連寫不成形（馬拉雅拉姆文：ഠ്ഛ 是合字，ഠ്ഛേ 在 WPF 不連）：帶前置母音的連寫兩種放法都算、取變窄少的。
+        /// 天城文不要開：ि 一定放在整串連寫前面，兩種都算只會白白偏寬（馬拉地文 1.3% → 2.3%）。
+        /// </summary>
+        public bool PreBaseMayBreakConjunct { get; init; }
+        /// <summary>
+        /// 大於 0：叢集交界的變寬量只依叢集的最後幾個字記（緬甸文 4 萬個叢集，一個一個記太多；變寬來自結尾的符號：ပျု့ + ငွီ 寬 2 px）。
+        /// </summary>
+        public int BoundaryTail { get; init; }
+        /// <summary>
+        /// 會變成 reph 的子音（ra）。「ra + virama」接子音時，WPF 把 reph 移到後一個子音後面；這支引擎照輸入的順序排：
+        /// 兩種順序都算、取變窄少的（卡納達文 ರ್ಙ 差 0.5 px）。
+        /// </summary>
+        public int Ra { get; init; } = -1;
         /// <summary>疊在下面的子音（藏文 ྐ…）：子音後面最多接 <see cref="MaxSubjoined"/> 個；第二個以後只能是 <see cref="LaterSubjoined"/> 裡的（藏文的 ya、ra、la、wa）。</summary>
         public HashSet<int> Subjoined { get; init; } = [];
         public int MaxSubjoined { get; init; }
@@ -63,11 +82,31 @@ public static class IndicClusters
     /// <summary>「前一個子音 + virama，後面接這個子音」的改變量的鍵。表是完整的：沒有這個鍵就是 0。</summary>
     public static string ConjunctKey(int first, int second) => $"{ConjunctPrefix}{first},{second}";
 
+    /// <summary>同上，但只給後一個叢集帶這個母音符號的時候（有這個鍵就用它，不用上面那個）。</summary>
+    public static string ConjunctKey(int first, int second, int sign) => $"{ConjunctPrefix}{first},{second},{sign}";
+
+    /// <summary>
+    /// 連寫改變量分組用：從 <paramref name="start"/> 開始的叢集（子音開頭）帶 nukta 就回 nukta（帶 nukta 的子音常常不連寫：奧里亞文 ଭ଼），
+    /// 否則回第一個母音符號或鼻化符號；都沒有回 -1。
+    /// </summary>
+    public static int SignOf(Script s, IReadOnlyList<int> cps, int start)
+    {
+        var k = start + 1;
+        if (k < cps.Count && cps[k] == s.Nukta) return s.Nukta;
+        return k < cps.Count && (s.Signs.Contains(cps[k]) || s.Modifiers.Contains(cps[k])) ? cps[k] : -1;
+    }
+
     /// <summary>度量檔裡記「叢集後面接標點或空白時最多變寬多少」的鍵（標點跟著併進同一段，字型的字距會套上去）。</summary>
     public const string TrailingKey = "+1";
 
     /// <summary>「這個叢集後面接同一個文字系統的叢集時最多變寬多少」的鍵（只有 <see cref="Script.Interacting"/> 的文字系統有）。</summary>
     public static string BoundaryKey(IEnumerable<int> cluster) => ">" + Key(cluster);
+
+    /// <summary>
+    /// 三個以上子音連寫（子音 + virama + 子音 + virama + 子音）時，整串比各叢集相加最多寬多少的鍵：量的時候這種連寫各叢集直接相加，
+    /// 再加這個值（奧里亞文 ଲ୍ୱ୍ଢ଼ 比相加寬 1.15 px）。
+    /// </summary>
+    public const string ChainKey = "+3";
 
     /// <summary>「鼻化／送氣符號最多讓疊字變寬多少」的鍵（只有 <see cref="Script.StackKeyed"/> 的文字系統有）。</summary>
     public const string ModifierKey = "+2";   // 存成 [改變量, -2]，跟 TrailingKey 同一種寫法
@@ -100,6 +139,8 @@ public static class IndicClusters
         Modifiers: [.. Range(0x0900, 0x0903)],
         Plain: [.. Range(0x0964, 0x0971)])   // danda、數字、縮寫號
     {
+        InvalidPairs = [.. ((int[])[0x0929, 0x0931, 0x0934, .. Range(0x0958, 0x095F)]).Select(c => (c, 0x093C))],   // 本身已經帶 nukta 的字母再接 nukta
+        Ra = 0x0930,
         PreBase = [0x093F, 0x094E],
     };
 
@@ -114,6 +155,7 @@ public static class IndicClusters
     {
         PreBase = [0x0BC6, 0x0BC7, 0x0BC8],
         Split = new() { [0x0BCA] = [0x0BC6, 0x0BBE], [0x0BCB] = [0x0BC7, 0x0BBE], [0x0BCC] = [0x0BC6, 0x0BD7] },
+        SyllableEndsAtVirama = true,
     };
 
     private static HashSet<int> Without(HashSet<int> set, params int[] gaps)
@@ -131,6 +173,8 @@ public static class IndicClusters
         Modifiers: [.. Range(0x0981, 0x0983)],
         Plain: [.. Range(0x09E6, 0x09FB)])
     {
+        InvalidPairs = [.. ((int[])[0x09DC, 0x09DD, 0x09DF]).Select(c => (c, 0x09BC))],   // 本身已經帶 nukta 的字母再接 nukta
+        Ra = 0x09B0,
         PreBase = [0x09BF, 0x09C7, 0x09C8],
         Split = new() { [0x09CB] = [0x09C7, 0x09BE], [0x09CC] = [0x09C7, 0x09D7] },
     };
@@ -144,6 +188,7 @@ public static class IndicClusters
         Modifiers: [0x0A01, 0x0A02, 0x0A03, 0x0A70],   // 0A71 addak 在子音前面起作用：沒列，用到就量不到
         Plain: [.. Range(0x0A66, 0x0A6F), 0x0A74])
     {
+        InvalidPairs = [.. ((int[])[0x0A33, 0x0A36, 0x0A59, 0x0A5A, 0x0A5B, 0x0A5E]).Select(c => (c, 0x0A3C))],   // 本身已經帶 nukta 的字母再接 nukta
         PreBase = [0x0A3F],
     };
 
@@ -156,6 +201,7 @@ public static class IndicClusters
         Modifiers: [.. Range(0x0A81, 0x0A83)],
         Plain: [.. Range(0x0AE6, 0x0AF1)])
     {
+        Ra = 0x0AB0,
         PreBase = [0x0ABF],
         Interacting = true,
     };
@@ -164,11 +210,13 @@ public static class IndicClusters
         "orya", "ory2", "orya", 0x0B00, 0x0B7F,
         Consonants: [.. Without(Range(0x0B15, 0x0B39), 0x0B29, 0x0B31, 0x0B34), 0x0B5C, 0x0B5D, 0x0B5F, 0x0B71],
         Vowels: [.. Without(Range(0x0B05, 0x0B14), 0x0B0D, 0x0B0E, 0x0B11, 0x0B12), 0x0B60, 0x0B61],
-        Signs: [.. Range(0x0B3E, 0x0B44), 0x0B47, 0x0B48, 0x0B4B, 0x0B4C, 0x0B56, 0x0B57, 0x0B62, 0x0B63],
+        Signs: [.. Range(0x0B3E, 0x0B44), 0x0B47, 0x0B48, 0x0B4B, 0x0B4C, 0x0B56, 0x0B57],   // ୢ ୣ（母音 L）不收：這支引擎跟 WPF 連寫不一樣
         Virama: 0x0B4D, Nukta: 0x0B3C,
         Modifiers: [.. Range(0x0B01, 0x0B03)],
         Plain: [.. Range(0x0B66, 0x0B70), .. Range(0x0B72, 0x0B77)])
     {
+        InvalidPairs = [.. ((int[])[0x0B5C, 0x0B5D]).Select(c => (c, 0x0B3C))],   // 本身已經帶 nukta 的字母再接 nukta
+        Ra = 0x0B30,
         PreBase = [0x0B47],
         Split = new() { [0x0B48] = [0x0B47, 0x0B56], [0x0B4B] = [0x0B47, 0x0B3E], [0x0B4C] = [0x0B47, 0x0B57] },
     };
@@ -191,11 +239,12 @@ public static class IndicClusters
         "knda", "knd2", "knda", 0x0C80, 0x0CFF,
         Consonants: [.. Without(Range(0x0C95, 0x0CB9), 0x0CA9, 0x0CB4)],   // 0CDE ೞ 已廢用
         Vowels: [.. Without(Range(0x0C85, 0x0C94), 0x0C8D, 0x0C91), 0x0CE0, 0x0CE1],
-        Signs: [.. Range(0x0CBE, 0x0CC4), .. Range(0x0CC6, 0x0CC8), .. Range(0x0CCA, 0x0CCC), 0x0CD5, 0x0CD6, 0x0CE2, 0x0CE3],
+        Signs: [.. Range(0x0CBE, 0x0CC4), .. Range(0x0CC6, 0x0CC8), .. Range(0x0CCA, 0x0CCC), 0x0CD5, 0x0CD6],   // ೢ ೣ（母音 L）不收：WPF 跟它們不連寫，這支引擎會連（ಖ್ತೣ 窄 15%）
         Virama: 0x0CCD, Nukta: -1,   // nukta + virama 字型組不起來（WPF 畫得比我們寬 30%）：用到就量不到
         Modifiers: [.. Range(0x0C81, 0x0C83)],
         Plain: [.. Range(0x0CE6, 0x0CEF)])
     {
+        Ra = 0x0CB0,
         Split = new()
         {
             [0x0CC0] = [0x0CBF, 0x0CD5], [0x0CC7] = [0x0CC6, 0x0CD5], [0x0CC8] = [0x0CC6, 0x0CD6],
@@ -213,8 +262,10 @@ public static class IndicClusters
         Modifiers: [.. Range(0x0D00, 0x0D03)],
         Plain: [.. Range(0x0D66, 0x0D79), 0x0D4F])
     {
+        Ra = 0x0D30,
         PreBase = [0x0D46, 0x0D47, 0x0D48],
         Split = new() { [0x0D4A] = [0x0D46, 0x0D3E], [0x0D4B] = [0x0D47, 0x0D3E], [0x0D4C] = [0x0D46, 0x0D57] },
+        PreBaseMayBreakConjunct = true,
     };
 
     public static readonly Script Sinhala = new(
@@ -270,6 +321,9 @@ public static class IndicClusters
             [0x1031, 0x102B, 0x1037, 0x103A], [0x103A], [0x1037, 0x103A], [0x102C, 0x103A]],
         ModifierSequences = [[0x1036], [0x1037], [0x1038], [0x1036, 0x1037], [0x1036, 0x1038], [0x1037, 0x1038]],
         InvalidPairs = [(0x103A, 0x1037), (0x103A, 0x1036)],
+        Droppable = [0x1036],   // ံ 跟 ့ 一起時這支引擎沒把 ့ 移開（ဆွှူံ့ 窄 0.4 px；WPF 跟 ဆွှူ့ 一樣寬）
+        Interacting = true,
+        BoundaryTail = 2,
     };
 
     /// <summary>藏文：子音下面最多疊兩個子音（第二個只有 ya、ra、la、wa），母音符號可以接在 a-chung（ཱ）後面。</summary>
@@ -293,7 +347,7 @@ public static class IndicClusters
     };
 
     /// <summary>有量的文字系統（WpfOracle --scripts 對照過）。緬甸文定義在上面但不在這裡（見 <see cref="Myanmar"/>）。</summary>
-    public static readonly Script[] All = [Devanagari, Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada, Malayalam, Sinhala, Khmer, Tibetan];
+    public static readonly Script[] All = [Devanagari, Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada, Malayalam, Sinhala, Khmer, Myanmar, Tibetan];
 
     public static Script? Of(int cp)
     {
@@ -327,6 +381,7 @@ public static class IndicClusters
             j += modifier;
         }
         if (j < cps.Count && s.InvalidPairs.Contains((cps[j - 1], cps[j]))) return 0;
+        for (var k = i + 1; k < j; k++) if (s.InvalidPairs.Contains((cps[k - 1], cps[k]))) return 0;
         return j - i;
     }
 
@@ -350,8 +405,14 @@ public static class IndicClusters
         var signs = s.SignSeqs.Where(m => m.All(drawable)).ToList();
         var medials = s.Medials.Where(m => m.All(drawable)).ToList();
         var subjoined = s.Subjoined.Order().Where(drawable).ToList();
+        bool Valid(int[] c)
+        {
+            for (var k = 1; k < c.Length; k++) if (s.InvalidPairs.Contains((c[k - 1], c[k]))) return false;
+            return true;
+        }
         IEnumerable<int[]> WithModifier(int[] core)
         {
+            if (!Valid(core)) yield break;
             yield return core;
             foreach (var m in modifiers)
                 if (!s.InvalidPairs.Contains((core[^1], m[0]))) yield return [.. core, .. m];
@@ -383,7 +444,7 @@ public static class IndicClusters
                         foreach (var sign in signs)
                             foreach (var x in WithModifier([.. core, .. sign])) yield return x;
                     }
-                if (drawable(s.Virama)) yield return [.. head, s.Virama];
+                if (drawable(s.Virama) && Valid(head)) yield return [.. head, s.Virama];
             }
         }
     }

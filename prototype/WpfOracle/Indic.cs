@@ -54,9 +54,10 @@ internal static class IndicGen
 
     public static int Run(string outPath)
     {
-        var rng = new Random(31);
+        var rng = new Random(int.TryParse(Environment.GetEnvironmentVariable("XF_GEN_SEED"), out var seed) ? seed : 31);   // XF_GEN_SEED 換一組字串（調整規則用的是 31，驗證要換一組）
         var result = new Dictionary<string, List<string>>();
-        foreach (var script in XamlFit.Core.Fonts.IndicClusters.All)
+        // 高棉文、藏文的字串用 gen-sea.js 產生（音節結構不一樣）
+        foreach (var script in XamlFit.Core.Fonts.IndicClusters.All.Where(s => Languages.ContainsKey(s.Tag)))
         {
             string S(IEnumerable<int> cps) => string.Concat(cps.Select(char.ConvertFromUtf32));
             var clusters = XamlFit.Core.Fonts.IndicClusters.Enumerate(script, _ => true).ToList();

@@ -137,11 +137,18 @@ that over-estimated the available width.
   and Tamil, and Gujarati and Telugu with a boundary model: each cluster boundary adds the largest
   widening that cluster or any prefix of it produces before any cluster (WPF kerns across trailing
   marks); Telugu also leaves out joined-consonant narrowing and the obsolete ఴ.
-- **Khmer and Tibetan** with the same cluster model (coeng as virama, register shifters before the
-  vowel; Tibetan stacks of up to two subjoined letters, keyed by stack with the widest vowel sign,
-  plus the most any mark widens a stack). **Lao** adds advances like Thai. Myanmar stays not
-  measurable. Punctuation of the script itself (Tibetan tsheg, danda) now counts as trailing
-  punctuation. Joined consonants are now adjusted per pair
+- **Khmer, Myanmar and Tibetan** with the same cluster model (Khmer coeng as virama, register
+  shifters before the vowel; Myanmar medials and vowel sequences, boundaries keyed by how a cluster
+  ends; Tibetan stacks of up to two subjoined letters, keyed by stack with the widest vowel sign,
+  plus the most any mark widens a stack). **Lao** adds advances like Thai. Punctuation of the
+  script itself (Tibetan tsheg, danda) now counts as trailing punctuation.
+- The export engine applies shaping features in stages and honours lookup flags (glyph classes,
+  mark attachment classes, mark filtering sets). Joined consonants keep a separate value for vowel
+  signs and nukta forms that narrow less than the bare consonant, are never narrower than the second
+  cluster alone, and try a reph on either side; chains of three consonants add the largest chain
+  widening seen. Odia measures 3.2% wide on average instead of 5.1%, Kannada 7.1% instead of 8.4%.
+  The vocalic-L signs of Odia and Kannada, and a nukta on a letter that already has one, are not
+  measurable. Joined consonants are now adjusted per pair
   (the least narrowing over every form of the second consonant), only for the first virama of a chain
   and only for plain consonants; a lone consonant + virama is shaped with halant forms; Sinhala's
   always-visible virama uses every feature. Marathi text measures 1.0% wide on average (was 2.1%).
@@ -173,8 +180,9 @@ that over-estimated the available width.
 - **Indic scripts** against `FormattedText` (Nirmala UI; 290 Marathi and 300 Tamil strings, and per
   script every cluster alone, random cluster sequences and conjunct-heavy random words, 4,000–15,000
   per script from `prototype/WpfOracle --indic-gen`): worst under-estimate 0.03%, Tamil 0.22%.
-  Khmer, Tibetan and Lao against 3,000 generated words each (Leelawadee UI, Microsoft Himalaya):
-  0.02%, 0.04% and 0.02%.
+  Every Indic check repeated with an independent second set of generated strings.
+  Khmer, Myanmar, Tibetan and Lao against two sets of 3,000 generated words each (Leelawadee UI,
+  Myanmar Text, Microsoft Himalaya): 0.02%, 0.02%, 0.04% and 0.02%.
 - **Display mode** against `FormattedText` (`prototype/WpfOracle --display` / `--display-check`; 13,200
   widths over ten fonts, eleven sizes, five scalings): with `--hinted`, all 13,200 measurable, 13,036
   exact, none narrower (with `hdmx` alone: 2,781 measurable, the rest reported as not measurable).

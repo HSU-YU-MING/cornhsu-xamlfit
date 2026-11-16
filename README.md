@@ -121,28 +121,36 @@ Telugu, Kannada, Malayalam and Sinhala. Each grapheme cluster (a letter with its
 virama) is shaped at export time with the font's own rules, per language system (Nirmala UI draws ल
 and श differently for Marathi), with pre-base vowel signs drawn first and two-part vowels split.
 Text is the sum of its clusters, plus — for each pair of consonants joined by a virama — the smallest
-narrowing any form of the second one produces (only for the first virama of a chain: in क्र्श the
-middle र cannot be both a below-base form and a reph), and the largest kerning seen before
-punctuation. Against Nirmala UI — 290 Marathi and 300 Tamil strings from Playnite and ScreenToGif,
+narrowing any form of the second one produces, with a separate value for vowel signs and nukta forms
+that narrow less than the bare consonant (Odia ୁ, Kannada ೃ), never narrower than the second cluster
+alone, and with a reph tried on either side of its consonant; a chain of three or more consonants is
+the plain sum plus the largest widening any three-consonant chain showed; and the largest kerning
+seen before punctuation. The export engine applies the shaping features in stages, as Windows does,
+and honours lookup flags (glyph classes, mark attachment classes and mark filtering sets) — without
+them Nirmala UI's Odia conjuncts never narrowed. Against Nirmala UI — 290 Marathi and 300 Tamil strings from Playnite and ScreenToGif,
 every cluster alone, random cluster sequences and conjunct-heavy random words (about 4,000–15,000 per
-script): worst under-estimate 0.03%, Tamil 0.22%; on average Marathi text measures 1.0% wide.
+script, checked again with a second, independent set): worst under-estimate 0.03%, Tamil 0.18%; on
+average Marathi text measures 1.3% wide, Odia 3.2–3.8%, Kannada 6.3–7.1%.
 In Gujarati and Telugu a cluster changes its neighbour (WPF kerns across a trailing anusvara or vowel
 sign; two-part vowels reach over), so every cluster boundary also adds the largest widening that
 cluster — or any prefix of it, since the marks are skipped — produces before any other cluster.
 Telugu also leaves out the joined-consonant narrowing (the export engine gets ళ్కి 2.8% narrower than
 WPF), and the obsolete ఴ, whose virama form reaches into the previous cluster and made every boundary
-9% wider. Worst under-estimate 0.03%; on average Gujarati measures 1.9% wide and Telugu 7.9%.
+9% wider. Worst under-estimate 0.03%; on average Gujarati measures 2.2% wide and Telugu 8.2%. The
+vocalic-L signs of Odia and Kannada (ୢ ୣ ೢ ೣ) are not measured: WPF does not join them the way the
+export engine does.
 
 **Khmer and Tibetan, against `FormattedText`.** The same cluster model, extended: Khmer coeng
 (U+17D2) works like a virama, and a register shifter (៉ ៊) may come before the vowel — this export
 engine draws ត៉ា 0.44 px narrower than WPF, which draws it as wide as តា, so clusters with a shifter
 keep the wider of the two. A Tibetan stack takes up to two subjoined letters (the second only ya, ra,
 la or wa); with 240,000 stack-and-vowel combinations, the file stores one value per stack — the widest
-over every vowel sign — plus the most any mark (ཾ ཿ ྂ ྃ) widens a stack. Against 3,000 words each
-(Leelawadee UI, Microsoft Himalaya; generated from the syllable structure, not real translations):
-worst under-estimate 0.02% (Khmer) and 0.04% (Tibetan). **Lao** adds up like Thai (≤ 0.02%).
-**Myanmar** is not measured: Myanmar Text moves marks aside under consonants with a descender (WPF
-draws ဋို့ 29% wider than this export engine computes), which needs a real Myanmar shaper.
+over every vowel sign — plus the most any mark (ཾ ཿ ྂ ྃ) widens a stack. **Myanmar** takes medial combinations and vowel sequences; with lookup flags honoured, the
+export engine draws ဋို့ as WPF does (it was 29% narrow), and since a syllable can widen the next one
+(ပျု့ + ငွီ), each boundary adds the largest widening seen after a cluster ending the same way. Against
+3,000 words each, twice with independent sets (Leelawadee UI, Myanmar Text, Microsoft Himalaya;
+generated from the syllable structure, not real translations): worst under-estimate 0.02% (Khmer,
+Myanmar) and 0.04% (Tibetan); Myanmar measures 12% wide on average. **Lao** adds up like Thai (≤ 0.02%).
 
 **`TextFormattingMode="Display"`, against `FormattedText`.** Display mode snaps every glyph to a
 whole pixel using the font's hinted widths, which depend on the pixel size — font size × display
@@ -418,7 +426,7 @@ out a horizontal `StackPanel` or `DockPanel`, and it is what `check` reports.
 
 What is *not* judged is counted and printed: strings with run-time placeholders (`{0}`), text
 the metrics do not cover (with the code points, so you know which font to export), and
-scripts that reshape in a way the metrics do not cover (Myanmar, Mongolian,
+scripts that reshape in a way the metrics do not cover (Mongolian,
 Arabic letters a font's data leaves out, Indic sequences that are not a grapheme cluster), and Display-mode
 text at a pixel size the font has no hinted widths for. **A culture in which nothing
 could be measured makes the run exit 3** — "not checked" must not look like "passed".
@@ -448,8 +456,8 @@ fail a build, because a guess should not block someone's pull request.
 | Styles applied by triggers, visual states or code-behind | not followed |
 | Text set through properties not scanned (`ToolTip`, `Title`, watermark/hint attached properties, `Hyperlink`/`Span` content) | not seen at all |
 | Resource dictionaries merged in code at run time | every dictionary file is assumed merged; conflicting definitions make the value unknown |
-| Shaping in Myanmar, Mongolian | reported as not measurable |
-| Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala), Khmer, Tibetan | measured as the sum of grapheme clusters, erring wide (Telugu by 7.9% on average); never more than 0.22% narrow in the comparisons; Khmer and Tibetan checked only against generated words |
+| Shaping in Mongolian | reported as not measurable |
+| Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala), Khmer, Myanmar, Tibetan | measured as the sum of grapheme clusters, erring wide (Myanmar by 12%, Telugu by 8% on average); never more than 0.18% narrow in the comparisons; Khmer, Myanmar and Tibetan checked only against generated words |
 | `TextFormattingMode="Display"` | measured from the font's hinted widths at every scaling in `displayScales`; a pixel size the font does not list is not measurable |
 | Arabic-script fonts whose contextual rules reach further than three letters | the letters involved, or the whole font, are reported as not measurable (see above) |
 | Arabic digits | WPF swaps 0–9 for Arabic-Indic digits in Arabic text; both are measured and the wider one is used |

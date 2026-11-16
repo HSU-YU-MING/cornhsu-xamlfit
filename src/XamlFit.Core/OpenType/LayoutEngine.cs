@@ -8,7 +8,8 @@ namespace XamlFit.Core.OpenType;
 /// 3（替代字形）沒有預設值，不套。
 /// GPOS 支援的 lookup：1 單一調整、2 成對調整（兩種格式）、7 上下文、8 串接上下文、9 延伸；只取 XAdvance
 /// （XPlacement、y 方向、裝置表都不改一行的寬度）。附著類（3–6）不改前進寬度，不套。
-/// LookupFlag 不處理 —— 呼叫端只餵沒有附加符號的字母序列。
+/// LookupFlag 有處理（GDEF 的字符分類、附加符號分類、附加符號集合）：被忽略的字符比對時跳過，lookup 也不套在它們身上。
+/// 沒處理之前，Nirmala UI 的奧里亞文「ଦ + 下加形 ଭ」被一個應該跳過下加形的 lookup 連成很寬的合字，連寫一個都沒變窄。
 /// 照 OpenType 的規則：lookup 依 LookupList 的順序套；同一個 lookup 在每個位置用第一個適用的子表。
 /// </summary>
 internal sealed class LayoutEngine
@@ -21,6 +22,10 @@ internal sealed class LayoutEngine
     private readonly bool _gpos;
     private readonly Dictionary<int, Dictionary<int, int>> _coverage = [];
     private readonly Dictionary<int, Dictionary<int, int>> _classes = [];
+    private readonly int _glyphClassDef, _markAttachClassDef, _markGlyphSets;
+
+    /// <summary>一個 lookup 的 LookupFlag 與附加符號集合（UseMarkFilteringSet 時）。</summary>
+    private readonly record struct Filter(int Flag, int MarkSet);
 
     /// <param name="table">"GSUB" 或 "GPOS"。</param>
     public LayoutEngine(SfntReader r, string table = "GSUB")
@@ -32,6 +37,66 @@ internal sealed class LayoutEngine
         _featureList = gsub + r.U16(gsub + 6);
         _lookupList = gsub + r.U16(gsub + 8);
         _lookupCount = r.U16(_lookupList);
+        if (r.Has("GDEF"))
+        {
+            var gdef = r.TableOffset("GDEF");
+            int Off(int at) => r.U16(gdef + at) is var o and > 0 ? gdef + o : 0;
+            _glyphClassDef = Off(4);
+            _markAttachClassDef = Off(10);
+            if (r.U16(gdef + 2) >= 2) _markGlyphSets = Off(12);   // GDEF 1.2 以上才有
+        }
+    }
+
+    private Filter FilterOf(int lookup)
+    {
+        var flag = _r.U16(lookup + 2);
+        var markSet = (flag & 0x10) != 0 ? _r.U16(lookup + 6 + _r.U16(lookup + 4) * 2) : -1;
+        return new Filter(flag, markSet);
+    }
+
+    /// <summary>這個 lookup 要不要跳過這個字符（IgnoreBaseGlyphs／IgnoreLigatures／IgnoreMarks、附加符號分類、附加符號集合）。</summary>
+    private bool Skip(int glyph, Filter f)
+    {
+        if (f.Flag == 0 || _glyphClassDef == 0) return false;
+        var cls = ClassOf(_glyphClassDef, glyph);
+        if (cls == 1) return (f.Flag & 0x2) != 0;
+        if (cls == 2) return (f.Flag & 0x4) != 0;
+        if (cls != 3) return false;
+        if ((f.Flag & 0x8) != 0) return true;
+        if ((f.Flag & 0x10) != 0 && f.MarkSet >= 0 && _markGlyphSets != 0)
+        {
+            if (f.MarkSet >= _r.U16(_markGlyphSets + 2)) return true;
+            var coverage = _markGlyphSets + (int)_r.U32(_markGlyphSets + 4 + f.MarkSet * 4);
+            return CoverageIndex(coverage, glyph) < 0;
+        }
+        var type = f.Flag >> 8;
+        return type != 0 && _markAttachClassDef != 0 && ClassOf(_markAttachClassDef, glyph) != type;
+    }
+
+    private int NextIndex(List<Glyph> buf, int from, Filter f)
+    {
+        for (var i = from; i < buf.Count; i++) if (!Skip(buf[i].Id, f)) return i;
+        return -1;
+    }
+
+    private int PrevIndex(List<Glyph> buf, int from, Filter f)
+    {
+        for (var i = from; i >= 0; i--) if (!Skip(buf[i].Id, f)) return i;
+        return -1;
+    }
+
+    /// <summary>從 pos 起（pos 本身算第一個）往後找 count 個不跳過的字符的位置；不夠回 null。</summary>
+    private int[]? InputPositions(List<Glyph> buf, int pos, int count, Filter f)
+    {
+        var positions = new int[count];
+        positions[0] = pos;
+        for (var k = 1; k < count; k++)
+        {
+            var next = NextIndex(buf, positions[k - 1] + 1, f);
+            if (next < 0) return null;
+            positions[k] = next;
+        }
+        return positions;
     }
 
     /// <summary>文字系統 script 下語言 lang 的語言系統（"dflt" = 預設）。沒有回 -1。</summary>
@@ -112,16 +177,17 @@ internal sealed class LayoutEngine
         var lookup = LookupOffset(lookupIndex);
         if (lookup < 0) return;
         var subs = Subtables(lookup).ToList();
+        var filter = FilterOf(lookup);
         if (!_gpos && subs.Count > 0 && subs[0].Type == 8)
         {
             for (var i = buf.Count - 1; i >= 0; i--)
-                if (applies(buf[i])) foreach (var (_, sub) in subs) if (ReverseChain(sub, buf, i)) break;
+                if (applies(buf[i]) && !Skip(buf[i].Id, filter)) foreach (var (_, sub) in subs) if (ReverseChain(sub, buf, i, filter)) break;
             return;
         }
         var pos = 0;
         while (pos < buf.Count)
         {
-            if (applies(buf[pos]) && ApplyAt(subs, buf, pos, out var next)) pos = Math.Max(next, pos + 1);
+            if (applies(buf[pos]) && !Skip(buf[pos].Id, filter) && ApplyAt(subs, buf, pos, filter, out var next)) pos = Math.Max(next, pos + 1);
             else pos++;
         }
     }
@@ -130,13 +196,15 @@ internal sealed class LayoutEngine
     private bool ApplyAt(int lookupIndex, List<Glyph> buf, int pos)
     {
         var lookup = LookupOffset(lookupIndex);
-        return lookup >= 0 && pos < buf.Count && ApplyAt(Subtables(lookup).ToList(), buf, pos, out _);
+        if (lookup < 0 || pos < 0 || pos >= buf.Count) return false;
+        var filter = FilterOf(lookup);
+        return !Skip(buf[pos].Id, filter) && ApplyAt(Subtables(lookup).ToList(), buf, pos, filter, out _);
     }
 
-    private bool ApplyAt(List<(int Type, int Offset)> subs, List<Glyph> buf, int pos, out int next)
+    private bool ApplyAt(List<(int Type, int Offset)> subs, List<Glyph> buf, int pos, Filter filter, out int next)
     {
         next = pos + 1;
-        if (_gpos) return Position(subs, buf, pos, out next);
+        if (_gpos) return Position(subs, buf, pos, filter, out next);
         foreach (var (type, sub) in subs)
         {
             switch (type)
@@ -155,20 +223,20 @@ internal sealed class LayoutEngine
                     }
                     break;
                 case 4:
-                    if (Ligature(sub, buf, pos)) return true;
+                    if (Ligature(sub, buf, pos, filter)) return true;
                     break;
                 case 5:
-                    if (Context(sub, buf, pos, out next)) return true;
+                    if (Context(sub, buf, pos, filter, out next)) return true;
                     break;
                 case 6:
-                    if (ChainContext(sub, buf, pos, out next)) return true;
+                    if (ChainContext(sub, buf, pos, filter, out next)) return true;
                     break;
             }
         }
         return false;
     }
 
-    private bool Position(List<(int Type, int Offset)> subs, List<Glyph> buf, int pos, out int next)
+    private bool Position(List<(int Type, int Offset)> subs, List<Glyph> buf, int pos, Filter filter, out int next)
     {
         next = pos + 1;
         foreach (var (type, sub) in subs)
@@ -179,19 +247,19 @@ internal sealed class LayoutEngine
                     if (SinglePos(sub, buf[pos].Id) is { } adv) { buf[pos] = buf[pos] with { Adv = buf[pos].Adv + adv }; return true; }
                     break;
                 case 2:
-                    if (pos + 1 < buf.Count && PairPos(sub, buf[pos].Id, buf[pos + 1].Id) is var (a1, a2, second))
+                    if (NextIndex(buf, pos + 1, filter) is var p2 and >= 0 && PairPos(sub, buf[pos].Id, buf[p2].Id) is var (a1, a2, second))
                     {
                         buf[pos] = buf[pos] with { Adv = buf[pos].Adv + a1 };
-                        buf[pos + 1] = buf[pos + 1] with { Adv = buf[pos + 1].Adv + a2 };
-                        next = second ? pos + 2 : pos + 1;
+                        buf[p2] = buf[p2] with { Adv = buf[p2].Adv + a2 };
+                        next = second ? p2 + 1 : p2;
                         return true;
                     }
                     break;
                 case 7:
-                    if (Context(sub, buf, pos, out next)) return true;
+                    if (Context(sub, buf, pos, filter, out next)) return true;
                     break;
                 case 8:
-                    if (ChainContext(sub, buf, pos, out next)) return true;
+                    if (ChainContext(sub, buf, pos, filter, out next)) return true;
                     break;
             }
         }
@@ -320,7 +388,7 @@ internal sealed class LayoutEngine
         return [.. Enumerable.Range(0, count).Select(i => (int)_r.U16(seq + 2 + i * 2))];
     }
 
-    private bool Ligature(int sub, List<Glyph> buf, int pos)
+    private bool Ligature(int sub, List<Glyph> buf, int pos, Filter filter)
     {
         var index = CoverageIndex(sub + _r.U16(sub + 2), buf[pos].Id);
         if (index < 0 || index >= _r.U16(sub + 4)) return false;
@@ -330,29 +398,40 @@ internal sealed class LayoutEngine
         {
             var lig = set + _r.U16(set + 2 + l * 2);
             var comps = _r.U16(lig + 2);
-            if (pos + comps > buf.Count) continue;
+            if (comps == 0 || InputPositions(buf, pos, comps, filter) is not { } at) continue;
             var ok = true;
-            for (var c = 1; c < comps && ok; c++) ok = buf[pos + c].Id == _r.U16(lig + 4 + (c - 1) * 2);
+            for (var c = 1; c < comps && ok; c++) ok = buf[at[c]].Id == _r.U16(lig + 4 + (c - 1) * 2);
             if (!ok) continue;
-            var first = buf[pos];
-            buf.RemoveRange(pos, comps);
-            buf.Insert(pos, first with { Id = _r.U16(lig) });
+            // 跳過的字符（夾在中間的附加符號）留在原處，排到連字後面
+            for (var c = comps - 1; c >= 1; c--) buf.RemoveAt(at[c]);
+            buf[pos] = buf[pos] with { Id = _r.U16(lig) };
             return true;
         }
         return false;
     }
 
-    private void ApplyRecords(int records, int count, List<Glyph> buf, int pos)
+    /// <summary>照比對到的位置套巢狀的 lookup；替換讓字符數變了，後面的位置跟著移。回傳最後一個比對位置的下一格。</summary>
+    private int ApplyRecords(int records, int count, List<Glyph> buf, int[] positions)
     {
+        // 結束位置照「原本最後一個比對位置的下一格 + 整體增減的字符數」算：替換在最後一個位置插入字符時，
+        // 不能停在插進來的字符上（同一條規則會一直重套，字符無限增加）
+        var end = positions[^1] + 1;
+        var countBefore = buf.Count;
         for (var k = 0; k < count; k++)
         {
             var seqIndex = _r.U16(records + k * 4);
             var lookupIndex = _r.U16(records + k * 4 + 2);
-            ApplyAt(lookupIndex, buf, pos + seqIndex);
+            if (seqIndex >= positions.Length) continue;
+            var before = buf.Count;
+            ApplyAt(lookupIndex, buf, positions[seqIndex]);
+            var delta = buf.Count - before;
+            if (delta != 0)
+                for (var j = seqIndex + 1; j < positions.Length; j++) positions[j] += delta;
         }
+        return Math.Max(end + buf.Count - countBefore, 0);
     }
 
-    private bool Context(int sub, List<Glyph> buf, int pos, out int next)
+    private bool Context(int sub, List<Glyph> buf, int pos, Filter filter, out int next)
     {
         next = pos + 1;
         var format = _r.U16(sub);
@@ -360,12 +439,10 @@ internal sealed class LayoutEngine
         {
             var glyphCount = _r.U16(sub + 2);
             var substCount = _r.U16(sub + 4);
-            if (pos + glyphCount > buf.Count) return false;
+            if (glyphCount == 0 || InputPositions(buf, pos, glyphCount, filter) is not { } at) return false;
             for (var i = 0; i < glyphCount; i++)
-                if (CoverageIndex(sub + _r.U16(sub + 6 + i * 2), buf[pos + i].Id) < 0) return false;
-            var before = buf.Count;
-            ApplyRecords(sub + 6 + glyphCount * 2, substCount, buf, pos);
-            next = pos + glyphCount + (buf.Count - before);
+                if (CoverageIndex(sub + _r.U16(sub + 6 + i * 2), buf[at[i]].Id) < 0) return false;
+            next = ApplyRecords(sub + 6 + glyphCount * 2, substCount, buf, at);
             return true;
         }
         if (CoverageIndex(sub + _r.U16(sub + 2), buf[pos].Id) < 0) return false;
@@ -385,23 +462,21 @@ internal sealed class LayoutEngine
             var rule = set + _r.U16(set + 2 + ri * 2);
             var glyphCount = _r.U16(rule);
             var substCount = _r.U16(rule + 2);
-            if (pos + glyphCount > buf.Count) continue;
+            if (glyphCount == 0 || InputPositions(buf, pos, glyphCount, filter) is not { } at) continue;
             var ok = true;
             for (var i = 1; i < glyphCount && ok; i++)
             {
                 var want = _r.U16(rule + 4 + (i - 1) * 2);
-                ok = format == 1 ? buf[pos + i].Id == want : ClassOf(classDef, buf[pos + i].Id) == want;
+                ok = format == 1 ? buf[at[i]].Id == want : ClassOf(classDef, buf[at[i]].Id) == want;
             }
             if (!ok) continue;
-            var before = buf.Count;
-            ApplyRecords(rule + 4 + (glyphCount - 1) * 2, substCount, buf, pos);
-            next = pos + glyphCount + (buf.Count - before);
+            next = ApplyRecords(rule + 4 + (glyphCount - 1) * 2, substCount, buf, at);
             return true;
         }
         return false;
     }
 
-    private bool ChainContext(int sub, List<Glyph> buf, int pos, out int next)
+    private bool ChainContext(int sub, List<Glyph> buf, int pos, Filter filter, out int next)
     {
         next = pos + 1;
         var format = _r.U16(sub);
@@ -409,28 +484,28 @@ internal sealed class LayoutEngine
         {
             var o = sub + 2;
             var backCount = _r.U16(o);
+            var p = pos;
             for (var i = 0; i < backCount; i++)
             {
-                var p = pos - 1 - i;
+                p = PrevIndex(buf, p - 1, filter);
                 if (p < 0 || CoverageIndex(sub + _r.U16(o + 2 + i * 2), buf[p].Id) < 0) return false;
             }
             o += 2 + backCount * 2;
             var inputCount = _r.U16(o);
-            if (pos + inputCount > buf.Count) return false;
+            if (inputCount == 0 || InputPositions(buf, pos, inputCount, filter) is not { } at) return false;
             for (var i = 0; i < inputCount; i++)
-                if (CoverageIndex(sub + _r.U16(o + 2 + i * 2), buf[pos + i].Id) < 0) return false;
+                if (CoverageIndex(sub + _r.U16(o + 2 + i * 2), buf[at[i]].Id) < 0) return false;
             o += 2 + inputCount * 2;
             var aheadCount = _r.U16(o);
+            p = at[^1];
             for (var i = 0; i < aheadCount; i++)
             {
-                var p = pos + inputCount + i;
-                if (p >= buf.Count || CoverageIndex(sub + _r.U16(o + 2 + i * 2), buf[p].Id) < 0) return false;
+                p = NextIndex(buf, p + 1, filter);
+                if (p < 0 || CoverageIndex(sub + _r.U16(o + 2 + i * 2), buf[p].Id) < 0) return false;
             }
             o += 2 + aheadCount * 2;
             var substCount = _r.U16(o);
-            var before = buf.Count;
-            ApplyRecords(o + 2, substCount, buf, pos);
-            next = pos + inputCount + (buf.Count - before);
+            next = ApplyRecords(o + 2, substCount, buf, at);
             return true;
         }
 
@@ -464,53 +539,55 @@ internal sealed class LayoutEngine
             var o = rule;
             var backCount = _r.U16(o);
             var ok = true;
+            var p = pos;
             for (var i = 0; i < backCount && ok; i++)
             {
-                var p = pos - 1 - i;
+                p = PrevIndex(buf, p - 1, filter);
                 ok = p >= 0 && Match(_r.U16(o + 2 + i * 2), buf[p].Id, backDef);
             }
             if (!ok) continue;
             o += 2 + backCount * 2;
             var inputCount = _r.U16(o);
-            if (pos + inputCount > buf.Count) continue;
-            for (var i = 1; i < inputCount && ok; i++) ok = Match(_r.U16(o + 2 + (i - 1) * 2), buf[pos + i].Id, inputDef);
+            if (inputCount == 0 || InputPositions(buf, pos, inputCount, filter) is not { } at) continue;
+            for (var i = 1; i < inputCount && ok; i++) ok = Match(_r.U16(o + 2 + (i - 1) * 2), buf[at[i]].Id, inputDef);
             if (!ok) continue;
             o += 2 + (inputCount - 1) * 2;
             var aheadCount = _r.U16(o);
+            p = at[^1];
             for (var i = 0; i < aheadCount && ok; i++)
             {
-                var p = pos + inputCount + i;
-                ok = p < buf.Count && Match(_r.U16(o + 2 + i * 2), buf[p].Id, aheadDef);
+                p = NextIndex(buf, p + 1, filter);
+                ok = p >= 0 && Match(_r.U16(o + 2 + i * 2), buf[p].Id, aheadDef);
             }
             if (!ok) continue;
             o += 2 + aheadCount * 2;
             var substCount = _r.U16(o);
-            var before = buf.Count;
-            ApplyRecords(o + 2, substCount, buf, pos);
-            next = pos + inputCount + (buf.Count - before);
+            next = ApplyRecords(o + 2, substCount, buf, at);
             return true;
         }
         return false;
     }
 
-    private bool ReverseChain(int sub, List<Glyph> buf, int pos)
+    private bool ReverseChain(int sub, List<Glyph> buf, int pos, Filter filter)
     {
         if (_r.U16(sub) != 1) return false;
         var index = CoverageIndex(sub + _r.U16(sub + 2), buf[pos].Id);
         if (index < 0) return false;
         var o = sub + 4;
         var backCount = _r.U16(o);
+        var p = pos;
         for (var i = 0; i < backCount; i++)
         {
-            var p = pos - 1 - i;
+            p = PrevIndex(buf, p - 1, filter);
             if (p < 0 || CoverageIndex(sub + _r.U16(o + 2 + i * 2), buf[p].Id) < 0) return false;
         }
         o += 2 + backCount * 2;
         var aheadCount = _r.U16(o);
+        p = pos;
         for (var i = 0; i < aheadCount; i++)
         {
-            var p = pos + 1 + i;
-            if (p >= buf.Count || CoverageIndex(sub + _r.U16(o + 2 + i * 2), buf[p].Id) < 0) return false;
+            p = NextIndex(buf, p + 1, filter);
+            if (p < 0 || CoverageIndex(sub + _r.U16(o + 2 + i * 2), buf[p].Id) < 0) return false;
         }
         o += 2 + aheadCount * 2;
         if (index >= _r.U16(o)) return false;

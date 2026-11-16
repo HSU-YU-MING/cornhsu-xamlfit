@@ -424,12 +424,16 @@ public static class TextMeasure
                 // 後面那個叢集自己又是「子音 + virama」（三個子音以上的連寫）也不套：後加形、下加形會再改一次（孟加拉文的 ya-phala）
                 var nextIsHead = i + length + 1 < cps.Count && cps[i + length + 1] == indic.Virama
                                  && (i + length + 2 >= cps.Count || !indic.Modifiers.Contains(cps[i + length + 2]));
+                // 三個以上子音連寫的開頭：各叢集直接相加，加上匯出時量到「整串比相加最多寬多少」
+                if (head >= 0 && !chained && nextIsHead && indic.Consonants.Contains(cps[i + length]) && clusters.TryGetValue(IndicClusters.ChainKey, out var chainChange))
+                    totalUnits += chainChange * scale;
                 if (head >= 0 && !chained && !nextIsHead && i + length < cps.Count && indic.Consonants.Contains(cps[i + length]) && face.TryAdvance(cps[i + length], out _)
-                    && clusters.TryGetValue(IndicClusters.ConjunctKey(head, cps[i + length]), out var conjunct))
+                    && (clusters.TryGetValue(IndicClusters.ConjunctKey(head, cps[i + length], IndicClusters.SignOf(indic, cps, i + length)), out var conjunct)
+                        || clusters.TryGetValue(IndicClusters.ConjunctKey(head, cps[i + length]), out conjunct)))
                     totalUnits += conjunct * scale;
                 // 叢集會影響下一個叢集的文字系統：後面接同一個文字系統的叢集時，加上匯出時量到的最大變寬
                 if (indic.Interacting && i + length < cps.Count && IndicClusters.Of(cps[i + length]) == indic && !indic.Plain.Contains(cps[i + length])
-                    && clusters.TryGetValue(IndicClusters.BoundaryKey(cluster), out var boundary))
+                    && clusters.TryGetValue(IndicClusters.BoundaryKey(indic.BoundaryTail > 0 ? cluster.TakeLast(indic.BoundaryTail) : cluster), out var boundary))
                     totalUnits += boundary * scale;
                 // 後面接的不是同一個文字系统的字（標點、空白…）：字型可能把它們之間撐開，加上匯出時量到的最大值
                 if (i + length < cps.Count && (IndicClusters.Of(cps[i + length]) != indic || indic.Plain.Contains(cps[i + length]))

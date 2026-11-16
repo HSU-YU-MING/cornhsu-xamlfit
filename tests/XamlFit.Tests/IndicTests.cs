@@ -57,6 +57,36 @@ public class IndicTests
     }
 
     [Fact]
+    public void A_conjunct_whose_second_consonant_carries_a_sign_uses_that_signs_own_change_when_there_is_one()
+    {
+        var data = new Dictionary<string, int>
+        {
+            [IndicClusters.ConjunctKey(Ka, Ssa)] = -300,
+            [IndicClusters.ConjunctKey(Ka, Ssa, 0x0941)] = -100,   // षु：這個母音符號讓連寫變窄得少
+        };
+        var face = Face(new() { ["deva"] = data });
+        Assert.Equal((400 + 400 - 100 + 400 + 400) / 100.0, M(face, S(Ka, Virama, Ssa, 0x0941)).WidthPx, 3);
+        Assert.Equal((400 + 400 - 300 + 400 + 400) / 100.0, M(face, S(Ka, Virama, Ssa, AaSign)).WidthPx, 3);   // 沒有自己的值：用一般的
+    }
+
+    [Fact]
+    public void A_chain_of_three_consonants_adds_the_widest_chain_change_once()
+    {
+        // क्ष्र：各叢集相加（三個子音不套連寫），開頭加一次「整串最多比相加寬多少」
+        var data = new Dictionary<string, int> { [IndicClusters.ConjunctKey(Ka, Ssa)] = -300, [IndicClusters.ChainKey] = 50 };
+        var face = Face(new() { ["deva"] = data });
+        Assert.Equal((400 + 400 + 400 + 400 + 400 + 50) / 100.0, M(face, S(Ka, Virama, Ssa, Virama, Ra)).WidthPx, 3);
+    }
+
+    [Fact]
+    public void A_letter_that_already_has_a_nukta_cannot_take_another()
+    {
+        Assert.Equal(1, IndicClusters.Match([0x0958], 0, IndicClusters.Devanagari));                 // क़
+        Assert.Equal(0, IndicClusters.Match([0x0958, 0x093C], 0, IndicClusters.Devanagari));         // क़ + ़：WPF 畫虛線圓圈
+        Assert.Equal(0, IndicClusters.Match([0x0B5C, 0x0B3C, 0x0B3E], 0, IndicClusters.Oriya));
+    }
+
+    [Fact]
     public void Punctuation_after_a_cluster_takes_the_largest_kerning_seen()
     {
         var face = Face(new() { ["deva"] = new Dictionary<string, int> { [IndicClusters.TrailingKey] = 50 } });
@@ -185,10 +215,20 @@ public class IndicTests
     }
 
     [Fact]
-    public void Myanmar_is_defined_but_not_measured()
+    public void Myanmar_boundaries_are_keyed_by_how_the_cluster_ends()
     {
-        Assert.Null(IndicClusters.Of(0x1000));   // Myanmar Text 的符號會依子音挪位置，這支匯出引擎算不出來
-        Assert.DoesNotContain(IndicClusters.Myanmar, IndicClusters.All);
+        // 緬甸文 4 萬個叢集：交界的變寬量依結尾兩個字記（ပျု့ + ငွီ 寬 2 px）
+        var face = new FontMetrics
+        {
+            Family = "Mymr",
+            UnitsPerEm = 1000,
+            DefaultAdvance = 500,
+            Ranges = [new AdvanceRange(0x1000, 0x1021, 500), new AdvanceRange(0x1022, 0x109F, 0)],
+            Indic = new Dictionary<string, IReadOnlyDictionary<string, int>> { ["mymr"] = new Dictionary<string, int> { [IndicClusters.BoundaryKey([0x102F, 0x1037])] = 70 } },
+        };
+        Assert.Same(IndicClusters.Myanmar, IndicClusters.Of(0x1000));
+        Assert.Equal((500 + 70 + 500) / 100.0, TextMeasure.Measure(S(0x1015, 0x103B, 0x102F, 0x1037, 0x1004), [face], 10).WidthPx, 3);   // 介音、符號在假字型裡寬 0
+        Assert.Equal(500 / 100.0, TextMeasure.Measure(S(0x1015, 0x102F, 0x1037), [face], 10).WidthPx, 3);   // 後面沒接：不加
     }
 
     [Fact]

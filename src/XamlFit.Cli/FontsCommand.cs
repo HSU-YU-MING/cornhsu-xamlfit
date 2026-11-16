@@ -91,7 +91,7 @@ internal static class FontsCommand
             // 先只讀名稱就知道要不要：沒在 --family 裡的字型不跑形狀表
             IReadOnlyList<FontMetrics> got;
             try { got = FontMetricsExtractor.FromFile(f, m => wanted.Count == 0 || wanted.Contains(m)); }
-            catch { return; }   // 一個資料夾裡有壞字型是常態，不要整批失敗
+            catch (Exception e) { if (Environment.GetEnvironmentVariable("XAMLFIT_DEBUG") is not null) Console.Error.WriteLine($"{f}: {e}"); return; }   // 一個資料夾裡有壞字型是常態，不要整批失敗
 
             perFile[i] = got.Where(m => wanted.Count == 0 || wanted.Contains(m.Family)).ToList();
         });

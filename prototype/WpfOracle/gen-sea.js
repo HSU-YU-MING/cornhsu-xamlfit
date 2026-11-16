@@ -1,5 +1,5 @@
 // 產生緬甸文、高棉文、藏文、寮文的測試字串（依音節結構隨機組合；不是真實語料）
-let seed = 20261116; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+let seed = Number(process.argv[3] ?? 20261116); const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
 const pick = a => a[Math.floor(rnd() * a.length)];
 const range = (a, b, ex = []) => { const r = []; for (let c = a; c <= b; c++) if (!ex.includes(c)) r.push(c); return r; };
 const S = cps => String.fromCodePoint(...cps);
