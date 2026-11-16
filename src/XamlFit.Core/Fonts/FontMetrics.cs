@@ -280,6 +280,8 @@ public static class TextMeasure
         var cps = new List<int>(text.Length);
         foreach (var rune in text.AsSpan().EnumerateRunes()) cps.Add(rune.Value);
         var forms = cps.Exists(ArabicJoining.IsArabic) ? ArabicJoining.FormsOf(cps) : null;
+        var mongolian = cps.Exists(MongolianJoining.IsMongolian) ? MongolianJoining.FormsOf(cps) : null;
+        var mongolianPairEnd = -1;   // 上一段合字對的第二個字（已經算進去了）
         // 有右到左文字時，空白、標點這類中性字可能跟旁邊的字分在不同方向的段落裡，WPF 不跨段套字距
         // （Arial 的「L 空白」-76：阿拉伯文句子裡的「URL 」量出來沒套）。這種位置只套會變寬的字距。
         var bidi = cps.Exists(IsRightToLeft);
@@ -307,6 +309,13 @@ public static class TextMeasure
         {
             var cp = cps[i];
             if (IndicClusters.Of(cp) is null) afterConjunctHead = false;
+            // 蒙古文：每個字照形狀查匯出時算好的「最寬會多寬」相加（MVS、FVS 也在表裡：MVS 在字中間 WPF 畫 205 單位寬，不是看不見的字）
+            if (mongolian is not null && MongolianJoining.Handles(cp) && MongolianWidth(i, mongolian[i]) is { } mongol)
+            {
+                totalUnits += mongol;
+                prevFace = null;
+                continue;
+            }
             if (IsDefaultIgnorable(cp)) { prevFace = null; prevShapes = null; continue; }   // 先判斷：U+FEFF 落在阿拉伯表現形式的範圍裡
             if (prevShapes is not null && ArabicJoining.TypeOf(cp) != ArabicJoining.Type.Transparent && !(forms is not null && forms[i] >= 0))
                 prevShapes = null;
@@ -425,8 +434,23 @@ public static class TextMeasure
                 var nextIsHead = i + length + 1 < cps.Count && cps[i + length + 1] == indic.Virama
                                  && (i + length + 2 >= cps.Count || !indic.Modifiers.Contains(cps[i + length + 2]));
                 // 三個以上子音連寫的開頭：各叢集直接相加，加上匯出時量到「整串比相加最多寬多少」
-                if (head >= 0 && !chained && nextIsHead && indic.Consonants.Contains(cps[i + length]) && clusters.TryGetValue(IndicClusters.ChainKey, out var chainChange))
-                    totalUnits += chainChange * scale;
+                if (head >= 0 && !chained && nextIsHead && indic.Consonants.Contains(cps[i + length]))
+                {
+                    // 剛好三個子音：依後兩個子音記（沒有鍵 = 0）；四個以上用總的最大值
+                    var third = i + length + 2;
+                    var thirdLength = third < cps.Count && indic.Consonants.Contains(cps[third]) ? IndicClusters.Match(cps, third, indic) : 0;
+                    // 高棉文兩個 coeng ro：WPF 畫虛線圓圈，量不到
+                    if (indic.SingleSubjoined >= 0 && cps[i + length] == indic.SingleSubjoined && thirdLength > 0 && cps[third] == indic.SingleSubjoined) complex = true;
+                    if (thirdLength > 0 && cps[third + thirdLength - 1] != indic.Virama)
+                    {
+                        var withNukta = indic.Nukta >= 0 && cps.Skip(third).Take(thirdLength).Contains(indic.Nukta);
+                        if (!(withNukta && clusters.TryGetValue(IndicClusters.ChainKey3(cps[i + length], cps[third], indic.Nukta), out var three))
+                            && !clusters.TryGetValue(IndicClusters.ChainKey3(cps[i + length], cps[third]), out three)) three = 0;
+                        totalUnits += three * scale;
+                    }
+                    else if (clusters.TryGetValue(IndicClusters.ChainKey, out var chainChange))
+                        totalUnits += chainChange * scale;
+                }
                 if (head >= 0 && !chained && !nextIsHead && i + length < cps.Count && indic.Consonants.Contains(cps[i + length]) && face.TryAdvance(cps[i + length], out _)
                     && (clusters.TryGetValue(IndicClusters.ConjunctKey(head, cps[i + length], IndicClusters.SignOf(indic, cps, i + length)), out var conjunct)
                         || clusters.TryGetValue(IndicClusters.ConjunctKey(head, cps[i + length]), out conjunct)))
@@ -460,6 +484,36 @@ public static class TextMeasure
 
         var px = totalUnits * fontSizePx / primary.UnitsPerEm;
         return new Measurement(px, missing, complex, usedFallback) { FirstMissing = firstMissing };
+
+        // 畫這個字的字型有蒙古文表、表裡有這個字這種形狀：寬度（換算成第一支字型的單位）；否則 null（照一般的字處理，蒙古文字母會被當成量不到）
+        // 從 at 開始的一段（合字對或一個字）的寬度；at 是上一段合字對的第二個字時回 0。字型沒有表、表裡沒有這一段回 null
+        double? MongolianWidth(int at, int form)
+        {
+            if (at == mongolianPairEnd) return 0;
+            var cp = cps[at];
+            (FontMetrics Face, double Scale)? Face()
+            {
+                for (var k = 0; k < chain.Count; k++)
+                    if (chain[k].TryAdvance(cp, out _))
+                    {
+                        if (k >= declaredCount) usedFallback = true;
+                        return (chain[k], (double)primary.UnitsPerEm / chain[k].UnitsPerEm);
+                    }
+                if (fallback?.Invoke(cp) is { } fb && fb.Face.TryAdvance(cp, out _))
+                {
+                    usedFallback = true;
+                    return (fb.Face, fb.Scale * (double)primary.UnitsPerEm / fb.Face.UnitsPerEm);
+                }
+                return null;
+            }
+            if (Face() is not { } f || f.Face.Indic is not { } data || !data.TryGetValue(MongolianJoining.DataKey, out var table)) return null;
+            var pair = at + 1 < cps.Count && MongolianJoining.IsLetter(cp) && MongolianJoining.IsLetter(cps[at + 1])
+                       && table.ContainsKey(MongolianJoining.PairKey(cp, cps[at + 1])) && f.Face.TryAdvance(cps[at + 1], out _);
+            if (!table.TryGetValue(MongolianJoining.SegmentKey(cps, at, pair ? 2 : 1, mongolian!), out var w)
+                && !table.TryGetValue(MongolianJoining.SegmentKey(cps, at, pair ? 2 : 1, mongolian!, coarse: true), out w)) return null;
+            if (pair) mongolianPairEnd = at + 1;
+            return w * f.Scale;
+        }
     }
 
     /// <summary>

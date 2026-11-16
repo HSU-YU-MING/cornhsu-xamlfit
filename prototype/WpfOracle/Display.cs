@@ -21,7 +21,9 @@ internal static class Display
         using var w = new StreamWriter(outPath);
         w.WriteLine("family\tweight\tsize\tscale\ttext\twidth");
         foreach (var family in families)
-        foreach (var weight in new[] { FontWeights.Normal, FontWeights.Bold })
+        // XF_DISPLAY_WEIGHTS="300,350,400,600,700"：可變字型的每個具名實例
+        foreach (var weight in Environment.GetEnvironmentVariable("XF_DISPLAY_WEIGHTS") is { Length: > 0 } ws
+                     ? ws.Split(',').Select(x => FontWeight.FromOpenTypeWeight(int.Parse(x))).ToArray() : new[] { FontWeights.Normal, FontWeights.Bold })
         {
             var tf = new Typeface(new FontFamily(family), FontStyles.Normal, weight, FontStretches.Normal);
             foreach (var size in sizes)
@@ -41,7 +43,7 @@ internal static class DisplayCheck
 {
     public static int Run(string metricsPath, string tsv)
     {
-        var resolver = new XamlFit.Core.Fonts.FontResolver(XamlFit.Core.Fonts.MetricsFile.Parse(File.ReadAllText(metricsPath)).ToMetrics());
+        var resolver = new XamlFit.Core.Fonts.FontResolver(XamlFit.Core.Fonts.MetricsFile.Load(metricsPath).ToMetrics());
         var stats = new Dictionary<string, (int N, int Exact, int Unknown, double Min, double Max, string Worst)>();
         foreach (var line in File.ReadLines(tsv).Skip(1))
         {

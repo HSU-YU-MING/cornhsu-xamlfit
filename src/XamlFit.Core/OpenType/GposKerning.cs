@@ -12,11 +12,16 @@ namespace XamlFit.Core.OpenType;
 /// </summary>
 internal static class GposKerning
 {
-    public static KerningTable? Read(SfntReader r, IReadOnlyDictionary<int, List<int>> glyphToCodepoints)
+    /// <param name="coords">可變字型的實例（正規化座標）：成對調整的 XAdvance 加上裝置表（VariationIndex）指到的變化量，無條件進位。
+    /// Segoe UI Variable Text Bold 的「rn」比預設位置寬 15 單位（WpfOracle 對照：不加偏窄 0.16%）。</param>
+    public static KerningTable? Read(SfntReader r, IReadOnlyDictionary<int, List<int>> glyphToCodepoints, double[]? coords = null)
     {
         if (!r.Has("GPOS") || glyphToCodepoints.Count == 0) return null;
         try
         {
+            Vary = null;
+            if (coords is not null && VariableFonts.GdefStore(r, coords.Length) is { } store)
+                Vary = device => r.U16(device + 4) == 0x8000 ? (int)Math.Ceiling(store(r.U16(device), r.U16(device + 2), coords) - 1e-6) : 0;
             var gpos = r.TableOffset("GPOS");
             var scriptList = gpos + r.U16(gpos + 4);
             var featureList = gpos + r.U16(gpos + 6);
@@ -110,8 +115,17 @@ internal static class GposKerning
 
     private static int ValueSize(int format) => 2 * System.Numerics.BitOperations.PopCount((uint)format & 0xFF);
 
-    private static int XAdvance(SfntReader r, int record, int format) =>
-        (format & 0x4) == 0 ? 0 : r.S16(record + 2 * System.Numerics.BitOperations.PopCount((uint)format & 0x3));
+    // 讀可變字型的實例時：裝置表（絕對位置）→ 變化量。一次只讀一支字型的一個實例（每條執行緒自己的）
+    [ThreadStatic] private static Func<int, int>? Vary;
+
+    /// <param name="parent">裝置表的位置從哪裡起算：格式 1 是 PairSet、格式 2 是子表。</param>
+    private static int XAdvance(SfntReader r, int record, int format, int parent)
+    {
+        var value = (format & 0x4) == 0 ? 0 : r.S16(record + 2 * System.Numerics.BitOperations.PopCount((uint)format & 0x3));
+        if (Vary is { } vary && (format & 0x40) != 0 && r.U16(record + 2 * System.Numerics.BitOperations.PopCount((uint)format & 0x3F)) is var device and > 0)
+            value += vary(parent + device);
+        return value;
+    }
 
     /// <summary>涵蓋表：字符 → 在涵蓋表裡的序號。</summary>
     private static Dictionary<int, int> Coverage(SfntReader r, int offset)
@@ -176,7 +190,8 @@ internal static class GposKerning
                 var rec = set + 2 + i * recordSize;
                 var second = r.U16(rec);
                 if (!cps.TryGetValue(second, out var secondCps)) continue;
-                var delta = XAdvance(r, rec + 2, fmt1) + XAdvance(r, rec + 2 + ValueSize(fmt1), fmt2);
+                // 格式 1 的裝置表從 PairSet 起算（格式 2 從子表起算）
+                var delta = XAdvance(r, rec + 2, fmt1, set) + XAdvance(r, rec + 2 + ValueSize(fmt1), fmt2, set);
                 foreach (var a in firstCps)
                     foreach (var b in secondCps)
                         pairs.TryAdd(KerningPairs.Key(a, b), delta);
@@ -201,7 +216,7 @@ internal static class GposKerning
             for (var c2 = 0; c2 < c2Count; c2++)
             {
                 var rec = matrix + (c1 * c2Count + c2) * recordSize;
-                var delta = XAdvance(r, rec, fmt1) + XAdvance(r, rec + size1, fmt2);
+                var delta = XAdvance(r, rec, fmt1, sub) + XAdvance(r, rec + size1, fmt2, sub);
                 if (delta != 0) cells[c1 * c2Count + c2] = delta;
             }
 

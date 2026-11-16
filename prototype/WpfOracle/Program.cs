@@ -11,7 +11,10 @@ using System.Windows;
 using System.Windows.Media;
 using XamlFit.Core.Fonts;
 
+Console.OutputEncoding = System.Text.Encoding.UTF8;
 if (args.Length >= 3 && args[0] == "--scripts") return Scripts.Run(args[1], args[2]);
+if (args.Length >= 3 && args[0] == "--mong-attr") return MongolianAttribution.Run(args[1], args[2]);
+if (args.Length >= 4 && args[0] == "--glyphs") return Glyphs.Run(args[1], args[2], args.Skip(3));
 if (args.Length >= 2 && args[0] == "--display") return Display.Run(args[1]);
 if (args.Length >= 2 && args[0] == "--indic") return Indic.Run(args[1]);
 if (args.Length >= 2 && args[0] == "--indic-gen") return IndicGen.Run(args[1]);
@@ -25,7 +28,7 @@ if (!File.Exists(metricsPath))
     return 2;
 }
 
-var resolver = new FontResolver(MetricsFile.Parse(File.ReadAllText(metricsPath)).ToMetrics());
+var resolver = new FontResolver(MetricsFile.Load(metricsPath).ToMetrics());
 
 // 刻意混雜：英文 UI 標籤、德文（最長）、中文、數字、標點、emoji、混語
 string[] samples =
@@ -74,6 +77,9 @@ Diag.Run(resolver);
 Console.WriteLine($"{"face",-22} {"size",4}  {"ours",9} {"wpf",9}  {"diff%",7}  text");
 Console.WriteLine(new string('-', 90));
 
+// XF_TEXT_FACES="Segoe UI Variable Text:300,400;Segoe UI Variable Display:700" 換一組字面
+if (Environment.GetEnvironmentVariable("XF_TEXT_FACES") is { Length: > 0 } custom)
+    faces = [.. custom.Split(';').SelectMany(part => part.Split(':')[1].Split(',').Select(w => (part.Split(':')[0], int.Parse(w), FontStyleKind.Normal)))];
 foreach (var (family, weight, style) in faces)
 {
     var typeface = new Typeface(

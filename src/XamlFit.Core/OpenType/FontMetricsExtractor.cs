@@ -24,15 +24,78 @@ public static class FontMetricsExtractor
     {
         var faces = SfntReader.Open(bytes);
         var result = new List<FontMetrics>(faces.Count);
-        foreach (var f in faces)
+        foreach (var f in faces) result.AddRange(TryExtract(f, wantFamily));
+        return result;
+    }
+
+    private static List<FontMetrics> TryExtract(SfntReader r, Func<string, bool>? wantFamily) => Extract(r, wantFamily) is { } m ? Expand(r, m, wantFamily) : [];
+
+    /// <summary>
+    /// 可變字型：照 WPF 的家族名稱展開成每個具名實例一個字面（見 <see cref="VariableFonts"/>）。
+    /// 字距、形狀表、hdmx 都是預設位置的：只留給預設實例，其他實例只有前進寬度與字距（字距套上 GDEF 的變化量）。
+    /// 讀不出 HVAR 的可變字型照舊：只有預設位置一個字面。
+    /// </summary>
+    private static List<FontMetrics> Expand(SfntReader r, FontMetrics m, Func<string, bool>? wantFamily)
+    {
+        if (!m.Variable) return [m];
+        var numGlyphs = r.U16(r.TableOffset("maxp") + 4);
+        var advances = ReadHmtx(r, numGlyphs, r.U16(r.TableOffset("hhea") + 34));
+        var instances = VariableFonts.Read(r, advances, m.Family, id => ReadName(r, id));
+        if (instances.Count == 0) return wantFamily is null || wantFamily(m.Family) ? [m] : [];
+        var cmap = ReadCmap(r);
+        var result = new List<FontMetrics>();
+        foreach (var inst in instances)
         {
-            var m = TryExtract(f, wantFamily);
-            if (m is not null) result.Add(m);
+            if (wantFamily is not null && !wantFamily(m.Family) && !wantFamily(inst.Family)) continue;
+            result.Add(new FontMetrics
+            {
+                Family = inst.Family, Weight = inst.Weight, Style = inst.Italic ? FontStyleKind.Italic : FontStyleKind.Normal, Stretch = m.Stretch,
+                LegacyFamily = inst.LegacyFamily, Aliases = [], Variable = true,
+                UnitsPerEm = m.UnitsPerEm, Ascender = m.Ascender, Descender = m.Descender, LineGap = m.LineGap,
+                DefaultAdvance = inst.Advances.Length > 0 ? inst.Advances[0] : m.DefaultAdvance,
+                Ranges = inst.IsDefault ? m.Ranges : BuildRanges(cmap, inst.Advances),
+                Kerning = inst.IsDefault ? m.Kerning : GposKerning.Read(r, GlyphToCodepoints(cmap), inst.Normalized),
+                Arabic = inst.IsDefault ? m.Arabic : null,
+                Indic = inst.IsDefault ? m.Indic : null,
+                Hinted = inst.IsDefault ? m.Hinted : null,
+            });
         }
         return result;
     }
 
-    private static FontMetrics? TryExtract(SfntReader r, Func<string, bool>? wantFamily)
+    private static bool WantsInstance(SfntReader r, string family, Func<string, bool> wantFamily)
+    {
+        var numGlyphs = r.U16(r.TableOffset("maxp") + 4);
+        return VariableFonts.Read(r, new int[numGlyphs], family, id => ReadName(r, id)).Any(i => wantFamily(i.Family));
+    }
+
+    /// <summary>name 表裡這個編號的名稱（英文優先）。</summary>
+    private static string? ReadName(SfntReader r, int id)
+    {
+        if (!r.Has("name")) return null;
+        var name = r.TableOffset("name");
+        var count = r.U16(name + 2);
+        var storage = name + r.U16(name + 4);
+        string? best = null;
+        var bestRank = int.MaxValue;
+        for (var i = 0; i < count; i++)
+        {
+            var rec = name + 6 + i * 12;
+            if (r.U16(rec + 6) != id) continue;
+            int platform = r.U16(rec), encoding = r.U16(rec + 2), language = r.U16(rec + 4);
+            var rank = (platform, language) switch { (3, 0x0409) => 0, (3, _) when (language & 0x3FF) == 0x09 => 1, (0, _) => 2, (1, 0) => 3, _ => 4 };
+            if (rank >= bestRank) continue;
+            var s = platform == 3 || (platform == 0 && encoding is not 0)
+                ? r.Utf16BeString(storage + r.U16(rec + 10), r.U16(rec + 8))
+                : r.AsciiString(storage + r.U16(rec + 10), r.U16(rec + 8));
+            if (string.IsNullOrWhiteSpace(s)) continue;
+            best = s.Trim();
+            bestRank = rank;
+        }
+        return best;
+    }
+
+    private static FontMetrics? Extract(SfntReader r, Func<string, bool>? wantFamily)
     {
         // 五張表缺一不可。缺了就讀不出度量 —— 回 null 讓呼叫端記成「這支讀不了」，
         // 不要丟例外讓整批匯出失敗（一個資料夾裡有一支壞字型是常態）。
@@ -60,7 +123,8 @@ public static class FontMetricsExtractor
         var (weight, stretch, italic) = ReadOs2(r, head);
         var (family, subfamily, legacyFamily, aliases) = ReadNames(r);
         if (string.IsNullOrWhiteSpace(family)) family = Path.GetFileNameWithoutExtension("unknown");
-        if (wantFamily is not null && !wantFamily(family)) return null;
+        // 可變字型的實例家族名（Segoe UI Variable Text）要等展開才知道：先放行
+        if (wantFamily is not null && !wantFamily(family) && !(r.Has("fvar") && WantsInstance(r, family, wantFamily))) return null;
 
         // 子家族名有時才是斜體的唯一來源（OS/2 的 fsSelection 不一定可靠）
         if (!italic && subfamily.Contains("italic", StringComparison.OrdinalIgnoreCase)) italic = true;
@@ -85,8 +149,17 @@ public static class FontMetricsExtractor
             Kerning = GposKerning.Read(r, GlyphToCodepoints(cmap)),
             Arabic = ArabicExport.Read(r, cmap, advances),
             Hinted = ReadHdmx(r, cmap, advances, unitsPerEm, numGlyphs),
-            Indic = IndicExport.Read(r, cmap, advances)?.ToDictionary(kv => kv.Key, kv => (IReadOnlyDictionary<string, int>)kv.Value),
+            Indic = WithMongolian(IndicExport.Read(r, cmap, advances), MongolianExport.Read(r, cmap, advances)),
         };
+    }
+
+    // 蒙古文的表跟印度系文字放在同一個欄位（鍵 "mong"），度量檔格式不用改
+    private static Dictionary<string, IReadOnlyDictionary<string, int>>? WithMongolian(Dictionary<string, Dictionary<string, int>>? indic, Dictionary<string, int>? mongolian)
+    {
+        if (indic is null && mongolian is null) return null;
+        var result = indic?.ToDictionary(kv => kv.Key, kv => (IReadOnlyDictionary<string, int>)kv.Value) ?? [];
+        if (mongolian is not null) result[MongolianJoining.DataKey] = mongolian;
+        return result;
     }
 
     /// <summary>

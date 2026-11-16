@@ -13,7 +13,65 @@ internal static class SyntheticFont
     /// 產生一支字型：unitsPerEm=1000，字符 0=.notdef(500)、1='A'(600)、2='B'(700)、3='中'(1000)。
     /// cmap 用 format 4（'A'=0x41、'B'=0x42 連續一段；'中'=0x4E2D 自己一段）。
     /// </summary>
-    public static byte[] Build(string familyName = "Test Sans", int weight = 400, bool italic = false)
+    public static byte[] Build(string familyName = "Test Sans", int weight = 400, bool italic = false) =>
+        Assemble(BaseTables(familyName, weight, italic, []));
+
+    /// <summary>
+    /// 可變字型版：wght 軸 300–700（預設 400），三個具名實例「Light Text」「Regular」「Bold Text」，
+    /// HVAR 讓 'A' 在 wght=700 寬 60、在 300 窄 30（'B' 是 70 與 40），沒有寬度對應表（inner = 字符編號）。
+    /// </summary>
+    public static byte[] BuildVariable(string familyName = "Test Var")
+    {
+        var fvar = new byte[16 + 20 + 3 * 8];
+        WriteU16(fvar, 0, 1);                    // majorVersion
+        WriteU16(fvar, 4, 16);                   // axesArrayOffset
+        WriteU16(fvar, 6, 2);                    // reserved
+        WriteU16(fvar, 8, 1);                    // axisCount
+        WriteU16(fvar, 10, 20);                  // axisSize
+        WriteU16(fvar, 12, 3);                   // instanceCount
+        WriteU16(fvar, 14, 8);                   // instanceSize（沒有 postScriptNameID）
+        System.Text.Encoding.ASCII.GetBytes("wght").CopyTo(fvar, 16);
+        WriteU32(fvar, 20, 300u << 16);
+        WriteU32(fvar, 24, 400u << 16);
+        WriteU32(fvar, 28, 700u << 16);
+        WriteU16(fvar, 34, 256);                 // axisNameID
+        (int Name, uint Wght)[] instances = [(257, 300), (258, 400), (259, 700)];
+        for (var i = 0; i < 3; i++)
+        {
+            var o = 36 + i * 8;
+            WriteU16(fvar, o, (ushort)instances[i].Name);
+            WriteU32(fvar, o + 4, instances[i].Wght << 16);
+        }
+
+        // HVAR：表頭 20 位元組，ItemVariationStore 接在後面
+        var hvar = new byte[20 + 12 + 16 + 18];
+        WriteU16(hvar, 0, 1);
+        WriteU32(hvar, 4, 20);                   // itemVariationStoreOffset
+        var store = 20;
+        WriteU16(hvar, store, 1);                // format
+        WriteU32(hvar, store + 2, 12);           // variationRegionListOffset
+        WriteU16(hvar, store + 6, 1);            // itemVariationDataCount
+        WriteU32(hvar, store + 8, 28);           // itemVariationDataOffsets[0]
+        var regions = store + 12;
+        WriteU16(hvar, regions, 1);              // axisCount
+        WriteU16(hvar, regions + 2, 2);          // regionCount
+        WriteU16(hvar, regions + 4, 0); WriteU16(hvar, regions + 6, 0x4000); WriteU16(hvar, regions + 8, 0x4000);        // 0 → 1
+        WriteU16(hvar, regions + 10, 0xC000); WriteU16(hvar, regions + 12, 0xC000); WriteU16(hvar, regions + 14, 0);    // -1 → 0
+        var data = store + 28;
+        WriteU16(hvar, data, 4);                 // itemCount
+        WriteU16(hvar, data + 2, 0);             // wordDeltaCount：全部一個位元組
+        WriteU16(hvar, data + 4, 2);             // regionIndexCount
+        WriteU16(hvar, data + 6, 0); WriteU16(hvar, data + 8, 1);
+        sbyte[] deltas = [0, 0, 60, -30, 70, -40, 0, 0];
+        for (var k = 0; k < deltas.Length; k++) hvar[data + 10 + k] = unchecked((byte)deltas[k]);
+
+        return Assemble(BaseTables(familyName, 400, false,
+            [(256, "Weight"), (257, "Light Text"), (258, "Regular"), (259, "Bold Text")],
+            [("fvar", fvar), ("HVAR", hvar)]));
+    }
+
+    private static List<(string Tag, byte[] Data)> BaseTables(string familyName, int weight, bool italic, (int Id, string Value)[] extraNames,
+        List<(string Tag, byte[] Data)>? extraTables = null)
     {
         var head = new byte[54];
         WriteU32(head, 0, 0x00010000);          // version
@@ -44,13 +102,13 @@ internal static class SyntheticFont
         WriteU16(os2, 6, 5);                    // usWidthClass = Normal
         WriteU16(os2, 62, (ushort)(italic ? 0x0001 : 0));    // fsSelection
 
-        var name = BuildName(familyName, italic ? "Italic" : "Regular");
+        var name = BuildName([(1, familyName), (2, italic ? "Italic" : "Regular"), .. extraNames]);
 
-        return Assemble(
+        return
         [
             ("OS/2", os2), ("cmap", cmap), ("head", head),
-            ("hhea", hhea), ("hmtx", hmtx), ("maxp", maxp), ("name", name),
-        ]);
+            ("hhea", hhea), ("hmtx", hmtx), ("maxp", maxp), ("name", name), .. extraTables ?? [],
+        ];
     }
 
     private static byte[] BuildCmapFormat4()
@@ -82,31 +140,27 @@ internal static class SyntheticFont
         return table;
     }
 
-    private static byte[] BuildName(string family, string subfamily)
+    private static byte[] BuildName((int Id, string Value)[] names)
     {
-        var fam = System.Text.Encoding.BigEndianUnicode.GetBytes(family);
-        var sub = System.Text.Encoding.BigEndianUnicode.GetBytes(subfamily);
-        var storage = 6 + 2 * 12;
-        var table = new byte[storage + fam.Length + sub.Length];
+        var strings = names.Select(n => System.Text.Encoding.BigEndianUnicode.GetBytes(n.Value)).ToArray();
+        var storage = 6 + names.Length * 12;
+        var table = new byte[storage + strings.Sum(x => x.Length)];
         WriteU16(table, 0, 0);                     // format
-        WriteU16(table, 2, 2);                     // count
+        WriteU16(table, 2, (ushort)names.Length);  // count
         WriteU16(table, 4, (ushort)storage);       // stringOffset
-
-        void Rec(int i, int nameId, int off, int len)
+        var off = 0;
+        for (var i = 0; i < names.Length; i++)
         {
             var o = 6 + i * 12;
             WriteU16(table, o, 3);                 // platformID Windows
             WriteU16(table, o + 2, 1);             // encodingID UCS-2
             WriteU16(table, o + 4, 0x0409);        // languageID en-US
-            WriteU16(table, o + 6, (ushort)nameId);
-            WriteU16(table, o + 8, (ushort)len);
+            WriteU16(table, o + 6, (ushort)names[i].Id);
+            WriteU16(table, o + 8, (ushort)strings[i].Length);
             WriteU16(table, o + 10, (ushort)off);
+            Array.Copy(strings[i], 0, table, storage + off, strings[i].Length);
+            off += strings[i].Length;
         }
-
-        Rec(0, 1, 0, fam.Length);
-        Rec(1, 2, fam.Length, sub.Length);
-        Array.Copy(fam, 0, table, storage, fam.Length);
-        Array.Copy(sub, 0, table, storage + fam.Length, sub.Length);
         return table;
     }
 

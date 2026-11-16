@@ -254,6 +254,36 @@ public sealed class MetricsFile
 
     private static string Quote(string s) => JsonSerializer.Serialize(s);
 
+    /// <summary>
+    /// 讀度量檔：開頭是 gzip 的標記（1F 8B）就先解壓縮。完整的度量檔（37 個家族）是 20 MB 的 JSON，gzip 之後不到 4 MB ——
+    /// 要放進 repo 的話用 <c>fonts export --out xamlfit.fonts.json.gz</c>。
+    /// </summary>
+    public static MetricsFile Load(string path) => Parse(ReadText(path));
+
+    /// <summary>度量檔的文字（gzip 的先解壓縮）。</summary>
+    public static string ReadText(string path)
+    {
+        var bytes = File.ReadAllBytes(path);
+        if (bytes.Length >= 2 && bytes[0] == 0x1F && bytes[1] == 0x8B)
+        {
+            using var gz = new System.IO.Compression.GZipStream(new MemoryStream(bytes), System.IO.Compression.CompressionMode.Decompress);
+            using var reader = new StreamReader(gz, System.Text.Encoding.UTF8);
+            return reader.ReadToEnd();
+        }
+        using var text = new StreamReader(new MemoryStream(bytes), System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return text.ReadToEnd();
+    }
+
+    /// <summary>寫度量檔：路徑結尾是 .gz 就壓縮。</summary>
+    public static void Save(string path, string json)
+    {
+        if (!path.EndsWith(".gz", StringComparison.OrdinalIgnoreCase)) { File.WriteAllText(path, json); return; }
+        using var file = File.Create(path);
+        using var gz = new System.IO.Compression.GZipStream(file, System.IO.Compression.CompressionLevel.SmallestSize);
+        var bytes = new System.Text.UTF8Encoding(false).GetBytes(json);
+        gz.Write(bytes);
+    }
+
     public static MetricsFile Parse(string json)
     {
         var f = JsonSerializer.Deserialize<MetricsFile>(json)

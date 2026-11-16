@@ -56,6 +56,14 @@ internal static class GdiHinting
         {
             foreach (var face in faces)
             {
+                // 可變字型：WPF Display 模式的寬度不是 GDI 的 hinting 寬度（Segoe UI Variable Small 10 px 的 i，WPF 3 px、GDI 2 px；
+                // 也不是線性寬度四捨五入）。不寫，Display 模式量不到
+                if (face.Variable)
+                {
+                    skipped.Add($"{face.Family} {face.Weight}: variable font (WPF's Display-mode widths are not GDI's)");
+                    result.Add(face);
+                    continue;
+                }
                 var hinted = Read(dc, face, out var why);
                 if (hinted is null)
                 {
@@ -74,16 +82,19 @@ internal static class GdiHinting
         return (result, skipped);
     }
 
+    private static string Truncate(string name) => name.Length > 31 ? name[..31] : name;
+
     private static Dictionary<int, IReadOnlyDictionary<int, int>>? Read(IntPtr dc, FontMetrics face, out string why)
     {
         why = "";
-        var name = face.LegacyFamily ?? face.Family;
+        // LOGFONT 的字面名稱最多 31 個字（GDI 回報的也是截斷的：「Segoe UI Variable Text Semiligh」）
+        var name = Truncate(face.LegacyFamily ?? face.Family);
         var italic = face.Style != FontStyleKind.Normal;
         // GDI 回報的是系統語言的名稱（繁中 Windows：「微軟正黑體」「細明體」，Light 字重是「微軟正黑體 Light」）：
         // 英文名、各語言的別名、別名加上舊式家族名的字重尾巴都算同一支；字重與斜體另外比
         var suffix = face.LegacyFamily is { } legacy && legacy.StartsWith(face.Family, StringComparison.OrdinalIgnoreCase)
             ? legacy[face.Family.Length..] : "";
-        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { name, face.Family };
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { name, face.LegacyFamily ?? face.Family, face.Family, Truncate(face.Family) };
         foreach (var alias in face.Aliases)
         {
             names.Add(alias);

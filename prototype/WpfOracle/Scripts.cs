@@ -14,7 +14,7 @@ internal static class Scripts
 {
     public static int Run(string metricsPath, string stringsPath)
     {
-        var resolver = new FontResolver(MetricsFile.Parse(File.ReadAllText(metricsPath)).ToMetrics());
+        var resolver = new FontResolver(MetricsFile.Load(metricsPath).ToMetrics());
         var sets = JsonSerializer.Deserialize<Dictionary<string, string[]>>(File.ReadAllText(stringsPath))!;
         var fonts = new Dictionary<string, string[]>
         {
@@ -28,11 +28,12 @@ internal static class Scripts
             ["lo"] = ["Leelawadee UI"],
             ["my"] = ["Myanmar Text"],
             ["bo"] = ["Microsoft Himalaya"],
+            ["mn"] = ["Mongolian Baiti"],
         };
         if (Environment.GetEnvironmentVariable("XF_SCRIPT_FONTS") is { Length: > 0 } extra)   // 例："Calibri,Courier New"
             foreach (var key in new[] { "ar", "fa" }) fonts[key] = extra.Split(',');
         var cultures = new Dictionary<string, string> { ["he"] = "he-IL", ["ar"] = "ar-SA", ["fa"] = "fa-IR", ["th"] = "th-TH", ["mr"] = "mr-IN", ["ta"] = "ta-IN",
-            ["km"] = "km-KH", ["lo"] = "lo-LA", ["my"] = "my-MM", ["bo"] = "bo-CN" };
+            ["km"] = "km-KH", ["lo"] = "lo-LA", ["my"] = "my-MM", ["bo"] = "bo-CN", ["mn"] = "mn-Mong-CN" };
         var worstAll = 0.0;
 
         foreach (var (script, strings) in sets)

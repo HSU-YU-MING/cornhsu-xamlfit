@@ -18,7 +18,7 @@ internal static class Usage
             FONTS EXPORT
               --from <path>        A font file (.ttf/.otf/.ttc) or a directory of them.
                                    Repeatable. Defaults to the system font directory.
-              --out <path>         Output file (default: xamlfit.fonts.json)
+              --out <path>         Output file (default: xamlfit.fonts.json; ending in .gz writes it gzipped, about a fifth of the size)
               --family <name>      Only export these families. Repeatable.
               --merge              Merge into an existing output file instead of replacing it.
               --hinted             Windows only: add GDI's hinted widths for 8–48 px, used for
@@ -37,7 +37,7 @@ internal static class Usage
                                    it is blocked. The summary says how many; this says which.
               --resx <path>        Directory holding .resx files, so resource strings get their
                                    current (source-language) width too. Repeatable.
-              --metrics <path>     Metrics file (default: xamlfit.fonts.json next to <root>)
+              --metrics <path>     Metrics file (default: xamlfit.fonts.json or xamlfit.fonts.json.gz next to <root>)
               --min-coverage <n>   Resolution floor, 0-100. Below it: exit 3.
                                    Default 0 for budget (an export, not a gate), 60 for check.
               --config <path>      Config file (default: xamlfit.config.json next to <root>).

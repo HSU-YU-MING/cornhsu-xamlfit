@@ -70,7 +70,7 @@ Measured out of the box, no configuration, on sixteen projects (fonts exported w
 | Playnite | 1,107 | 274 | 140 | 506 | **66.2%** |
 | ScreenToGif | 1,277 | 167 | 203 | 790 | **45.1%** |
 | HandyControl | 210 | 11 | 61 | 123 | 15.3% |
-| MahApps.Metro | 1,613 | 56 | 746 | 718 | 7.0% |
+| MahApps.Metro | 1,613 | 59 | 743 | 718 | 7.4% |
 | MaterialDesignInXamlToolkit | 2,339 | 0 | 867 | 1,432 | 0% |
 | wpfui | 440 | 0 | 15 | 405 | 0% |
 | NETworkManager (MahApps.Metro 2.4) | 1,862 | 0 | 49 | 1,727 | 0% |
@@ -123,34 +123,55 @@ and श differently for Marathi), with pre-base vowel signs drawn first and two-
 Text is the sum of its clusters, plus — for each pair of consonants joined by a virama — the smallest
 narrowing any form of the second one produces, with a separate value for vowel signs and nukta forms
 that narrow less than the bare consonant (Odia ୁ, Kannada ೃ), never narrower than the second cluster
-alone, and with a reph tried on either side of its consonant; a chain of three or more consonants is
-the plain sum plus the largest widening any three-consonant chain showed; and the largest kerning
-seen before punctuation. The export engine applies the shaping features in stages, as Windows does,
-and honours lookup flags (glyph classes, mark attachment classes and mark filtering sets) — without
-them Nirmala UI's Odia conjuncts never narrowed. Against Nirmala UI — 290 Marathi and 300 Tamil strings from Playnite and ScreenToGif,
-every cluster alone, random cluster sequences and conjunct-heavy random words (about 4,000–15,000 per
-script, checked again with a second, independent set): worst under-estimate 0.03%, Tamil 0.18%; on
-average Marathi text measures 1.3% wide, Odia 3.2–3.8%, Kannada 6.3–7.1%.
-In Gujarati and Telugu a cluster changes its neighbour (WPF kerns across a trailing anusvara or vowel
-sign; two-part vowels reach over), so every cluster boundary also adds the largest widening that
-cluster — or any prefix of it, since the marks are skipped — produces before any other cluster.
-Telugu also leaves out the joined-consonant narrowing (the export engine gets ళ్కి 2.8% narrower than
-WPF), and the obsolete ఴ, whose virama form reaches into the previous cluster and made every boundary
-9% wider. Worst under-estimate 0.03%; on average Gujarati measures 2.2% wide and Telugu 8.2%. The
-vocalic-L signs of Odia and Kannada (ୢ ୣ ೢ ೣ) are not measured: WPF does not join them the way the
-export engine does.
+alone; a chain of exactly three consonants adds a value kept per last two consonants (the widest over
+every first one), longer chains the largest any chain showed; and the largest kerning seen before
+punctuation. The export engine applies the shaping features in stages, as Windows does, and honours
+lookup flags — without them Nirmala UI's Odia conjuncts never narrowed. It does not reorder a
+syllable the way WPF does, so where WPF would — a below-base vowel sign moves next to the base
+(হ্যৃ: ৃ joins হ), a pre-base form (Telugu and Malayalam ra) is drawn first, a reph goes after its
+consonant, Odia's candrabindu attaches to the first consonant — each join is also shaped that way and
+the widest kept. In Gujarati and Telugu a cluster changes its neighbour (WPF kerns across a trailing
+anusvara or vowel sign), so every cluster boundary also adds the largest widening that cluster — or
+any prefix of it — produces before any other cluster.
+Against Nirmala UI, **every** two-consonant join with every vowel sign, nukta and mark, every bare
+three-consonant chain and 20,000 chains with signs — about 2.4 million strings over the ten scripts
+(`WpfOracle --indic-gen` with `XF_GEN_EXHAUSTIVE=1`): worst under-estimate 0.03%. That check found
+rare joins the previous version measured up to 35% narrow (Odia ଧ୍ଯି, Malayalam യ്യൢ, Bengali হ্যৃ,
+Kannada ಜ್ಞು); random sampling had missed them twice. On realistic random words (two independent sets)
+text measures on average 0.4% wide in Marathi, 1.0% Bengali and Gurmukhi, 1.5% Gujarati, 1.7–1.9%
+Malayalam, 3.6–3.7% Telugu, 3.7–4.3% Odia, 4.5–5.0% Kannada; 290 Marathi and 300 Tamil strings from
+Playnite and ScreenToGif stay within 0.18%. Not measured: the vocalic-L signs of Odia, Kannada and
+Telugu, Telugu's lone length mark ౖ, and the obsolete ఴ — WPF draws them in ways the export engine
+does not.
 
-**Khmer and Tibetan, against `FormattedText`.** The same cluster model, extended: Khmer coeng
+**Khmer, Myanmar and Tibetan, against `FormattedText`.** The same cluster model, extended: Khmer coeng
 (U+17D2) works like a virama, and a register shifter (៉ ៊) may come before the vowel — this export
 engine draws ត៉ា 0.44 px narrower than WPF, which draws it as wide as តា, so clusters with a shifter
-keep the wider of the two. A Tibetan stack takes up to two subjoined letters (the second only ya, ra,
-la or wa); with 240,000 stack-and-vowel combinations, the file stores one value per stack — the widest
-over every vowel sign — plus the most any mark (ཾ ཿ ྂ ྃ) widens a stack. **Myanmar** takes medial combinations and vowel sequences; with lookup flags honoured, the
+keep the wider of the two. A robat (៌) after anything but the base consonant, and a second coeng ro
+in one cluster, are not measured: WPF draws a dotted circle. A Tibetan stack takes up to two subjoined
+letters (the second only ya, ra, la or wa); with 240,000 stack-and-vowel combinations, the file stores
+one value per stack — the widest over every vowel sign — plus the most any mark (ཾ ཿ ྂ ྃ) widens a
+stack. **Myanmar** takes medial combinations and vowel sequences; with lookup flags honoured, the
 export engine draws ဋို့ as WPF does (it was 29% narrow), and since a syllable can widen the next one
-(ပျု့ + ငွီ), each boundary adds the largest widening seen after a cluster ending the same way. Against
-3,000 words each, twice with independent sets (Leelawadee UI, Myanmar Text, Microsoft Himalaya;
-generated from the syllable structure, not real translations): worst under-estimate 0.02% (Khmer,
-Myanmar) and 0.04% (Tibetan); Myanmar measures 12% wide on average. **Lao** adds up like Thai (≤ 0.02%).
+(ပျု့ + ငွီ), each boundary adds the largest widening seen after a cluster ending the same way.
+Real translations (Leelawadee UI, Myanmar Text, Microsoft Himalaya): 1,176 Khmer strings from Survey
+Solutions and SystemTrayMenu measure 0.35% wide on average, 879 Tibetan strings from SOSpect 0.17%,
+173 Burmese strings from Discord CustomRP and dotnet-ftps-server 1.4%; worst under-estimate 0.04%.
+Every Khmer join and chain (about 800,000 strings) stays within 0.04%; two sets of 3,000 generated words
+per script within 0.04% too, Myanmar's averaging 12% wide (generated syllables are denser than real
+text). **Lao** adds up like Thai (≤ 0.02%).
+
+**Mongolian, against `FormattedText`.** A Mongolian letter's glyph depends on its position, on the
+word's vowel harmony, on a following variation selector, on a vowel separator (MVS) or narrow
+no-break space next to it, on whether it is in the first syllable, and on the letter before it; a
+consonant and a vowel often become one ligature that WPF counts all to the consonant. `fonts export`
+runs the font's rules over every letter, every pair, every three basic letters in both genders and
+150,000 random words, and stores the widest width each letter — or each ligature pair — took in each
+of those situations; text is the sum. Variation selectors draw nothing after a letter; MVS between
+letters has a width (205 units in Mongolian Baiti), it is not invisible. Against Mongolian Baiti, three
+sets of 4,000 generated words and sentences: about 4% wide on average, worst under-estimate 0.04%;
+the 32 Mongolian strings Windows ships for the mn-Mong locale (month and day names, the language name):
+5.2% wide, 0.01% narrow. Mongolian Baiti's table is about 600 KB.
 
 **`TextFormattingMode="Display"`, against `FormattedText`.** Display mode snaps every glyph to a
 whole pixel using the font's hinted widths, which depend on the pixel size — font size × display
@@ -162,7 +183,9 @@ all 13,200 of WPF's widths across ten fonts, eleven sizes and five scalings are 
 exact, the rest wider, none narrower. The tool measures every scaling in `displayScales` (default
 100–200%) and keeps the widest; a pixel size the file has no hinted widths for is reported as not
 measurable, because hinting can widen a glyph by several pixels (Yu Gothic UI says hinting never
-changes widths and still does). An app that only supports some scalings can say so.
+changes widths and still does). An app that only supports some scalings can say so. Variable fonts
+are not measured in Display mode: WPF's widths for them are not GDI's (Segoe UI Variable Small at
+10 px: WPF draws an `i` 3 px wide, GDI hints it to 2 px) and not rounded linear widths either.
 
 **Right-to-left and Thai text, against `FormattedText`.** Hebrew, Thai and Lao add up like Latin
 (≤ 0.02%). Arabic, Persian and Urdu letters change shape with their neighbours, so
@@ -320,6 +343,10 @@ xamlfit fonts export --family "Segoe UI" --family "Microsoft JhengHei UI"
 git add xamlfit.fonts.json
 ```
 
+A file with many families is large (37 families with complex-script fonts: about 20 MB); written as
+`--out xamlfit.fonts.json.gz` it is gzipped to about a fifth, and every command reads either (the
+default lookup tries `xamlfit.fonts.json`, then `xamlfit.fonts.json.gz`).
+
 `xamlfit.fonts.json` contains **numbers only** — advance widths, kerning adjustments, and the widths
 of Arabic letter forms worked out from the font's own rules, and with `--hinted` (Windows) the
 whole-pixel widths GDI gives each character from 8 to 48 px. No glyph outlines, no font software.
@@ -330,7 +357,12 @@ It will not substitute a font it has for one it lacks:
 
 - the *first* family in a fallback list must be in the file (a later one is only a fallback);
 - bold text is not measured with the regular face;
-- a variable font only answers for its default weight;
+- a variable font answers for its named instances only, under the family names WPF uses —
+  Segoe UI Variable becomes `Segoe UI Variable Text`, `Small` and `Display`, each with its Light,
+  Semilight, Regular, Semibold and Bold widths from the font's `HVAR` and kerning variations.
+  `Segoe UI Variable` itself is not a family to WPF: it reads the name as Segoe UI plus a face name
+  and draws Segoe UI. The tool reports it as a font not in the file (declare it in `absentFonts`,
+  or write the name WPF knows);
 - `TextFormattingMode="Display"` text is not measured with linear widths (measured against WPF:
   −37% to +45%); it needs hinted widths for its pixel size (`fonts export --hinted`).
 
@@ -426,8 +458,8 @@ out a horizontal `StackPanel` or `DockPanel`, and it is what `check` reports.
 
 What is *not* judged is counted and printed: strings with run-time placeholders (`{0}`), text
 the metrics do not cover (with the code points, so you know which font to export), and
-scripts that reshape in a way the metrics do not cover (Mongolian,
-Arabic letters a font's data leaves out, Indic sequences that are not a grapheme cluster), and Display-mode
+scripts that reshape in a way the metrics do not cover (Mongolian letters in a situation the export
+never saw, Arabic letters a font's data leaves out, Indic sequences that are not a grapheme cluster), and Display-mode
 text at a pixel size the font has no hinted widths for. **A culture in which nothing
 could be measured makes the run exit 3** — "not checked" must not look like "passed".
 
@@ -456,9 +488,9 @@ fail a build, because a guess should not block someone's pull request.
 | Styles applied by triggers, visual states or code-behind | not followed |
 | Text set through properties not scanned (`ToolTip`, `Title`, watermark/hint attached properties, `Hyperlink`/`Span` content) | not seen at all |
 | Resource dictionaries merged in code at run time | every dictionary file is assumed merged; conflicting definitions make the value unknown |
-| Shaping in Mongolian | reported as not measurable |
-| Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala), Khmer, Myanmar, Tibetan | measured as the sum of grapheme clusters, erring wide (Myanmar by 12%, Telugu by 8% on average); never more than 0.18% narrow in the comparisons; Khmer, Myanmar and Tibetan checked only against generated words |
-| `TextFormattingMode="Display"` | measured from the font's hinted widths at every scaling in `displayScales`; a pixel size the font does not list is not measurable |
+| Mongolian | the sum of the widest width each letter or ligature pair took in the same situation at export time, erring wide (about 4%); a letter in a situation the export never saw is not measurable; checked against generated words and 32 strings from Windows' locale data only |
+| Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala), Khmer, Myanmar, Tibetan | measured as the sum of grapheme clusters, erring wide (Kannada by up to 5%, Myanmar's generated words by 12%, real Burmese by 1.4%); never more than 0.18% narrow in the comparisons, including every two-consonant join of the Indic scripts and Khmer |
+| `TextFormattingMode="Display"` | measured from the font's hinted widths at every scaling in `displayScales`; a pixel size the font does not list, and any variable font, is not measurable |
 | Arabic-script fonts whose contextual rules reach further than three letters | the letters involved, or the whole font, are reported as not measurable (see above) |
 | Arabic digits | WPF swaps 0–9 for Arabic-Indic digits in Arabic text; both are measured and the wider one is used |
 | Ligatures other than Arabic (`fi`, `ffl`…) | not applied; covered by the text-width comparison above (worst under-estimate 0.025%) |

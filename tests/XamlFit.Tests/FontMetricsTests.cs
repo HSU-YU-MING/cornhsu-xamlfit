@@ -274,4 +274,52 @@ public class FontResolverTests
         var m2 = TextMeasure.Measure("A", [latin, other], 10, declaredCount: 0);
         Assert.True(m2.UsedAutoFallback);
     }
+
+    [Fact]
+    public void A_variable_font_becomes_one_face_per_named_instance_under_the_name_wpf_uses()
+    {
+        // WPF 不認得字型自己的家族名（Segoe UI Variable 會被拆成 Segoe UI + 字面名稱）；它認得的是「家族 + 那組實例共同的字」
+        var faces = FontMetricsExtractor.FromBytes(SyntheticFont.BuildVariable()).OrderBy(f => f.Weight).ToList();
+        Assert.Equal([300, 400, 700], faces.Select(f => f.Weight));
+        Assert.All(faces, f => Assert.Equal("Test Var Text", f.Family));
+        Assert.All(faces, f => Assert.True(f.Variable));
+        Assert.Equal("Test Var Text Light", faces[0].LegacyFamily);   // GDI／舊式名稱
+        Assert.Null(faces[1].LegacyFamily);
+        Assert.Null(faces[2].LegacyFamily);                           // 粗體跟一般同一個舊式家族
+        // HVAR：'A' 600 → Light 570、Bold 660；'B' 700 → 660、770
+        Assert.True(faces[0].TryAdvance('A', out var a300) && a300 == 570);
+        Assert.True(faces[1].TryAdvance('A', out var a400) && a400 == 600);
+        Assert.True(faces[2].TryAdvance('A', out var a700) && a700 == 660);
+        Assert.True(faces[2].TryAdvance('B', out var b700) && b700 == 770);
+        Assert.True(faces[0].TryAdvance('B', out var b300) && b300 == 660);
+        // --family 寫字型自己的家族名或實例的家族名都拿得到
+        Assert.Equal(3, FontMetricsExtractor.FromBytes(SyntheticFont.BuildVariable(), f => f == "Test Var").Count);
+        Assert.Equal(3, FontMetricsExtractor.FromBytes(SyntheticFont.BuildVariable(), f => f == "Test Var Text").Count);
+        Assert.Empty(FontMetricsExtractor.FromBytes(SyntheticFont.BuildVariable(), f => f == "Other"));
+        // 解析時只准用實例的字重
+        var resolver = new FontResolver(faces);
+        Assert.Single(resolver.Resolve("Test Var Text", 700, FontStyleKind.Normal, "Test Var Text").Chain);
+        Assert.Empty(resolver.Resolve("Test Var Text", 600, FontStyleKind.Normal, "Test Var Text").Chain);
+        Assert.Single(resolver.Resolve("Test Var Text Light", 400, FontStyleKind.Normal, "Test Var Text Light").Chain);
+    }
+
+    [Fact]
+    public void A_gzipped_metrics_file_reads_the_same()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "xamlfit-gz-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var json = MetricsFile.FromMetrics([FontMetricsExtractor.FromBytes(SyntheticFont.Build()).Single()], "test", new DateOnly(2026, 11, 16)).ToJson();
+            var gz = Path.Combine(dir, "m.fonts.json.gz");
+            var plain = Path.Combine(dir, "m.fonts.json");
+            MetricsFile.Save(gz, json);
+            MetricsFile.Save(plain, json);
+            Assert.Equal(0x1F, File.ReadAllBytes(gz)[0]);
+            Assert.Equal('{', (char)File.ReadAllBytes(plain)[0]);
+            Assert.Equal(json, MetricsFile.ReadText(gz));
+            Assert.Equal(MetricsFile.Load(plain).ToJson(), MetricsFile.Load(gz).ToJson());
+        }
+        finally { Directory.Delete(dir, true); }
+    }
 }

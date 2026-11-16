@@ -70,12 +70,70 @@ public class IndicTests
     }
 
     [Fact]
-    public void A_chain_of_three_consonants_adds_the_widest_chain_change_once()
+    public void A_chain_of_exactly_three_consonants_uses_the_change_kept_for_its_last_two()
     {
-        // क्ष्र：各叢集相加（三個子音不套連寫），開頭加一次「整串最多比相加寬多少」
-        var data = new Dictionary<string, int> { [IndicClusters.ConjunctKey(Ka, Ssa)] = -300, [IndicClusters.ChainKey] = 50 };
+        // क्ष्र：各叢集相加（三個子音不套連寫），再加依「後兩個子音」記的改變量（取所有第一個子音裡最寬的）
+        var data = new Dictionary<string, int>
+        {
+            [IndicClusters.ConjunctKey(Ka, Ssa)] = -300,
+            [IndicClusters.ChainKey3(Ssa, Ra)] = -500,
+            [IndicClusters.ChainKey] = 50,
+        };
         var face = Face(new() { ["deva"] = data });
-        Assert.Equal((400 + 400 + 400 + 400 + 400 + 50) / 100.0, M(face, S(Ka, Virama, Ssa, Virama, Ra)).WidthPx, 3);
+        Assert.Equal((400 + 400 + 400 + 400 + 400 - 500) / 100.0, M(face, S(Ka, Virama, Ssa, Virama, Ra)).WidthPx, 3);
+        // 這兩個子音沒有鍵：表是完整的，就是 0
+        Assert.Equal((400 + 400 + 400 + 400 + 400) / 100.0, M(face, S(Ka, Virama, Ra, Virama, Ssa)).WidthPx, 3);
+        // 四個子音：用總的最大值
+        Assert.Equal((400 * 7 + 50) / 100.0, M(face, S(Ka, Virama, Ssa, Virama, Ra, Virama, Ka)).WidthPx, 3);
+    }
+
+    [Fact]
+    public void A_three_consonant_chain_whose_last_consonant_has_a_nukta_uses_its_own_change()
+    {
+        // 奧里亞文 ନ୍ଫ୍ଯ଼：WPF 三個 virama 都看得見（不連寫），帶 nukta 的另外記
+        const int Na = 0x0B28, Pha = 0x0B2B, Ya = 0x0B2F, Halant = 0x0B4D, Nukta = 0x0B3C;
+        var face = new FontMetrics
+        {
+            Family = "Orya", UnitsPerEm = 1000, DefaultAdvance = 500,
+            Ranges = [new AdvanceRange(0x0B00, 0x0B7F, 400)],
+            Indic = new Dictionary<string, IReadOnlyDictionary<string, int>>
+            {
+                ["orya"] = new Dictionary<string, int> { [IndicClusters.ChainKey3(Pha, Ya)] = -600, [IndicClusters.ChainKey3(Pha, Ya, Nukta)] = 0 },
+            },
+        };
+        Assert.Equal((400 * 5 - 600) / 100.0, TextMeasure.Measure(S(Na, Halant, Pha, Halant, Ya), [face], 10).WidthPx, 3);
+        Assert.Equal(400 * 6 / 100.0, TextMeasure.Measure(S(Na, Halant, Pha, Halant, Ya, Nukta), [face], 10).WidthPx, 3);
+
+        var back = MetricsFile.Parse(MetricsFile.FromMetrics([face], "test", new DateOnly(2026, 11, 16)).ToJson()).ToMetrics().Single().Indic!["orya"];
+        Assert.Equal(-600, back[IndicClusters.ChainKey3(Pha, Ya)]);
+        Assert.Equal(0, back[IndicClusters.ChainKey3(Pha, Ya, Nukta)]);
+    }
+
+    [Fact]
+    public void Khmer_robat_only_follows_the_base_consonant_and_coeng_ro_appears_once()
+    {
+        var k = IndicClusters.Khmer;
+        Assert.Equal(2, IndicClusters.Match([0x1798, 0x17CC], 0, k));                 // ម៌：robat 緊接子音
+        Assert.Equal(0, IndicClusters.Match([0x179C, 0x17D2, 0x179C, 0x17CC], 2, k));  // វ្វ៌：robat 接在下標子音後面，WPF 畫虛線圓圈
+        Assert.Equal(0, IndicClusters.Match([0x1798, 0x17B6, 0x17CC], 0, k));          // 接在母音後面也不行
+        var face = new FontMetrics
+        {
+            Family = "Khmr", UnitsPerEm = 1000, DefaultAdvance = 500,
+            Ranges = [new AdvanceRange(0x1780, 0x17FF, 400)],
+            Indic = new Dictionary<string, IReadOnlyDictionary<string, int>> { ["khmr"] = new Dictionary<string, int>() },
+        };
+        // ឋ្រ្រ：兩個 coeng ro —— 量不到
+        Assert.True(TextMeasure.Measure(S(0x178B, 0x17D2, 0x179A, 0x17D2, 0x179A), [face], 10).ComplexScript);
+        Assert.False(TextMeasure.Measure(S(0x179F, 0x17D2, 0x178F, 0x17D2, 0x179A), [face], 10).ComplexScript);   // ស្ត្រ
+    }
+
+    [Fact]
+    public void Telugu_rare_signs_whose_ra_form_wpf_changes_are_not_measured()
+    {
+        var t = IndicClusters.Telugu;
+        Assert.Equal(2, IndicClusters.Match([0x0C17, 0x0C48], 0, t));   // గై
+        Assert.Equal(1, IndicClusters.Match([0x0C17, 0x0C56], 0, t));   // 單獨的 ౖ 不是母音符號：下一個叢集對不上
+        Assert.Equal(1, IndicClusters.Match([0x0C17, 0x0C62], 0, t));   // ౢ
     }
 
     [Fact]

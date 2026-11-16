@@ -190,6 +190,14 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 110 | **LookupFlag 要處理** | 不處理時 Nirmala UI 的奧里亞文「ଦ + 下加形 ଭ」被一個該跳過下加形（附加符號分類 8）的 lookup 連成寬合字，連寫全部沒變窄（平均偏寬 5%）；緬甸文 ဋို့ 窄 29%。處理之後要注意：巢狀 lookup 在最後一個比對位置插入字符時，下一個位置要照整體增減算，否則同一條規則重套到記憶體用光（OutOfMemory，匯出整支字型讀不了） | WpfOracle --scripts |
 | 111 | **「最少變窄」會被一個例外拖到 0** | 奧里亞文 1,444 組連寫裡 1,380 組被「後一個子音接 virama」（量的時候本來就不套）或 nukta、ୁ 形式拖成 0。量的時候不套的形式匯出也不要算；比單獨子音變窄得少的母音符號另外記 | 匯出時印每一組的值 |
 | 112 | **調規則用的字串不能拿來驗收** | 用種子 31 的字串調完全部通過，換種子 777 冒出古木基文 −8%、奧里亞文 −5.9%、卡納達文 −1.9%（而且已經發佈的版本就有）。WpfOracle --indic-gen 用 `XF_GEN_SEED`、gen-sea.js 第二個參數換一組 | WpfOracle --scripts |
+| 113 | **印度系文字要窮舉才算驗收** | 兩組隨機字串都過了，窮舉「每個連寫 × 每個母音符號／nukta／鼻化符號、每個不帶符號的三子音連寫、再抽 2 萬個帶符號的」（十種文字約 240 萬句）還冒出**上一版就有**的少算：孟加拉文 হ্যৃ −17%、奧里亞文 ଧ୍ଯି −35%、卡納達文 ಜ್ಞು −19%、馬拉雅拉姆文 യ്യൢ −32%。`XF_GEN_EXHAUSTIVE=1 WpfOracle --indic-gen`（高棉文也有） | WpfOracle --scripts |
+| 114 | **匯出引擎不做 WPF 的音節重排** | 下加、後加的母音符號 WPF 放在主子音旁邊（হ্যৃ 的 ৃ 跟 হ 成合字；ಜ್ಞು 不成 ಜ್ಞ 合字）；前置形（泰盧固文、馬拉雅拉姆文的 ra）畫在最前面，**而且是搬過去之後才套最後一階段的規則**（గ్రై 的 ra 換成寬的那個字形）；奧里亞文的 ଁ 掛到第一個子音上。匯出時這幾種排法都算、取寬的，只對真的會變成下加／後加／前置形的子音做（每個子音都做的話，窮舉的平均偏寬馬拉地文 10% → 27%）。`XAMLFIT_INDIC_TRACE="碼位,…;…"` 印引擎排出的字形，`WpfOracle --glyphs` 印 WPF 的 | WpfOracle --glyphs |
+| 115 | **三個子音的連寫依後兩個子音記** | 只記一個總最大值時，卡納達文、泰盧固文三子音的字平均偏寬 40～60%（下加形都被當成全寬）。中間是 ra、ya（有 reph、後加形）時引擎在連寫中間也照樣套，算出來偏窄 16～34%：這些用同類裡的最大值。後兩個都是下加形時母音符號掛在第一個子音上跟它成合字，帶符號的要每個第一子音都試。最後一個子音帶 nukta 時 WPF 整串不連寫（奧里亞文 ନ୍ଫ୍ଯ଼），另外記 | WpfOracle --scripts（窮舉） |
+| 116 | **高棉文的 robat 只能緊接主子音、coeng ro 一串只能一個** | robat 接在下標子音或母音後面、兩個 ្រ：WPF 畫虛線圓圈（寬到 3 倍）。窮舉時六萬多個「少算」全是這個 —— 先確認是不是虛線圓圈再查量法 | WpfOracle --glyphs |
+| 117 | **蒙古文的寬度要分很細，合字要整對記** | 每個字各取最大值時平均偏寬 60%：擴充字母（托忒、錫伯、滿文）混進一般字母、陰陽性、FVS、MVS／窄不換行空白前後、在不在第一個音節、前一個是不是母音，都會換字形；子音 + 母音的合字 WPF 整個算給子音、母音分到 0，要整對一起查。FVS 要沿用前一個字母的形狀特性（跟 HarfBuzz 一樣），不然引擎沒把它換成零寬字形（2214 單位）。MVS 在字中間 WPF 畫 205 單位寬，不是看不見的字 | WpfOracle --scripts、--mong-attr |
+| 118 | **WPF 不認得「Segoe UI Variable」** | 它把名字拆成「Segoe UI」+ 字面名稱「Variable」，畫的是 Segoe UI（「Segoe UI Foo」也一樣）。可變字型 WPF 認得的家族是「家族名 + 那組實例共同的字」：Segoe UI Variable Text／Small／Display，字重是各具名實例。寬度要讀 HVAR，字距要讀 GDEF 的變化量 —— PairPos 格式 1 的裝置表**從 PairSet 起算**，不是從子表；不讀時粗體偏窄 0.16% | WpfOracle（`XF_TEXT_FACES`） |
+| 119 | **可變字型的 Display 寬度不是 GDI 的** | Segoe UI Variable Small 10 px 的 i：WPF 3 px、GDI 2 px；也不是線性寬度四捨五入。`--hinted` 不寫可變字型，Display 模式量不到 | WpfOracle --display-check（`XF_DISPLAY_WEIGHTS`） |
+| 120 | **完整的度量檔 gzip 後只剩五分之一** | 37 個家族 20 MB 的 JSON 壓成約 4 MB：`--out xamlfit.fonts.json.gz`，讀的時候看檔頭（1F 8B）自動解壓；預設找不到 `.json` 時也找 `.json.gz` | — |
 | 109 | **產生測試字串時順序寫錯，WPF 會畫虛線圓圈** | 緬甸文「်」寫在「့」前面、寮文聲調寫在 ະ 後面：WPF 畫虛線圓圈（寬很多），看起來像工具偏窄 18%。先確認字串本身合法；工具這邊對不合法的順序報量不到（InvalidPairs） | WpfOracle --scripts |
 | 104 | **古吉拉特文、泰盧固文的叢集會互相影響** | WPF 套字距時**跳過**附加符號：「દૃં」+「ડ」照「દૃ」+「ડ」撐開；這支匯出引擎不處理 LookupFlag，量不到。改成每個交界加「這個叢集或它任何前綴接任何叢集時最多變寬多少」；泰盧固文另外不用連寫值（ళ్కి 偏窄 2.8%）（偏寬 1.9%／7.9%，偏窄 ≤0.03%） | WpfOracle --scripts |
 | 105 | **佈景的範本裡可能有 UseLayoutRounding** | 控制項本身沒設，範本裡的元素設了：內容寬度帶小數時控制項寬度被捨入到像素（HandyControl、WPF-UI 幾乎每個控制項）。用小數寬度的內容在真的視窗裡量才看得出來；當鄰居時多留 1 DIP | LayoutOracle --theme |
@@ -210,7 +218,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 661 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 685 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 42 條 CLI 路徑的退出碼
@@ -237,7 +245,7 @@ M6 裡它兩次不是零，兩次都是工具錯。
 
 - `M0Survey` —— 可量測比例調查（已修過五個 bug，結論在 `docs/`）
 - `WpfOracle` —— 拿 WPF 的 `FormattedText` 當真值驗量測（Windows only）。`-- --scripts <度量檔> <strings.json>` 對照希伯來文、阿拉伯文、波斯文、泰文、印度系文字、寮文、高棉文、藏文、緬甸文（strings.json：鍵是語言，km／lo／bo／my 用 Leelawadee UI／Microsoft Himalaya／Myanmar Text；`{"ar": [...], ...}`；`XF_SCRIPT_FONTS` 換字型、`XF_SCRIPT_DUMP="ar/Segoe UI"` 加 `XF_SCRIPT_ALL=1` 逐句印、`XF_SCRIPT_LTR=1` 用左到右排）。`-- --display <out.tsv>` 存 Display 模式的寬度（10 支字型 × 11 個字級 × 5 種縮放；`XF_DISPLAY_FAMILIES="Microsoft JhengHei,MingLiU"` 換一組字型），`-- --display-check <度量檔> <tsv>` 拿工具的量法比（度量檔要用 `fonts export --hinted` 匯出才每組都量得到），`-- --display-gdi <tsv>` 拿 GDI 的 hinting 寬度比（`XF_GDI_NARROW=1` 印偏窄的）；
-`-- --indic <strings.json>` 比「整個字」與「叢集相加」，`-- --indic-gen <out.json>` 從 IndicClusters 的定義產生每種文字的測試字串（餵給 `--scripts`；`XF_GEN_SEED` 換一組，調完規則一定要換一組驗）。`node prototype/WpfOracle/gen-sea.js <out.json> [種子]` 依音節結構產生緬甸文、高棉文、藏文、寮文各 3,000 個字（固定亂數種子；語料裡沒有這幾種語言）。`fonts export` 時設 `XAMLFIT_DEBUG=1` 會印出讀不了的字型檔與例外（平常一個資料夾裡有壞字型是常態，靜靜跳過）。匯出時的阿拉伯文自我檢查：`XAMLFIT_ARABIC_SELFCHECK=1 xamlfit fonts export …` 印每個語言系統拼窄的字數與移掉的字母
+`-- --glyphs <字型> <語言> <文字或碼位…>` 印 WPF 實際排出的字形編號與寬度（跟匯出時 `XAMLFIT_INDIC_TRACE` 印的比），`-- --mong-attr <度量檔> <strings.json>` 把 WPF 的字形照 ClusterMap 分給字、跟蒙古文表比、列出多算最多的鍵；主程式設 `XF_TEXT_FACES="Segoe UI Variable Text:300,400;…"` 換一組字面，`--display` 設 `XF_DISPLAY_WEIGHTS="300,350,400,600,700"` 量可變字型的每個實例；`-- --indic <strings.json>` 比「整個字」與「叢集相加」，`-- --indic-gen <out.json>` 從 IndicClusters 的定義產生每種文字的測試字串（餵給 `--scripts`；`XF_GEN_SEED` 換一組，調完規則一定要換一組驗）。`--indic-gen` 加 `XF_GEN_EXHAUSTIVE=1` 窮舉（每個連寫 × 每種形式、每個不帶符號的三子音連寫、2 萬個帶符號的；含高棉文；一種文字 10～80 萬句，跑一次約 20 秒）。`node prototype/WpfOracle/gen-mong.js <out.json> [種子]` 產生蒙古文的字與句子（匯出時的自我檢查用另一種產生方式；匯出時設 `XAMLFIT_MONGOLIAN_WHY="碼位,形狀;…"` 印出把這些鍵撐到最大的上下文、`XAMLFIT_DEBUG=1` 印自我檢查拼窄的字數）；`node prototype/WpfOracle/gen-sea.js <out.json> [種子]` 依音節結構產生緬甸文、高棉文、藏文、寮文各 3,000 個字（固定亂數種子；語料裡沒有這幾種語言）。`fonts export` 時設 `XAMLFIT_DEBUG=1` 會印出讀不了的字型檔與例外（平常一個資料夾裡有壞字型是常態，靜靜跳過）。匯出時的阿拉伯文自我檢查：`XAMLFIT_ARABIC_SELFCHECK=1 xamlfit fonts export …` 印每個語言系統拼窄的字數與移掉的字母
 - `ChromeGen` —— 量控制項內距表（Windows only）
 - `DemoMetrics` —— 產生示範用的合成字型度量（跨平台）
 - `GridOracle` —— 早期的 Grid 欄寬對照。⚠ 它量的是根元素而不是 Show 過的視窗，

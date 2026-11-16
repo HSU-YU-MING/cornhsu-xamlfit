@@ -49,7 +49,7 @@ internal static class IndicGen
     public static readonly Dictionary<string, string> Languages = new()
     {
         ["deva"] = "mr", ["beng"] = "bn", ["guru"] = "pa", ["gujr"] = "gu", ["orya"] = "or",
-        ["taml"] = "ta", ["telu"] = "te", ["knda"] = "kn", ["mlym"] = "ml", ["sinh"] = "si",
+        ["taml"] = "ta", ["telu"] = "te", ["knda"] = "kn", ["mlym"] = "ml", ["sinh"] = "si", ["khmr"] = "km",
     };
 
     public static int Run(string outPath)
@@ -57,7 +57,7 @@ internal static class IndicGen
         var rng = new Random(int.TryParse(Environment.GetEnvironmentVariable("XF_GEN_SEED"), out var seed) ? seed : 31);   // XF_GEN_SEED 換一組字串（調整規則用的是 31，驗證要換一組）
         var result = new Dictionary<string, List<string>>();
         // 高棉文、藏文的字串用 gen-sea.js 產生（音節結構不一樣）
-        foreach (var script in XamlFit.Core.Fonts.IndicClusters.All.Where(s => Languages.ContainsKey(s.Tag)))
+        foreach (var script in XamlFit.Core.Fonts.IndicClusters.All.Where(s => Languages.ContainsKey(s.Tag) && (s.Tag != "khmr" || Environment.GetEnvironmentVariable("XF_GEN_EXHAUSTIVE") is not null)))
         {
             string S(IEnumerable<int> cps) => string.Concat(cps.Select(char.ConvertFromUtf32));
             var clusters = XamlFit.Core.Fonts.IndicClusters.Enumerate(script, _ => true).ToList();
@@ -66,6 +66,18 @@ internal static class IndicGen
                 list.Add(string.Concat(Enumerable.Range(0, rng.Next(2, 6)).Select(_ => S(clusters[rng.Next(clusters.Count)]))));
             var cons = script.Consonants.Order().ToList();
             var signs = script.Signs.Order().ToList();
+            if (Environment.GetEnvironmentVariable("XF_GEN_EXHAUSTIVE") is not null)
+            {
+                // 窮舉：每一組「子音 + virama + 叢集」、每一組不帶符號的三個子音連寫、再抽 2 萬個帶符號的三個子音連寫
+                var heads = clusters.Where(c => c.Length == 2 && c[1] == script.Virama).ToList();
+                var nexts = clusters.Where(c => script.Consonants.Contains(c[0]) && c[^1] != script.Virama).ToList();
+                list = [];
+                foreach (var h in heads) foreach (var c in nexts) list.Add(S([.. h, .. c]));
+                foreach (var h1 in heads) foreach (var h2 in heads) foreach (var c in cons) list.Add(S([.. h1, .. h2, c]));
+                for (var n = 0; n < 20000; n++) list.Add(S([.. heads[rng.Next(heads.Count)], .. heads[rng.Next(heads.Count)], .. nexts[rng.Next(nexts.Count)]]));
+                result[Languages[script.Tag]] = list;
+                continue;
+            }
             for (var n = 0; n < 800; n++)
             {
                 var word = "";
