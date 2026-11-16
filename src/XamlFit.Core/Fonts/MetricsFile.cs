@@ -175,10 +175,10 @@ public sealed class MetricsFile
 
     // 連寫改變量的鍵是「+碼位」：存成 [改變量, -碼位]
     // 「+a,b」存成 [改變量, -a, -b]；「+1」（後面接標點）存成 [改變量, -1]
-    // 「>碼位,…」（叢集交界）存成 [改變量, 0, 碼位, …]
+    // 「>碼位,…」（叢集交界）存成 [改變量, 0, 碼位, …]；「>」（只有子音的叢集，緬甸文依符號記）存成 [改變量, 0]
     private static List<int[]> EncodeIndic(IReadOnlyDictionary<string, int> table) =>
         [.. table.OrderBy(c => c.Key, StringComparer.Ordinal)
-            .Select(c => c.Key.StartsWith('>') ? new[] { c.Value, 0 }.Concat(c.Key[1..].Split(',').Select(x => int.Parse(x, System.Globalization.CultureInfo.InvariantCulture))).ToArray()
+            .Select(c => c.Key.StartsWith('>') ? new[] { c.Value, 0 }.Concat(c.Key[1..].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => int.Parse(x, System.Globalization.CultureInfo.InvariantCulture))).ToArray()
                 : c.Key.StartsWith(IndicClusters.ConjunctPrefix, StringComparison.Ordinal)
                 ? new[] { c.Value }.Concat(c.Key[1..].Split(',').Select(x => -int.Parse(x, System.Globalization.CultureInfo.InvariantCulture))).ToArray()
                 : new[] { c.Value }.Concat(c.Key.Split(',').Select(x => int.Parse(x, System.Globalization.CultureInfo.InvariantCulture))).ToArray())];

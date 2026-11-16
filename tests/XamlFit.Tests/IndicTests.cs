@@ -285,7 +285,7 @@ public class IndicTests
     [Fact]
     public void Myanmar_boundaries_are_keyed_by_how_the_cluster_ends()
     {
-        // 緬甸文 4 萬個叢集：交界的變寬量依結尾兩個字記（ပျု့ + ငွီ 寬 2 px）
+        // 舊的度量檔（沒有 BoundaryMarksMarker）：交界的變寬量依結尾兩個字記（ပျု့ + ငွီ 寬 2 px）
         var face = new FontMetrics
         {
             Family = "Mymr",
@@ -297,6 +297,86 @@ public class IndicTests
         Assert.Same(IndicClusters.Myanmar, IndicClusters.Of(0x1000));
         Assert.Equal((500 + 70 + 500) / 100.0, TextMeasure.Measure(S(0x1015, 0x103B, 0x102F, 0x1037, 0x1004), [face], 10).WidthPx, 3);   // 介音、符號在假字型裡寬 0
         Assert.Equal(500 / 100.0, TextMeasure.Measure(S(0x1015, 0x102F, 0x1037), [face], 10).WidthPx, 3);   // 後面沒接：不加
+    }
+
+    private static FontMetrics Mymr(Dictionary<string, int> table) => new()
+    {
+        Family = "Mymr",
+        UnitsPerEm = 1000,
+        DefaultAdvance = 500,
+        Ranges = [new AdvanceRange(0x1000, 0x1021, 500), new AdvanceRange(0x1022, 0x109F, 0)],
+        Indic = new Dictionary<string, IReadOnlyDictionary<string, int>> { ["mymr"] = table },
+    };
+
+    [Fact]
+    public void Myanmar_boundaries_are_keyed_by_the_marks_of_the_cluster()
+    {
+        // 新的度量檔：依符號記（拿掉子音）；沒有鍵 = 不撐開
+        int[] first = [0x1015, 0x103B, 0x102F, 0x1037];
+        var table = new Dictionary<string, int>
+        {
+            [IndicClusters.BoundaryMarksMarker] = 1,
+            [IndicClusters.BoundaryKey(IndicClusters.Myanmar, first)] = 90,
+            [IndicClusters.BoundaryKey([0x1037, 0x1004])] = 70,   // 舊的鍵（最後兩個字）：有記號時不看
+        };
+        Assert.Equal(IndicClusters.BoundaryKey([0x103B, 0x102F, 0x1037]), IndicClusters.BoundaryKey(IndicClusters.Myanmar, first));
+        Assert.Equal((500 + 90 + 500) / 100.0, TextMeasure.Measure(S([.. first, 0x1004]), [Mymr(table)], 10).WidthPx, 3);
+        Assert.Equal((500 + 500 + 500) / 100.0, TextMeasure.Measure(S(0x1015, 0x102D, 0x1037, 0x1004, 0x1015), [Mymr(table)], 10).WidthPx, 3);
+        // 只有子音、子音加一個符號的叢集照整個叢集記（沒有符號時撐開多少看子音）
+        Assert.Equal(IndicClusters.BoundaryKey([0x1015, 0x102F]), IndicClusters.BoundaryKey(IndicClusters.Myanmar, [0x1015, 0x102F]));
+    }
+
+    [Fact]
+    public void Myanmar_stacked_consonants_use_the_change_kept_for_their_form()
+    {
+        // ဎ္ဘ：疊在下面的 ဘ 整個不佔寬度；帶介音、符號的另外記（介音也算一種符號）
+        Assert.Equal(0x103E, IndicClusters.SignOf(IndicClusters.Myanmar, [0x1012, 0x103E, 0x102F], 0));
+        Assert.Equal(-1, IndicClusters.SignOf(IndicClusters.Myanmar, [0x1018], 0));
+        var table = new Dictionary<string, int>
+        {
+            [IndicClusters.ConjunctKey(0x100E, 0x1018)] = -100,
+            [IndicClusters.ConjunctKey(0x100E, 0x1018, -1)] = -500,
+        };
+        Assert.Equal(500 / 100.0, TextMeasure.Measure(S(0x100E, 0x1039, 0x1018), [Mymr(table)], 10).WidthPx, 3);
+        Assert.Equal((1000 - 100) / 100.0, TextMeasure.Measure(S(0x100E, 0x1039, 0x1018, 0x102D), [Mymr(table)], 10).WidthPx, 3);
+    }
+
+    [Fact]
+    public void A_chain_that_starts_with_ra_uses_its_own_value_and_falls_back_to_the_general_one()
+    {
+        // 卡納達文：ra 開頭（reph 移到後面）的三子音連寫另外記，跟其他 C1 放在一起時每一組都被它撐大
+        var data = new Dictionary<string, int>
+        {
+            [IndicClusters.ChainKey3(Ssa, Ka)] = -500,
+            [IndicClusters.ChainKey3(Ssa, Ka, AaSign)] = -300,
+            [IndicClusters.RaChainKey3(Ssa, Ka)] = -100,
+        };
+        var face = Face(new() { ["deva"] = data });
+        // 沒有記號（舊的度量檔）：ra 開頭的也用一般的
+        Assert.Equal((400 * 5 - 500) / 100.0, M(face, S(Ra, Virama, Ssa, Virama, Ka)).WidthPx, 3);
+        data[IndicClusters.RaChainMarker] = 1;
+        face = Face(new() { ["deva"] = data });
+        Assert.Equal((400 * 5 - 100) / 100.0, M(face, S(Ra, Virama, Ssa, Virama, Ka)).WidthPx, 3);
+        Assert.Equal((400 * 6 - 100) / 100.0, M(face, S(Ra, Virama, Ssa, Virama, Ka, AaSign)).WidthPx, 3);   // ra 沒有帶符號的鍵：ra 不帶符號的
+        Assert.Equal((400 * 5 - 500) / 100.0, M(face, S(Ka, Virama, Ssa, Virama, Ka)).WidthPx, 3);
+        data.Remove(IndicClusters.RaChainKey3(Ssa, Ka));
+        face = Face(new() { ["deva"] = data });
+        Assert.Equal((400 * 6 - 300) / 100.0, M(face, S(Ra, Virama, Ssa, Virama, Ka, AaSign)).WidthPx, 3);   // ra 都沒有：一般的
+    }
+
+    [Fact]
+    public void The_new_keys_survive_the_metrics_file()
+    {
+        var table = new Dictionary<string, int>
+        {
+            [IndicClusters.BoundaryMarksMarker] = 1,
+            [IndicClusters.BoundaryKey([])] = 40,
+            [IndicClusters.ConjunctKey(0x100E, 0x1018, -1)] = -500,
+            [IndicClusters.RaChainMarker] = 1,
+            [IndicClusters.RaChainKey3(0x1015, 0x1019, 0x102D)] = -20,
+        };
+        var back = MetricsFile.Parse(MetricsFile.FromMetrics([Mymr(table)], "test", new DateOnly(2026, 11, 16)).ToJson()).ToMetrics().Single().Indic!["mymr"];
+        Assert.Equal(table, back);
     }
 
     [Fact]

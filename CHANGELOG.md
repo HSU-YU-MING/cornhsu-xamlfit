@@ -201,8 +201,8 @@ that over-estimated the available width.
   in `GDEF`. Legacy names such as `Segoe UI Variable Text Semibold` resolve. `--family` accepts either
   the font's family or an instance family. `--hinted` leaves variable fonts out: WPF's Display-mode
   widths for them are not GDI's.
-- **Gzipped metrics files**: `fonts export` writes `xamlfit.fonts.json.gz` by default (a 30 MB file
-  becomes about 5 MB; `--out xamlfit.fonts.json` writes it uncompressed); every command reads either,
+- **Gzipped metrics files**: `fonts export` writes `xamlfit.fonts.json.gz` by default (a 38 MB file
+  becomes about 6 MB; `--out xamlfit.fonts.json` writes it uncompressed); every command reads either,
   and when a folder has both, the newer one. Schema version 2 stores an Indic language system's table as its
   differences from the script's default table (about 1 MB less); version 1 files still read.
 - **Three-consonant chains keep a value per sign on the last consonant**, and the export engine
@@ -211,6 +211,18 @@ that over-estimated the available width.
   4.5–5.0%), Telugu 1.7–1.8% (3.6–3.7%), Odia 1.6–2.0% (3.7–4.3%), Malayalam 1.0% (1.7–1.9%), Khmer
   1.4% (2.5%). A Malayalam pre-base ra after a visible virama is drawn before the second consonant;
   a Khmer vowel sign over a chain is tried with every first consonant (it changes the base's width).
+- **Reph only at the start of a syllable**, as WPF applies it: the export engine had turned a ra in
+  the middle of a chain into a reph too, so chains with ra in the middle fell back to one maximum. A
+  chain that starts with ra (its reph moved to the end) keeps its own value (stored only where it
+  differs). Average over-estimate on random words: Kannada 1.8–1.9% (was 2.7–2.9%), Odia 1.5–1.8%
+  (1.6–2.0%), Bengali 0.6% (0.8%), Marathi 0.3% (0.4%), Gujarati 1.3% (1.4%); Malayalam 1.1% (1.0%:
+  its signed chains are now tried with every first consonant). Exhaustively still ≤ 0.03% narrow.
+- **Myanmar**: a stacked consonant (ဎ္ဘ) narrows by a value kept per medial or vowel sign on the
+  stacked consonant, and a syllable boundary is keyed by the marks of the first cluster instead of its
+  last two characters, with every next cluster tried by its first drawn character and its upper marks.
+  Generated words 4.2% wide on average (was 7.7%), real Burmese 0.90% (was 0.79%, the price of
+  trying more next clusters). The boundary search runs in parallel; a full export takes about 26
+  minutes instead of 20.
 - **Variable fonts in Display mode** are measured: WPF rounds each glyph's linear width instead of
   hinting it (rounded up from 0.485), and the tool rounds kerning toward zero.
 - **A family name WPF reads as family plus face name** (`Segoe UI Variable` → Segoe UI,
@@ -238,9 +250,9 @@ that over-estimated the available width.
   Myanmar Text, Microsoft Himalaya): 0.02%, 0.02%, 0.04% and 0.02%; Khmer exhaustively (about
   800,000 strings) 0.04%. Real translations: Khmer 1,176 strings (Survey Solutions, SystemTrayMenu),
   Tibetan 879 (SOSpect), Burmese 173 (Discord CustomRP, dotnet-ftps-server): worst under-estimate
-  0.02%, 0.04% and 0.01%, on average 0.35%, 0.17% and 0.79% wide. Myanmar's generated words average
-  7.7% wide (12% before Myanmar Text's single-adjustment `dist` lookup on ြ, which WPF does not apply,
-  was skipped).
+  0.02%, 0.04% and 0.01%, on average 0.35%, 0.17% and 0.90% wide. Myanmar's generated words average
+  4.2% wide (12% before Myanmar Text's single-adjustment `dist` lookup on ြ, which WPF does not apply,
+  was skipped; 7.7% before stacked consonants and boundaries were keyed finer).
 - **Mongolian** against `FormattedText` (Mongolian Baiti; `prototype/WpfOracle/gen-mong.js`, three sets
   of 4,000 words and sentences): worst under-estimate 0.04%, about 2.7% wide on average; the 32 strings
   of Windows' mn-Mong locale data: 0.02% and 2.4%; 312 real translations (MonkeyPaste): 0.02% and

@@ -498,7 +498,11 @@ public static class TextMeasure
                     {
                         // 最後一個子音帶的符號（nukta、母音符號、鼻化符號）有自己的值就用它
                         var sign = IndicClusters.SignOf(indic, cps, third);
-                        if (!(sign >= 0 && clusters.TryGetValue(IndicClusters.ChainKey3(cps[i + length], cps[third], sign), out var three))
+                        // 第一個子音是 ra：先查另外記的值（只記跟一般的不一樣的），沒有再查一般的
+                        var raFirst = indic.Ra >= 0 && cps[i] == indic.Ra && clusters.ContainsKey(IndicClusters.RaChainMarker);
+                        if (!(raFirst && sign >= 0 && clusters.TryGetValue(IndicClusters.RaChainKey3(cps[i + length], cps[third], sign), out var three))
+                            && !(raFirst && clusters.TryGetValue(IndicClusters.RaChainKey3(cps[i + length], cps[third]), out three))
+                            && !(sign >= 0 && clusters.TryGetValue(IndicClusters.ChainKey3(cps[i + length], cps[third], sign), out three))
                             && !clusters.TryGetValue(IndicClusters.ChainKey3(cps[i + length], cps[third]), out three)) three = 0;
                         totalUnits += three * scale;
                     }
@@ -510,9 +514,14 @@ public static class TextMeasure
                         || clusters.TryGetValue(IndicClusters.ConjunctKey(head, cps[i + length]), out conjunct)))
                     totalUnits += conjunct * scale;
                 // 叢集會影響下一個叢集的文字系統：後面接同一個文字系統的叢集時，加上匯出時量到的最大變寬
-                if (indic.Interacting && i + length < cps.Count && IndicClusters.Of(cps[i + length]) == indic && !indic.Plain.Contains(cps[i + length])
-                    && clusters.TryGetValue(IndicClusters.BoundaryKey(indic.BoundaryTail > 0 ? cluster.TakeLast(indic.BoundaryTail) : cluster), out var boundary))
-                    totalUnits += boundary * scale;
+                if (indic.Interacting && i + length < cps.Count && IndicClusters.Of(cps[i + length]) == indic && !indic.Plain.Contains(cps[i + length]))
+                {
+                    int Get(string key) => clusters.TryGetValue(key, out var v) ? v : 0;   // 沒有鍵 = 不撐開
+                    totalUnits += (!indic.BoundaryByMarks ? Get(IndicClusters.BoundaryKey(cluster))
+                        // 依符號記；舊的度量檔是依最後兩個字記的
+                        : clusters.ContainsKey(IndicClusters.BoundaryMarksMarker) ? Get(IndicClusters.BoundaryKey(indic, cluster))
+                        : Get(IndicClusters.BoundaryKey(cluster.TakeLast(2)))) * scale;
+                }
                 // 後面接的不是同一個文字系统的字（標點、空白…）：字型可能把它們之間撐開，加上匯出時量到的最大值
                 if (i + length < cps.Count && (IndicClusters.Of(cps[i + length]) != indic || indic.Plain.Contains(cps[i + length]))
                     && clusters.TryGetValue(IndicClusters.TrailingKey, out var trailing))

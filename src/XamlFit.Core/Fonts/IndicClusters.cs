@@ -41,9 +41,14 @@ public static class IndicClusters
         /// </summary>
         public bool PreBaseMayBreakConjunct { get; init; }
         /// <summary>
-        /// 大於 0：叢集交界的變寬量只依叢集的最後幾個字記（緬甸文 4 萬個叢集，一個一個記太多；變寬來自結尾的符號：ပျု့ + ငွီ 寬 2 px）。
+        /// 叢集交界的變寬量只依叢集的符號記（拿掉子音：介音、母音符號、聲調符號）。緬甸文 4 萬個叢集，一個一個記太多；
+        /// WPF 量出來交界撐開多少幾乎只看兩邊的符號、不看子音（1,600 組對照：同一組符號的差距 0.01 px）。
+        /// 先前只依最後兩個字記，產生的字平均偏寬多 2%。只有子音、或子音加一個符號的叢集照整個叢集記：沒有符號時撐開多少看子音
+        /// （全部只記「沒有符號」一個值時，真實的緬甸文平均偏寬 0.8% → 10%）。
         /// </summary>
-        public int BoundaryTail { get; init; }
+        public bool BoundaryByMarks { get; init; }
+        /// <summary>畫在上方的符號（緬甸文 ိ ီ ဲ ံ ်）：匯出交界變寬量時，後一個叢集依它帶哪些上方符號各試一次。</summary>
+        public HashSet<int> UpperMarks { get; init; } = [];
         /// <summary>
         /// 會變成 reph 的子音（ra）。「ra + virama」接子音時，WPF 把 reph 移到後一個子音後面；這支引擎照輸入的順序排：
         /// 兩種順序都算、取變窄少的（卡納達文 ರ್ಙ 差 0.5 px）。
@@ -68,6 +73,11 @@ public static class IndicClusters
         /// 套了的話單獨一個音節就偏寬 5%；但疊字上下文規則加的 350 照吃，整個 dist 都不套又會少掉 ျ 的 380 單位，偏窄 24%）。
         /// </summary>
         public HashSet<int> NoDistOn { get; init; } = [];
+        /// <summary>
+        /// 連寫的改變量每一種母音符號（含沒有符號、介音）都另外記，只要比一般的值窄（一般的值 = 全部裡變窄最少的）。
+        /// 緬甸文：ဎ္ဘ 的 ဘ 疊在下面整個不佔寬度（−2113 單位），帶某些符號時只窄 1092 —— 只記一個值時疊字平均偏寬 7.6%。
+        /// </summary>
+        public bool ConjunctEverySign { get; init; }
         /// <summary>疊在下面的子音（藏文 ྐ…）：子音後面最多接 <see cref="MaxSubjoined"/> 個；第二個以後只能是 <see cref="LaterSubjoined"/> 裡的（藏文的 ya、ra、la、wa）。</summary>
         public HashSet<int> Subjoined { get; init; } = [];
         public int MaxSubjoined { get; init; }
@@ -112,7 +122,8 @@ public static class IndicClusters
     {
         var k = start + 1;
         if (k < cps.Count && cps[k] == s.Nukta) return s.Nukta;
-        return k < cps.Count && (s.Signs.Contains(cps[k]) || s.Modifiers.Contains(cps[k])) ? cps[k] : -1;
+        // 介音（緬甸文 ျ ြ ွ ှ）也算：疊在下面的子音帶介音時變窄的量跟不帶的差很多
+        return k < cps.Count && (s.Signs.Contains(cps[k]) || s.Modifiers.Contains(cps[k]) || s.Medials.Any(m => m[0] == cps[k])) ? cps[k] : -1;
     }
 
     /// <summary>度量檔裡記「叢集後面接標點或空白時最多變寬多少」的鍵（標點跟著併進同一段，字型的字距會套上去）。</summary>
@@ -120,6 +131,13 @@ public static class IndicClusters
 
     /// <summary>「這個叢集後面接同一個文字系統的叢集時最多變寬多少」的鍵（只有 <see cref="Script.Interacting"/> 的文字系統有）。</summary>
     public static string BoundaryKey(IEnumerable<int> cluster) => ">" + Key(cluster);
+
+    /// <summary>這個叢集的交界變寬量的鍵（見 <see cref="Script.BoundaryByMarks"/>）。</summary>
+    public static string BoundaryKey(Script s, IReadOnlyList<int> cluster) =>
+        BoundaryKey(s.BoundaryByMarks && cluster.Count > 2 ? cluster.Where(cp => !s.Consonants.Contains(cp)) : cluster);
+
+    /// <summary>表是依符號記的。沒有這個記號的舊度量檔：交界照最後兩個字記。</summary>
+    public static readonly string BoundaryMarksMarker = BoundaryKey([1]);
 
     /// <summary>
     /// 三個以上子音連寫（子音 + virama + 子音 + virama + 子音）時，整串比各叢集相加最多寬多少的鍵：量的時候這種連寫各叢集直接相加，
@@ -135,6 +153,15 @@ public static class IndicClusters
 
     /// <summary>同上，最後一個子音帶這個符號（nukta、母音符號、鼻化符號，見 <see cref="SignOf"/>）的時候（有這個鍵就用它，沒有用上面那個）。</summary>
     public static string ChainKey3(int second, int third, int sign) => $"{ChainKey},{second},{third},{sign}";
+
+    /// <summary>
+    /// 第一個子音是 ra（變成 reph、被 WPF 移到後面）的三子音連寫另外記：跟其他第一子音放在一起取最大值時，
+    /// 卡納達文每一組都被 ra 開頭的撐大（三子音的字平均偏寬 28%）。表裡有 <see cref="RaChainMarker"/> 才有這種鍵（舊的度量檔沒有：照一般的鍵）。
+    /// 只記跟一般的鍵查出來不一樣的：量的時候 ra 帶符號的鍵 → ra 不帶符號的鍵 → 一般的鍵。
+    /// </summary>
+    public static string RaChainKey3(int second, int third) => $"+4,{second},{third}";
+    public static string RaChainKey3(int second, int third, int sign) => $"+4,{second},{third},{sign}";
+    public const string RaChainMarker = "+4";
 
     /// <summary>「鼻化／送氣符號最多讓疊字變寬多少」的鍵（只有 <see cref="Script.StackKeyed"/> 的文字系統有）。</summary>
     public const string ModifierKey = "+2";   // 存成 [改變量, -2]，跟 TrailingKey 同一種寫法
@@ -354,8 +381,10 @@ public static class IndicClusters
         InvalidPairs = [(0x103A, 0x1037), (0x103A, 0x1036)],
         Droppable = [0x1036],   // ံ 跟 ့ 一起時這支引擎沒把 ့ 移開（ဆွှူံ့ 窄 0.4 px；WPF 跟 ဆွှူ့ 一樣寬）
         Interacting = true,
-        BoundaryTail = 2,
+        BoundaryByMarks = true,
+        UpperMarks = [0x102D, 0x102E, 0x1032, 0x1036, 0x103A],
         NoDistOn = [0x103C],
+        ConjunctEverySign = true,
     };
 
     /// <summary>藏文：子音下面最多疊兩個子音（第二個只有 ya、ra、la、wa），母音符號可以接在 a-chung（ཱ）後面。</summary>
