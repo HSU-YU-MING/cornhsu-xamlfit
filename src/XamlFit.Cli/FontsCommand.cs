@@ -96,6 +96,9 @@ internal static class FontsCommand
             {
                 foreach (var i in gdiQueue.GetConsumingEnumerable())
                 {
+                    // 這個 lambda 只在 Windows 上建立（見上面的三元運算子），但平台分析器
+                    // 的判斷帶不進 lambda，所以在裡面再擋一次 —— 執行期走不到這一行。
+                    if (!OperatingSystem.IsWindows()) continue;
                     var sw = System.Diagnostics.Stopwatch.StartNew();
                     var (withHints, skipped) = GdiHinting.Add(files[i], perFile[i]!);
                     (hintedPerFile[i], hintSkippedPerFile[i]) = ([.. withHints], [.. skipped]);
