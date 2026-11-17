@@ -70,8 +70,12 @@ dotnet tool install --tool-path ./artifacts/tool --add-source ./artifacts Cornhs
 ## 發完之後
 
 nuget.org 的套件清單（flatcontainer）會先出現新版，但 `dotnet tool install`
-走的 registration 索引晚約 2～3 分鐘。要驗安裝就等
+走的 registration 索引比較晚。要驗安裝就等
 `registration5-gz-semver2/cornhsu.xamlfit/index.json` 出現新版再裝，
 別誤判成發佈失敗。
+
+⚠ **第一次建立一個新的套件 ID 比較久**：0.1.0 實測 **5 分半**（每 30 秒查一次，
+前十次都是 404，第 11 次才 200），新 ID 要先過套件驗證才進索引。
+既有套件發新版才是約 2～3 分鐘。照舊的數字等 3 分鐘就放棄，會誤判成發佈失敗。
 
 接著更新作品集網站的版本欄位（`portfolio-release-update` skill）。
