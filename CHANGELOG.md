@@ -3,9 +3,9 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.0] - 2026-11-17
 
-Nothing has been released yet. The entries below describe the implementation as it stands
+First release. The entries below describe the implementation as it stands
 after a from-scratch audit (`docs/M6-全面重讀.md`), which replaced several earlier behaviours
 that over-estimated the available width.
 
@@ -326,12 +326,13 @@ that over-estimated the available width.
   runs give identical results.
 - **Shipped software**: 984 source-language measurements over ten projects. The only two
   overflows are in the maintainer's app and are real (drawn by WPF).
-- 661 unit tests.
+- 726 unit tests.
 
 ### Not verified
 
-- nuget.org installation and Trusted Publishing: nothing has been released. The release steps
-  and the Action's script were rehearsed locally. (CI on Linux and Windows runs and passes.)
+- nuget.org installation and Trusted Publishing: 0.1.0 is the first release, so that path runs
+  for the first time with this tag. The release steps and the Action's script were rehearsed
+  locally. (CI on Linux and Windows runs and passes.)
 - The default UI fonts for Japanese, Korean and Simplified Chinese Windows: taken from
   Windows' font configuration, not measured on those systems.
 - Text in drop-down lists, data templates and hidden panels: the render harness cannot draw
