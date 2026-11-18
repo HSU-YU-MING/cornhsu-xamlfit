@@ -1,0 +1,6 @@
+<UserControl xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- 翻譯完整度（0.5.0）的 hard-coded-text：專案有德文譯文，這段字卻寫死在 XAML 裡，每個語言都一樣。
+       放在獨立的檔案裡，不改 MainWindow 的版面（那裡的寬度是照德文實測校準的）。 -->
+  <TextBlock Text="Made with the XamlFit demo"/>
+</UserControl>

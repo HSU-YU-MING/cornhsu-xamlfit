@@ -88,11 +88,13 @@ public static partial class CheckDiagnostics
     }
 
     private static string Message(FitFinding f) =>
-        string.Create(CultureInfo.InvariantCulture,
-            $"{FitFinding.KindSlug(f.Kind)} [{f.Culture}] \"{f.Text}\" needs {f.ActualPx:0.#} px " +
-            $"but has {f.LimitPx:0.#} px" +
-            $"{(f.OverflowPx > 0 ? $" (over by {f.OverflowPx:0.#} px)" : "")}" +
-            $"{(f.Warning is not null ? $" [{f.Warning}]" : "")}");
+        f.IsFit
+            ? string.Create(CultureInfo.InvariantCulture,
+                $"{FitFinding.KindSlug(f.Kind)} [{f.Culture}] \"{f.Text}\" needs {f.ActualPx:0.#} px " +
+                $"but has {f.LimitPx:0.#} px" +
+                $"{(f.OverflowPx > 0 ? $" (over by {f.OverflowPx:0.#} px)" : "")}" +
+                $"{(f.Warning is not null ? $" [{f.Warning}]" : "")}")
+            : $"{FitFinding.KindSlug(f.Kind)} [{f.Culture}] {f.Key}: {f.Warning}";
 
     /// <summary>
     /// SARIF 2.1.0（GitHub code scanning 消費）。
@@ -113,6 +115,10 @@ public static partial class CheckDiagnostics
                 "The translated string is wider than its slot. Trimming is set, so it renders as an ellipsis rather than spilling out, but information is lost."),
             (FitKind.Tight, "Text nearly fills its slot",
                 "The string fits but leaves less slack than the configured safety margin, so a small change to the text or the font will break it."),
+            (FitKind.PlaceholderMismatch, "Translation does not match the source's format items",
+                "The source string is a composite format string ({0}, {1}…). The translation uses an index the source does not have or has an unescaped brace, so String.Format throws FormatException (error); or it drops an index, so that value is not shown in this language (warning)."),
+            (FitKind.MissingTranslation, "String has no translation in this language",
+                "The source-language string table has this key and this language's does not, so WPF shows the source text."),
         };
 
         var rules = kinds.Select(k => new
@@ -124,8 +130,9 @@ public static partial class CheckDiagnostics
             defaultConfiguration = new { level = LevelOf(k.Item1) },
         });
 
+        // reflow 與寫死的字（info）不輸出：不是缺陷，灌進 Security tab 是噪音（JSON、PR 註記裡照樣有）
         var results = reported
-            .Where(f => f.Kind != FitKind.Reflow)
+            .Where(f => f.Kind is not (FitKind.Reflow or FitKind.HardCodedText))
             .Select(f =>
             {
                 var (file, line) = SplitSite(f.Site);
@@ -136,8 +143,10 @@ public static partial class CheckDiagnostics
                     message = new
                     {
                         // InvariantCulture：de-DE 下的小數點會變成逗號，消費端解析會壞
-                        text = string.Create(CultureInfo.InvariantCulture,
-                            $"[{f.Culture}] \"{f.Text}\" needs {f.ActualPx:0.#} px but has {f.LimitPx:0.#} px"),
+                        text = f.IsFit
+                            ? string.Create(CultureInfo.InvariantCulture,
+                                $"[{f.Culture}] \"{f.Text}\" needs {f.ActualPx:0.#} px but has {f.LimitPx:0.#} px")
+                            : $"[{f.Culture}] {f.Key}: {f.Warning}",
                     },
                     locations = new[]
                     {
@@ -185,7 +194,7 @@ public static partial class CheckDiagnostics
 
     private static string LevelOf(FitKind k) => k switch
     {
-        FitKind.Overflow or FitKind.VerticalClip => "error",
+        FitKind.Overflow or FitKind.VerticalClip or FitKind.PlaceholderMismatch => "error",
         _ => "warning",
     };
 

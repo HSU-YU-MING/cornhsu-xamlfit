@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI 守門：示範專案是刻意做壞的，所以預期 exit 1，而且每一種判定各一個。
+# CI 守門：示範專案是刻意做壞的，所以預期 exit 1，而且每一種判定各一個（五種寬度判定 + 三種翻譯完整度）。
 #
 # 計數斷言同時驗證兩件事：工具真的會擋，而且擋的數量沒有莫名其妙變動。
 # 改了判定規則導致誤判變多，CI 立刻紅。
@@ -55,6 +55,10 @@ expect vertical-clip  1
 expect trimmed        1
 expect tight          1
 expect reflow         1
+# 翻譯完整度（0.5.0）：Strings.resx 的 Farewell 沒有德文、SavedCount 的德文用了來源沒有的 {2}、AboutPanel.xaml 寫死一段字
+expect missing-translation  1
+expect placeholder-mismatch 1
+expect hard-coded-text      1
 
 # 樣式解析的斷言。
 # Caption 的字級由 <Style x:Key="Caption"> 設成 11 → 84.8 px，塞得進 92 px。

@@ -20,6 +20,16 @@ public enum FitKind
     Reflow,
     /// <summary>餘裕低於安全邊界。</summary>
     Tight,
+
+    // ── 翻譯完整度（0.5.0）：不是寬度問題，沒有像素值（見 TranslationCompleteness）──
+
+    /// <summary>來源語言有這個鍵，這個語言沒有：WPF 顯示來源語言的字。</summary>
+    MissingTranslation,
+    /// <summary>譯文的 <c>{0}</c> 跟來源語言對不上：多了來源沒有的編號或大括號不成對（String.Format 會丟例外），
+    /// 或少了來源有的編號（那個值不見了）。</summary>
+    PlaceholderMismatch,
+    /// <summary>有譯文的專案裡，寫死在 XAML 的文字：每個語言都一樣。</summary>
+    HardCodedText,
 }
 
 public enum FitSeverity { Info, Warn, Fail }
@@ -35,6 +45,9 @@ public sealed record FitFinding
     public required double LimitPx { get; init; }
     public required double ActualPx { get; init; }
     public double OverflowPx => ActualPx - LimitPx;
+
+    /// <summary>是寬度判定（有像素值）。翻譯完整度的 finding 不是，報告裡不印 needs／has。</summary>
+    public bool IsFit => Kind is FitKind.Overflow or FitKind.Trimmed or FitKind.VerticalClip or FitKind.Reflow or FitKind.Tight;
     public string? Warning { get; init; }
     public string? SuppressedReason { get; init; }
 
@@ -50,6 +63,9 @@ public sealed record FitFinding
         FitKind.Trimmed => "trimmed",
         FitKind.VerticalClip => "vertical-clip",
         FitKind.Reflow => "reflow",
+        FitKind.MissingTranslation => "missing-translation",
+        FitKind.PlaceholderMismatch => "placeholder-mismatch",
+        FitKind.HardCodedText => "hard-coded-text",
         _ => "tight",
     };
 
@@ -329,6 +345,23 @@ public sealed class CheckAnalyzer
                 Counts = counts,
             },
             parts.SelectMany(p => p.Findings)
+                .OrderByDescending(f => f.Severity)
+                .ThenByDescending(f => f.OverflowPx)
+                .ThenBy(f => f.Site, StringComparer.Ordinal)
+                .ThenBy(f => f.Culture, StringComparer.Ordinal)
+                .ToList());
+    }
+
+    /// <summary>把另外算出來的 finding（翻譯完整度）併進結果：計數跟著加、排序跟 <see cref="Merge"/> 一樣。</summary>
+    public static CheckResult WithExtra(CheckResult result, IReadOnlyList<FitFinding> extra)
+    {
+        if (extra.Count == 0) return result;
+        var counts = new Dictionary<string, int>(result.Summary.Counts);
+        foreach (var g in extra.GroupBy(f => FitFinding.KindSlug(f.Kind)))
+            counts[g.Key] = counts.GetValueOrDefault(g.Key) + g.Count();
+        return new CheckResult(
+            result.Summary with { Counts = counts },
+            result.Findings.Concat(extra)
                 .OrderByDescending(f => f.Severity)
                 .ThenByDescending(f => f.OverflowPx)
                 .ThenBy(f => f.Site, StringComparer.Ordinal)

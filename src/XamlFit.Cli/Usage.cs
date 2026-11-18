@@ -73,6 +73,7 @@ internal static class Usage
               --baseline <path>    Only report findings not in this baseline
               --write-baseline <p> Write current findings as a baseline and exit 0
               --sarif <path>       Write SARIF 2.1.0 (GitHub code scanning)
+              --md <path>          Write a Markdown report (for a PR comment)
               --msbuild            Also print MSBuild diagnostics on stdout, so Visual Studio
                                    lists them in the Error List (XF0001 gated, XF0002 warning,
                                    XF0003 result not trustworthy)

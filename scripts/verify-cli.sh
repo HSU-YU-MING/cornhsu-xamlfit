@@ -86,6 +86,8 @@ run 2 "check --sites (budget-only flag)" check "$DEMO" --sites "$TMP/x.csv"
 run 2 "budget --pseudo (check-only flag)" budget "$DEMO" --pseudo
 run 2 "check, --resx is not a directory" check "$DEMO" --resx "$TMP/nope"
 run 1 "check --sarif"              check "$DEMO" --resx "$RESX" --sarif "$TMP/c.sarif"
+run 1 "check --md"                 check "$DEMO" --resx "$RESX" --md "$TMP/c.md"
+run 2 "budget --md (check only)"    budget "$DEMO" --md "$TMP/b.md"
 run 1 "check --msbuild"            check "$DEMO" --resx "$RESX" --msbuild
 run 2 "check, bad --fail-on"       check "$DEMO" --resx "$RESX" --fail-on sideways
 run 2 "check, non-numeric --margin" check "$DEMO" --resx "$RESX" --margin abc

@@ -7,4 +7,7 @@
   <data name="Ok"><value>OK</value></data>
   <data name="Caption"><value>Optional</value></data>
   <data name="Unbounded"><value>This label has no width bound at all.</value></data>
+  <!-- 翻譯完整度（0.5.0）：程式碼用的字串，XAML 沒引用 —— 完整度看整份表 -->
+  <data name="SavedCount"><value>Saved {0} of {1} files.</value></data>
+  <data name="Farewell"><value>See you next time.</value></data>
 </root>

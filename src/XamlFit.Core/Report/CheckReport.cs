@@ -63,9 +63,10 @@ public static class CheckReport
                 culture = f.Culture,
                 text = f.Text,
                 site = f.Site,
-                limitPx = f.LimitPx,
-                actualPx = f.ActualPx,
-                overflowPx = Math.Round(f.OverflowPx, 2),
+                // 翻譯完整度的 finding 沒有寬度：null，不是 0（0 會被讀成「剛好放得下」）
+                limitPx = f.IsFit ? f.LimitPx : (double?)null,
+                actualPx = f.IsFit ? f.ActualPx : (double?)null,
+                overflowPx = f.IsFit ? Math.Round(f.OverflowPx, 2) : (double?)null,
                 warning = f.Warning,
             }),
         };

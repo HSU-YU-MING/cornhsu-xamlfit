@@ -3,7 +3,12 @@ using System.Xml.Linq;
 namespace XamlFit.Core.Analysis;
 
 /// <summary>一個文化的字串表。</summary>
-public sealed record CultureStrings(string Culture, IReadOnlyDictionary<string, string> Values, string File);
+public sealed record CultureStrings(string Culture, IReadOnlyDictionary<string, string> Values, string File)
+{
+    /// <summary>每個鍵定義在哪個檔案、第幾行（行號 0 = 不知道）。翻譯完整度的 finding 要指得出位置。
+    /// null = 這份表沒記（測試直接建的表）。</summary>
+    public IReadOnlyDictionary<string, (string File, int Line)>? Origins { get; init; }
+}
 
 /// <summary>
 /// 讀 .resx。只取 &lt;data name="K"&gt;&lt;value&gt;V&lt;/value&gt;&lt;/data&gt;，不碰二進位資源。
@@ -33,11 +38,13 @@ public static class ResxReader
     public static CultureStrings? ReadFile(string file)
     {
         XDocument doc;
-        try { doc = Xaml.SafeXml.Load(file); }
+        try { doc = Xaml.SafeXml.Load(file, lineInfo: true); }
         catch { return null; }
         if (doc.Root is null) return null;
 
+        var path = file.Replace('\\', '/');
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        var origins = new Dictionary<string, (string File, int Line)>(StringComparer.Ordinal);
         foreach (var data in doc.Root.Elements("data"))
         {
             var name = data.Attribute("name")?.Value;
@@ -49,9 +56,10 @@ public static class ResxReader
             var value = data.Element("value")?.Value;
             if (value is null) continue;
             values[name] = value;
+            origins[name] = (path, ((System.Xml.IXmlLineInfo)data).LineNumber);
         }
 
-        return new CultureStrings(CultureOf(file), values, file.Replace('\\', '/'));
+        return new CultureStrings(CultureOf(file), values, path) { Origins = origins };
     }
 
     /// <summary>Strings.de-DE.resx → de-DE；Strings.resx → 中性。</summary>
