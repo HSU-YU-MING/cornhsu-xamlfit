@@ -369,9 +369,11 @@ public sealed class CheckAnalyzer
     /// <summary>一段文字在一個位置上排出來的樣子。</summary>
     /// <param name="WidestLine">不換行時最寬的那一行（明寫的換行仍然會換）。</param>
     /// <param name="Lines">照位置的換行設定排出來的行數。</param>
+    /// <param name="WidestWrapped">換行之後最寬的那一行。換行寬度跟看得見的寬度一樣時它不會超過後者；
+    /// 換行寬度比較大（<see cref="AvailableWidth.WrapPx"/>）時超過的部分就是被裁掉的。</param>
     /// <param name="UnbreakableOverflow">換行模式下，有一個不能斷開的詞比整行還寬（WrapWithOverflow）。</param>
     private sealed record TextLayout(
-        double WidestLine, int Lines, double WidestUnbreakable, bool UnbreakableOverflow, bool UsedAutoFallback, string? Unreliable)
+        double WidestLine, int Lines, double WidestWrapped, double WidestUnbreakable, bool UnbreakableOverflow, bool UsedAutoFallback, string? Unreliable)
     {
         public int FirstMissing { get; init; } = -1;
     }
@@ -379,13 +381,26 @@ public sealed class CheckAnalyzer
     private static bool Wraps(TextSite site) =>
         site.Wrap != WrapMode.NoWrap && !site.Width.WrapDefeated && site.Width.Px > 0;
 
+    /// <summary>
+    /// 一段文字在這個位置排成幾行（給 LayoutOracle 跟真的 WPF 比）。量不到回 null。
+    /// 換行失效的位置永遠是 1 行（明寫的換行除外）。
+    /// </summary>
+    public static int? LineCount(TextSite site, string text, FontResolver fonts, string defaultFamily)
+    {
+        var lookup = fonts.Resolve(site.FontFamily, site.FontWeight, site.FontStyle, defaultFamily, site.Language);
+        if (lookup.Chain.Count == 0) return null;
+        var layout = new CheckAnalyzer(fonts, defaultFamily, 0).Layout(site, text, lookup);
+        return layout.Unreliable is null ? layout.Lines : null;
+    }
+
     private TextLayout Layout(TextSite site, string text, FontLookup lookup)
     {
-        var limit = site.Width.Px;
+        // 換行用的是 Measure 傳下來的約束（元素自己的 Width、固定欄），可能比最後看得見的寬
+        var limit = site.Width.WrapPx ?? site.Width.Px;
         var wraps = Wraps(site);
         var display = TextRules.Cased(TextRules.Display(site.Element, text), site.Casing);
 
-        double widest = 0, widestWord = 0;
+        double widest = 0, widestWord = 0, widestWrapped = 0;
         var lines = 0;
         var usedAuto = false;
         var unbreakable = false;
@@ -394,13 +409,13 @@ public sealed class CheckAnalyzer
         {
             var whole = TextMeasure.Measure(line, lookup, site.FontSize, site.DisplayScales);
             if (!whole.IsReliable)
-                return new TextLayout(0, 0, 0, false, false, whole.UnreliableReason)
+                return new TextLayout(0, 0, 0, 0, false, false, whole.UnreliableReason)
                     { FirstMissing = whole.ComplexScript || whole.Unsupported is not null ? -1 : whole.FirstMissing };
 
             usedAuto |= whole.UsedAutoFallback;
             widest = Math.Max(widest, whole.WidthPx);
 
-            if (!wraps || whole.WidthPx <= limit) { lines++; continue; }
+            if (!wraps || whole.WidthPx <= limit) { lines++; widestWrapped = Math.Max(widestWrapped, whole.WidthPx); continue; }
 
             // 貪婪換行：一個詞一個詞往行裡放，放不下就換行。
             // 中日韓文字每個字之間都可以斷。
@@ -417,6 +432,7 @@ public sealed class CheckAnalyzer
                 var lead = used > 0 && word.SpaceBefore ? space : 0;
                 if (used > 0 && used + lead + w > limit)
                 {
+                    widestWrapped = Math.Max(widestWrapped, used);
                     lineCount++;
                     used = 0;
                     lead = 0;
@@ -436,6 +452,7 @@ public sealed class CheckAnalyzer
                         var extra = (int)Math.Ceiling((used + lead + w) / limit) - 1;
                         lineCount += extra;
                         used = (used + lead + w) - extra * limit;
+                        widestWrapped = Math.Max(widestWrapped, limit);
                     }
                     continue;
                 }
@@ -443,10 +460,11 @@ public sealed class CheckAnalyzer
                 used += lead + w;
             }
 
+            widestWrapped = Math.Max(widestWrapped, used);
             lines += lineCount;
         }
 
-        return new TextLayout(widest, Math.Max(1, lines), widestWord, unbreakable, usedAuto, null);
+        return new TextLayout(widest, Math.Max(1, lines), widestWrapped, widestWord, unbreakable, usedAuto, null);
     }
 
     /// <summary>可以換行的單位：以空白分開的詞；中日韓文字（與全形標點）每個字自成一個單位。</summary>
@@ -516,6 +534,14 @@ public sealed class CheckAnalyzer
             severity = FitSeverity.Fail;
             actual = layout.WidestUnbreakable;
         }
+        else if (layout.WidestWrapped > limit)
+        {
+            // 照自己的寬度換行了，但外層看得見的比它窄：每一行超出去的部分被裁掉
+            //（Width="300" 的 TextBlock 放在 100 寬的欄裡；或在水平 StackPanel 裡被前面的兄弟擠出去）
+            if (site.Trim == TrimMode.None) { kind = FitKind.Overflow; severity = FitSeverity.Fail; }
+            else { kind = FitKind.Trimmed; severity = FitSeverity.Warn; }
+            actual = layout.WidestWrapped;
+        }
         else if (site.Height is { } height && LineHeightOf(site) is var lineHeight and > 0 && layout.Lines * lineHeight > height)
         {
             // 來源語言自己就放不下的高度不是翻譯造成的，但仍然是裁切
@@ -542,7 +568,9 @@ public sealed class CheckAnalyzer
         if (layout.UsedAutoFallback)
             warnings.Add("some characters are drawn with WPF's fallback font for them (taken from WPF's own fallback table)");
         if (site.Width.WrapDefeated && site.Wrap != WrapMode.NoWrap)
-            warnings.Add("TextWrapping has no effect here: the text is measured with unlimited width (horizontal StackPanel, Auto column or WrapPanel)");
+            warnings.Add("TextWrapping has no effect here: the text is measured with unlimited width (horizontal StackPanel, Auto column or WrapPanel) and nothing between it and that panel sets a Width or MaxWidth");
+        if (site.Width.WrapPx is { } wrapAt && site.Wrap != WrapMode.NoWrap)
+            warnings.Add($"the text wraps at {wrapAt.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)} px (its own Width/MaxWidth or a container's), but only {limit.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)} px of each line are visible");
         if (site.Width.TakenByInlineBefore > 0)
             warnings.Add($"{site.Width.TakenByInlineBefore.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)} px of the line is taken by the text before it in the same TextBlock");
         if (site.Width.AssumedScrollBar)

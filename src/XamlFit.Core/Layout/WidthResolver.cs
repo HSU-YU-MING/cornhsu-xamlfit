@@ -156,6 +156,14 @@ public sealed class WidthResolver
         private bool _assumedScrollBar;
         private bool _wrapDefeated;
 
+        /// <summary>
+        /// 文字換行用的寬度是不是已經定了。WPF 量文字用的是 Measure 傳下來的約束：
+        /// 往上走遇到第一個**確定的**上界（明寫的 Width、固定欄、解出來的欄）時，再上面的東西只會裁切、不會改變換行；
+        /// 遇到用無限寬量子元素的容器時，它底下的 Width／MaxWidth 候選就是換行寬度，一個都沒有才是「換行失效」。
+        /// </summary>
+        private bool _wrapSettled;
+        private double? _wrapPx;
+
         /// <summary>扣過同一排兄弟的寬度。這時「沒有剩下空間」是真的結果（WPF 把它擠到看不見），
         /// 不是「內距比上界還大、我們一定算錯了」。</summary>
         private bool _rowShared;
@@ -172,7 +180,28 @@ public sealed class WidthResolver
             if (_pending is not null) { _boundAfterPending = true; return; }
             var px = boundPx - deducted;
             if (_best is null || px < _best.Value.Px) _best = (px, source, at, deducted);
-            if (definitive) _anchored = true;
+            if (definitive)
+            {
+                _anchored = true;
+                // 第一個確定的上界就是 Measure 傳給文字的約束（它底下的 MaxWidth 候選已經夾在 _best 裡）
+                if (!_wrapSettled) { _wrapSettled = true; _wrapPx = _best.Value.Px; }
+            }
+        }
+
+        /// <summary>
+        /// 走到用無限寬量子元素的容器（水平 StackPanel、StatusBar、WrapPanel、Grid 的 Auto 欄）。
+        ///
+        /// ⚠ 回報 1（ZeroCel CanvasView.xaml:1171）：<c>&lt;TextBlock Width="120" TextWrapping="Wrap"/&gt;</c> 放在水平
+        ///   StackPanel 裡，第一版一律報「換行失效」並判成溢出 72 px。WPF 實測（Measure(∞,∞)）它折成兩行、寬 120：
+        ///   FrameworkElement.MeasureCore 先把可用寬度夾到元素自己的 Width／MaxWidth，父層給無限寬也一樣。
+        ///   「換行失效」只在元素與這個容器之間**一層都沒有寬度上界**時成立。
+        /// </summary>
+        private void Unconstrained()
+        {
+            if (_wrapSettled) return;
+            _wrapSettled = true;
+            if (_best is { } b) _wrapPx = b.Px;
+            else _wrapDefeated = true;
         }
 
         /// <summary>上面不會再有上界了（走到根、快顯、可水平捲動）。</summary>
@@ -230,6 +259,8 @@ public sealed class WidthResolver
             {
                 AssumedScrollBar = _assumedScrollBar,
                 WrapDefeated = _wrapDefeated,
+                // 換行寬度比看得見的寬：外層把它裁掉了（Width="300" 放在 100 寬的欄裡、或在水平 StackPanel 裡被兄弟擠出去）
+                WrapPx = _wrapSettled && !_wrapDefeated && _wrapPx is { } wrap && wrap > b.Px + 0.01 ? wrap : null,
                 DependsOnNeighbourText = owner.ResourceLookups > _resourceLookupsAtStart,
             };
         }
@@ -439,10 +470,10 @@ public sealed class WidthResolver
                         Block(WidthStatus.Unmeasurable, $"Orientation of <{pLocal}> is not statically readable");
                     else if (o.IsValue && IsOneOf(o.Value, "Horizontal"))
                     {
-                        // WPF 實測：水平 StackPanel 用無限寬量子元素 —— Wrap 不會換行，
+                        // WPF 實測：水平 StackPanel 用無限寬量子元素 —— 沒有自己的寬度時 Wrap 不會換行，
                         // 排在前面的兄弟把它往右推，整排超出面板的部分被裁掉。
                         // 預算 = 面板寬 − 其他**所有**兄弟（讓後面的兄弟也留在畫面裡）。
-                        _wrapDefeated = true;
+                        Unconstrained();
                         Share(parent, child, $"a horizontal <{pLocal}>", _ => true, depth);
                         if (owner.Sharing == RowSharing.Preceding && _trailingAllowed && _trailing > 0)
                             _deductions -= _trailing;
@@ -453,7 +484,7 @@ public sealed class WidthResolver
 
                 case "StatusBar":
                     // 預設的 ItemsPanel 是 DockPanel：項目往左靠、各自依內容決定寬度
-                    _wrapDefeated = true;
+                    Unconstrained();
                     Share(parent, child, "a <StatusBar>", _ => true, depth);
                     return null;
 
@@ -478,13 +509,14 @@ public sealed class WidthResolver
 
                 case "WrapPanel":
                 {
-                    // 子元素用 ItemWidth（沒設就是無限寬）去量，超出面板寬的部分被裁掉
-                    _wrapDefeated = true;
+                    // 子元素用 ItemWidth（沒設就是無限寬）去量，超出面板寬的部分被裁掉。
+                    // 有 ItemWidth 時它就是換行寬度（先記候選再標無限寬，不然會被當成換行失效）
                     var item = owner._styles.ResolveEx(parent, "ItemWidth", inheritable: false);
                     if (item.IsUnreadable)
                         Block(WidthStatus.Unmeasurable, "ItemWidth of <WrapPanel> is not statically readable");
                     else if (item.IsValue && TryLength(item.Value, out var itemWidth))
                         Candidate(itemWidth, $"ItemWidth={itemWidth:G} on <WrapPanel>", parent, _deductions, definitive: true);
+                    Unconstrained();
                     return null;
                 }
 
@@ -522,7 +554,7 @@ public sealed class WidthResolver
                 var (solved, ownWidth) = owner.TrySolveGrid(parent, child, depth);
                 if (solved.Width is { } solvedWidth && ownWidth is not null)
                 {
-                    _wrapDefeated |= solved.Unconstrained;
+                    if (solved.Unconstrained) Unconstrained();
                     _rowShared |= solved.Squeezed;
                     return ClosedVia(ownWidth, solvedWidth, $"solved Grid {solved.Reason}", parent);
                 }
@@ -539,7 +571,7 @@ public sealed class WidthResolver
         {
             _usedChrome |= own.UsedChromeTable;
             _assumedScrollBar |= own.AssumedScrollBar;
-            _wrapDefeated |= own.WrapDefeated;
+            if (own.WrapDefeated) Unconstrained();
             return Closed(boundPx, source, at);
         }
 

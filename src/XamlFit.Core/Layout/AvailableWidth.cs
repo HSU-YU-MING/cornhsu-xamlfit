@@ -43,11 +43,21 @@ public sealed record AvailableWidth(
     public bool AssumedScrollBar { get; init; }
 
     /// <summary>
-    /// 這個位置的文字是用**無限寬**去量的（水平 StackPanel、Grid 的 Auto 欄、WrapPanel）。
+    /// 這個位置的文字是用**無限寬**去量的（水平 StackPanel、Grid 的 Auto 欄、WrapPanel），
+    /// 而且它跟那個容器之間一層都沒有 Width／MaxWidth。
     /// WPF 實測：這種位置上 <c>TextWrapping="Wrap"</c> **不會換行**，文字一路畫出去被裁掉。
     /// 判定時要把它當成 NoWrap，否則會把「溢出」報成無害的「換行」。
+    /// ⚠ 元素自己有 Width／MaxWidth 時**不是**這種情形：WPF 先把可用寬度夾到它自己的寬度，照那個寬度換行
+    ///   （回報 1：ZeroCel 的 <c>TextBlock Width="120" TextWrapping="Wrap"</c> 在水平 StackPanel 裡折成兩行）。
     /// </summary>
     public bool WrapDefeated { get; init; }
+
+    /// <summary>
+    /// 文字**換行用**的寬度，只在它比 <see cref="Px"/> 大時有值（null = 跟 Px 一樣）。
+    /// WPF 量文字用的是 Measure 傳下來的約束，不是最後看得見的寬度：<c>Width="300"</c> 的 TextBlock 放在 100 寬的欄裡
+    /// 照 300 換行，每一行再被裁到 100。判定要用這個寬度排行、用 Px 判裁切。
+    /// </summary>
+    public double? WrapPx { get; init; }
 
     /// <summary>
     /// 這個寬度是「扣掉同一排其他在地化字串之後」剩下的 —— 那些字串換一個語言就不一樣寬。
