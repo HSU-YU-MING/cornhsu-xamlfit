@@ -229,6 +229,9 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 145 | **元素自己有 Width／MaxWidth 時，水平 StackPanel／Auto 欄裡的 Wrap 照樣換行** | WPF 的 MeasureCore 先把可用寬度夾到元素自己的 Width／MaxWidth，父層給無限寬也一樣；「換行失效」只在元素與那個容器之間一層都沒有上界時成立。第一版把 ZeroCel 唯二的 fail 報在 `TextBlock Width="120" TextWrapping="Wrap"` 上（溢出 72 px），實際折成兩行。連帶：換行寬度是**第一個確定的上界**（自己的 Width、固定欄），看得見的寬度是全部上界取小 —— `Width="300"` 放在 100 的欄裡照 300 換行、每行被裁掉 200，之前報成無害的 reflow（`AvailableWidth.WrapPx`、LayoutOracle `--wrap`） | 回報 1（ZeroCel） |
 | 146 | **UserControl 裝在哪個視窗裡，XAML 看得到** | 根元素的 x:Class 對得上放它的 `<views:CanvasView/>`（clr-namespace）。第一版只看「所有視窗的共識」，主視窗沒設字型、對話框設 Segoe UI 就把只放在主視窗裡的三個 UserControl 100 處全擋掉。現在順著放置關係找到視窗；放在不一致的視窗、資源字典、循環 → 仍不知道，原因點名檔案；沒有 XAML 放它才退回共識 | 回報 2 §2（ZeroCel） |
 | 147 | **對照程式量換行要用 DesiredSize.Height，不能用 ActualHeight** | 直接放在視窗裡的 TextBlock 被拉高到整個視窗（300 → 「20 行」）；DesiredSize 才是文字自己的高度。另外有 MaxWidth 的元素換行之後會縮到最寬的那一行（117.5 不是 120），那不是裁切，寬度比對的案例要用不換行的文字 | LayoutOracle `--wrap` |
+| 148 | **UserControl 的寬度也順著放置關係走** | ZeroCel 351 處「到根都沒有上界」全在 UserControl 裡：走到根就停，而放它的主視窗寫了 Width=1280。走到根時從放它的元素（`WidthResolver.PlacementsOf`，照 x:Class 對 `<views:Name/>`）用 `OuterWidth` 接著往上，取最窄的；有一個放它的地方算不出來就量不到（它可能更窄）；全部查不到上界才是查不到上界。根元素的 Margin 在自己這邊扣，放它的元素的 Margin 在那邊扣 | 回報 2 §3-2（ZeroCel） |
+| 149 | **視窗的 Width 是初始大小，能縮的視窗可以縮到 MinWidth** | 工具一向拿 Width 當上界（偏樂觀）。`assumeWindowMinWidth` 開了才改用 MinWidth（字面值、視窗能縮、MinWidth < Width），報告標明是宣告的最壞情況。LayoutOracle「minwidth:」案例把視窗縮到 MinWidth 再量：三案 0 高估 | 回報 2 §3-2 |
+| 150 | **快顯的內距要真的打開才量得到** | ContextMenu 13（Padding 4 + Border 2 + 範本其他 7）、ToolTip 14、子選單的 Popup 6、裸 Popup 0；MenuItem 子項 85 跟表一致。ChromeGen 離線 Measure 量不到快顯（坑 61）；`LayoutOracle --popups` 放進真的視窗、IsOpen 再量，兩個內容寬度斜率都是 1。這幾個條目只在使用者宣告 `popupMaxWidth` 時用到，不宣告快顯照舊不檢查 | LayoutOracle `--popups` |
 
 ### 環境層級的坑
 
@@ -245,11 +248,11 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 750 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 768 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 47 條 CLI 路徑的退出碼
-dotnet run -c Release --project prototype/LayoutOracle   # 238 案 vs 真的 WPF 視窗（--check 用檢查模式的排法再跑一次；--wrap 比換行的行數）（Windows）；有高估就回 1
+dotnet run -c Release --project prototype/LayoutOracle   # 241 案 vs 真的 WPF 視窗（--check 用檢查模式的排法再跑一次；--wrap 比換行的行數；--popups 量快顯的內距）（Windows）；有高估就回 1
 ```
 
 **來源語言自我檢驗**（沒有腳本，手動跑）：對一個已經出貨的 App 跑

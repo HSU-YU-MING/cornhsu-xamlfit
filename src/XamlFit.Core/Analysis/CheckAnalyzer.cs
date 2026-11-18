@@ -573,6 +573,11 @@ public sealed class CheckAnalyzer
             warnings.Add($"the text wraps at {wrapAt.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)} px (its own Width/MaxWidth or a container's), but only {limit.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)} px of each line are visible");
         if (site.Width.TakenByInlineBefore > 0)
             warnings.Add($"{site.Width.TakenByInlineBefore.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)} px of the line is taken by the text before it in the same TextBlock");
+        // 宣告出來的上界不是 XAML 裡量到的事實：報告要說清楚（回報 2 §3-2、§3-3）
+        if (site.Width.BoundSource.Contains("assumeWindowMinWidth", StringComparison.Ordinal))
+            warnings.Add("the limit is the window's MinWidth (assumeWindowMinWidth): the worst case when the window is shrunk, not its initial Width");
+        if (site.Width.BoundSource.Contains("popupMaxWidth", StringComparison.Ordinal))
+            warnings.Add("the limit is the declared popupMaxWidth, not a bound in the XAML: popups grow with their content");
         if (site.Width.AssumedScrollBar)
             warnings.Add("assumes the vertical scroll bar is visible");
         if (site.Width.DependsOnNeighbourText)

@@ -90,6 +90,18 @@ public sealed class FitConfig
     /// <summary>專案套了外部佈景也照樣用內建的 Aero2 內距表（你確認過那個佈景沒有改動控制項的內距）。</summary>
     [JsonPropertyName("assumeDefaultTheme")] public bool? AssumeDefaultTheme { get; set; }
 
+    /// <summary>
+    /// 可以縮小的視窗用它的 MinWidth（而不是 Width）當寬度上界：回答「視窗縮到最小時裝不裝得下」，
+    /// 正好是翻譯之後最常爆的情況。預設關；開了報告會說寬度來自 MinWidth。沒有 MinWidth、或不能縮小的視窗照舊用 Width。
+    /// </summary>
+    [JsonPropertyName("assumeWindowMinWidth")] public bool? AssumeWindowMinWidth { get; set; }
+
+    /// <summary>
+    /// 快顯（ContextMenu、ToolTip、Popup、子選單）最寬可以到多寬（DIP）。快顯跟著內容變寬、不裁切，所以預設不檢查；
+    /// 宣告之後，快顯裡的文字拿它當上界（扣掉量到的快顯內距），超過的就報出來。報告標明上界來自宣告。
+    /// </summary>
+    [JsonPropertyName("popupMaxWidth")] public double? PopupMaxWidth { get; set; }
+
     [JsonPropertyName("cultures")] public List<string>? Cultures { get; set; }
     [JsonPropertyName("resx")] public List<string>? Resx { get; set; }
 
@@ -137,6 +149,7 @@ public sealed class FitConfig
         Check("defaultFontSize", config.DefaultFontSize, 1, 400);
         Check("marginPercent", config.MarginPercent, 0, 100);
         Check("minCoverage", config.MinCoverage, 0, 100);
+        Check("popupMaxWidth", config.PopupMaxWidth, 1, 4000);
 
         if (config.DefaultFontFamily is { Length: 0 })
             problems.Add(new Problem("defaultFontFamily", "must not be empty"));

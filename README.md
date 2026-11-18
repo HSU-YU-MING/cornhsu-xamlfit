@@ -320,7 +320,18 @@ them once in `xamlfit.config.json`.
   "sourceCulture": "zh-Hant",
 
   // An external theme was detected, but it does not change control padding.
-  "assumeDefaultTheme": false
+  "assumeDefaultTheme": false,
+
+  // A resizable window can be shrunk to its MinWidth. Use that, not Width, as the bound: the
+  // report then answers "does it fit when the window is as small as it gets", which is where
+  // translations overflow first. Off by default; the bound is labelled as coming from MinWidth.
+  "assumeWindowMinWidth": false,
+
+  // The widest a popup (ContextMenu, ToolTip, Popup, submenu) may grow. Popups size to their
+  // content and never clip, so they are not checked unless you declare this; then text in them
+  // is held to it (minus the measured popup chrome) and the report says the limit is declared.
+  // Menu-bar items are not affected: a Menu wraps its items.
+  "popupMaxWidth": 400
 }
 ```
 
@@ -378,6 +389,12 @@ the value at that element is what the control inherits. Placed in windows that d
 resource dictionary, the inherited value is unknown, and the report names the files. A control no
 XAML file places (created in code) falls back to the consensus of the windows in the same
 application; if they disagree, pin `defaultFontFamily` / `defaultFontSize`.
+
+The same placement gives a user control its **width**: text inside `CanvasView.xaml` has no bound
+in that file, so the walk continues from the `<views:CanvasView/>` element in the window that
+places it (a Grid column there, the window's own Width). Placed in several files, the narrowest
+wins; a placement that cannot be resolved blocks the site, because that one may be narrower.
+A control no XAML file places still has no declared limit.
 
 ## Fonts
 
