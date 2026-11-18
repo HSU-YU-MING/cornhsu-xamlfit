@@ -3,9 +3,18 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-11-18
 
 Both changes come from a first external trial (ZeroCel, a WPF app with 35 XAML files; reports 1 and 2, 2026-11-18).
+
+**Upgrading**: measurement semantics changed, so findings can move. A `TextBlock` with its own
+`Width`/`MaxWidth` inside a horizontal `StackPanel` or an `Auto` column is no longer reported as
+overflowing when it wraps; a text element whose own `Width` is wider than the column or row that
+holds it is now reported as overflow instead of reflow; and sites in user controls that were
+blocked as "windows in this project set different FontFamily values" are now measured when the
+XAML places the control in one window. If a baseline hides findings in those sites, refresh it
+with `--write-baseline` after reviewing the new report. Nothing else (CLI, config, report
+schema, baseline keys) changed.
 
 ### Fixed
 
