@@ -3,6 +3,26 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-11-19
+
+**Upgrading**: the GitHub Action's inputs changed; the CLI did not. `sarif` is now a switch
+(`true` uploads to code scanning from inside the action, so drop your own `upload-sarif` step)
+and `json` is gone: the JSON report is uploaded as a workflow artifact (`upload-report`,
+`artifact-name`). The action installs .NET itself, so the `setup-dotnet` step before it can go.
+
+### Changed
+
+- **The GitHub Action has the same shape as the XamlContrast action** (report 2 follow-up, on the
+  way to one action for the three XAML tools): inputs are validated before anything is installed
+  (a bad value exits 2 and names the input; paths starting with `-` and values with line breaks
+  are refused), the tool's output is wrapped in `::stop-commands::` because the XAML and `.resx`
+  strings it prints are untrusted input, every finding is annotated on its line in the PR
+  (`fail` → error, `warn` → warning, `info` → notice), SARIF paths are made repo-relative and
+  uploaded to code scanning by the action, the JSON report is uploaded as an artifact, and the
+  job fails only in the last step, so a red PR still shows the whole report. New inputs:
+  `working-directory`, `config`, `upload-report`, `artifact-name`; `fail-on` and `min-coverage`
+  now default to the config file's values. All third-party actions are pinned to commit SHAs.
+
 ## [0.3.0] - 2026-11-18
 
 Follow-ups from the ZeroCel trial (report 2 §3-2, §3-3). Only additions: a user control now gets a width from the file that places it (no config), and two new config keys that are off unless declared. Findings can appear in user-control sites that previously had no declared limit.

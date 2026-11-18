@@ -49,6 +49,47 @@ jobs:
       - name: README pins the released version
         run: bash scripts/verify-readme-facts.sh
 
+  # 真的跑一次 action.yml：單元測試只看得到文字，看不到 jq 註記、stop-commands、最後一步才擋有沒有接起來。
+  # 裝的是 nuget.org 上的正式版（Action 本來就這樣用），所以這裡測的是 Action 的殼，不是這個分支的 CLI。
+  action:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # 示範專案是刻意做壞的：gate 一定要紅，而且報告與註記要在紅之前就出去
+      - name: Run the action on the demo (expects the gate to fail)
+        id: demo
+        continue-on-error: true
+        uses: ./
+        with:
+          root: samples/demo
+          resx: samples/demo/Resources
+          artifact-name: xamlfit-demo-report
+      - name: The gate failed and the report was written
+        env:
+          OUTCOME: ${{ steps.demo.outcome }}
+        run: |
+          test "$OUTCOME" = failure || { echo "expected the demo to fail the gate, got $OUTCOME"; exit 1; }
+          test -s "$RUNNER_TEMP/xamlfit-report.json" || { echo "no report"; exit 1; }
+          n=$(jq '.findings | length' "$RUNNER_TEMP/xamlfit-report.json")
+          test "$n" -gt 0 || { echo "the report has no findings"; exit 1; }
+          echo "ok: gate failed, $n finding(s) in the report"
+
+      # 壞的輸入要在裝任何東西之前 exit 2，不能變成預設值
+      - name: A bad input is refused
+        id: bad
+        continue-on-error: true
+        uses: ./
+        with:
+          root: samples/demo
+          fail-on: Warn
+          upload-report: false
+      - name: The bad input failed the step
+        env:
+          OUTCOME: ${{ steps.bad.outcome }}
+        run: |
+          test "$OUTCOME" = failure || { echo "expected fail-on: Warn to be refused, got $OUTCOME"; exit 1; }
+
   # 分析是純算術，不相依 WPF —— 但使用者大多在 Windows 上跑（路徑分隔、大小寫不分的副檔名）。
   windows:
     runs-on: windows-latest

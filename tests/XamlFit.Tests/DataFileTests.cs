@@ -37,14 +37,27 @@ public class DataFileTests
     public void The_action_never_interpolates_an_input_into_a_shell_script()
     {
         if (RepoRoot() is not { } root) return;
-        var envLine = new Regex(@"^\s+XF_[A-Z_]+: \$\{\{ inputs\.[a-z-]+ \}\}\s*$");
-        var offenders = File.ReadAllLines(Path.Combine(root, "action.yml"))
-            .Select((line, i) => (line, n: i + 1))
-            .Where(x => x.line.Contains("${{", StringComparison.Ordinal)
-                        && !x.line.TrimStart().StartsWith('#')
-                        && !envLine.IsMatch(x.line))
-            .Select(x => $"action.yml:{x.n}: {x.line.Trim()}")
-            .ToList();
+        // 只看 run: 腳本的內容：if:、with:、working-directory: 是 runner 的表達式與參數，不經過 shell（XamlContrast 的 Action 也這樣用）。
+        // run: | 的區塊從那一行起，到縮排回到 run: 的層級為止
+        var lines = File.ReadAllLines(Path.Combine(root, "action.yml"));
+        var offenders = new List<string>();
+        var runIndent = -1;
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            var indent = line.Length - line.TrimStart().Length;
+            if (runIndent >= 0 && line.Trim().Length > 0 && indent <= runIndent) runIndent = -1;
+            if (runIndent < 0)
+            {
+                var m = Regex.Match(line, @"^(\s+)run:\s*(\|?)\s*(.*)$");
+                if (!m.Success) continue;
+                if (m.Groups[2].Value == "|") { runIndent = m.Groups[1].Length; continue; }
+                if (m.Groups[3].Value.Contains("${{", StringComparison.Ordinal)) offenders.Add($"action.yml:{i + 1}: {line.Trim()}");
+                continue;
+            }
+            if (line.Contains("${{", StringComparison.Ordinal) && !line.TrimStart().StartsWith('#'))
+                offenders.Add($"action.yml:{i + 1}: {line.Trim()}");
+        }
         Assert.True(offenders.Count == 0, string.Join(Environment.NewLine, offenders));
     }
 }

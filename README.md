@@ -609,29 +609,41 @@ trustworthy.
 ```yaml
 permissions:
   contents: read
-  security-events: write          # only needed to upload SARIF
+  security-events: write          # only with sarif: true
 steps:
   - uses: actions/checkout@v4
-  - uses: actions/setup-dotnet@v4
-    with:
-      dotnet-version: '10.0.x'
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.3.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.4.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.3.0              # pin the tool too
-      sarif: xamlfit.sarif
-  - uses: github/codeql-action/upload-sarif@v3
-    if: always()
-    with:
-      sarif_file: xamlfit.sarif
+      version: 0.4.0              # pin the tool too
+      sarif: true                 # upload to code scanning
 ```
 
-Inputs: `root` (required), `resx`, `metrics`, `pseudo`, `baseline`, `fail-on` (`fail` or `warn`),
-`min-coverage` (default 60), `json`, `sarif`, and `version`. Without `version` the action installs
-the latest release, so a new release can change a build that nobody touched; pin it. The path is
-passed after `--`, so a folder named like a flag is still scanned as a folder. The metrics file is
-found next to `root` as usual (`xamlfit.fonts.json.gz` committed to the repository).
+The action installs .NET and the tool, runs `xamlfit check`, annotates every finding on its line
+in the PR, uploads the JSON report as a workflow artifact, uploads SARIF to code scanning when
+asked, and only then fails the job on the check's exit code, so a red PR still shows the whole
+report. It has the same shape as the XamlContrast action (inputs are validated before anything
+is installed; the tool's output is wrapped in `::stop-commands::`, because the XAML and `.resx`
+it prints are untrusted input).
+
+| Input | Default | What it does |
+|---|---|---|
+| `root` | required | folder to scan |
+| `working-directory` | `.` | folder to run in; the paths below are relative to it |
+| `version` | latest | tool version to install; the tool is 0.x, so pin it |
+| `resx` | config file | folder holding the `.resx` translations |
+| `metrics` | next to `root` | font metrics file |
+| `config` | next to `root` | `xamlfit.config.json` |
+| `baseline` | none | ratchet file: only new findings fail |
+| `pseudo` | `false` | simulate expansion instead of real translations (never fails the job) |
+| `fail-on` | config, else `fail` | `fail` or `warn` |
+| `min-coverage` | config, else 60 | resolution floor; below it the job exits 3 |
+| `sarif` | `false` | upload SARIF to code scanning (needs `security-events: write`) |
+| `upload-report` | `true` | upload the JSON report as an artifact |
+| `artifact-name` | `xamlfit-report` | artifact name, and the code-scanning category when the action runs twice in one run |
+
+The path is passed after `--`, so a folder named like a flag is still scanned as a folder.
 
 Suppress a single slot with a reason — the reason is required, and suppressed slots are counted:
 
