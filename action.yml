@@ -197,9 +197,12 @@ runs:
           def esc: gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A");
           def prop: esc | gsub(":"; "%3A") | gsub(","; "%2C");
           .findings[]
-          | (.site | capture("^(?<file>.*):(?<line>[0-9]+)$")) as $loc
+          # site 不是「路徑:行號」的 finding（將來的 kind，例如某個語言漏了鍵）照樣註記、只是不掛在行上 ——
+          # capture 對不上會丟錯，整個 jq 停在那一筆，後面的 finding 全部沒有註記
+          | (try (.site | capture("^(?<file>.*):(?<line>[0-9]+)$")) catch null) as $loc
           | (if .severity == "fail" then "error" elif .severity == "warn" then "warning" else "notice" end) as $level
-          | "::\($level) file=\(($root + $loc.file) | prop),line=\($loc.line)::\("\(.kind) [\(.culture)] \(.key): needs \(.actualPx) px, has \(.limitPx) px\(if .warning then " (" + .warning + ")" else "" end)" | esc)"
+          | ("\(.kind) [\(.culture)] \(.key)" + (if .actualPx != null and .limitPx != null then ": needs \(.actualPx) px, has \(.limitPx) px" else "" end) + (if .warning then " (" + .warning + ")" else "" end)) as $msg
+          | if $loc then "::\($level) file=\(($root + $loc.file) | prop),line=\($loc.line)::\($msg | esc)" else "::\($level)::\($msg | esc)" end
         ' "$report" || true
 
     # SARIF 的路徑是 root 相對 —— 先補上前綴變成 repo 相對，code scanning 才對得上檔案
