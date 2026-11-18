@@ -343,6 +343,112 @@ public class ScannerTests
         Assert.Equal(14, Site(scan, "Own").FontSize);
     }
 
+    // ───────────────────────── 誰放它（回報 2 §2，ZeroCel） ─────────────────────────
+    // 主視窗沒設字型、兩個對話框設 Segoe UI：第一版因為「視窗們不一致」把只放在主視窗裡的 UserControl 全部擋掉。
+    // x:Class 跟 <v:Page/> 對得上，順著放置關係就知道它在哪個視窗裡。
+
+    private const string Views = "xmlns:v=\"clr-namespace:App.Views\"";
+
+    private static string Classed(string cls, string body, string attributes = "") =>
+        $"<UserControl {Ns} {Views} x:Class=\"App.Views.{cls}\" {attributes}>{body}</UserControl>";
+
+    private const string Hosted = "<TextBlock Width=\"100\" Text=\"Hosted\"/>";
+
+    [Fact]
+    public void A_user_control_takes_the_font_of_the_window_that_places_it()
+    {
+        var scan = Scan(
+            ("Main.xaml", Window("<v:Page/>", $"Width=\"400\" FontSize=\"20\" {Views}")),
+            ("Dialog.xaml", Window("", "Width=\"400\" FontSize=\"14\"")),   // 不一致的視窗，但它沒放 Page
+            ("Page.xaml", Classed("Page", Hosted)));
+        Assert.Equal(WidthStatus.Known, Site(scan, "Hosted").Width.Status);
+        Assert.Equal(20, Site(scan, "Hosted").FontSize);
+    }
+
+    [Fact]
+    public void A_window_that_sets_nothing_gives_the_default_font()
+    {
+        // ZeroCel 的情形：主視窗沒設字型，對話框有
+        var scan = Scan(
+            ("Main.xaml", Window("<v:Page/>", $"Width=\"400\" {Views}")),
+            ("Dialog.xaml", Window("", "Width=\"400\" FontSize=\"14\"")),
+            ("Page.xaml", Classed("Page", Hosted)));
+        Assert.Equal(WidthStatus.Known, Site(scan, "Hosted").Width.Status);
+        Assert.Equal(MonoSize, Site(scan, "Hosted").FontSize);
+    }
+
+    [Fact]
+    public void Placed_in_windows_that_disagree_stays_unknown_and_names_them()
+    {
+        var scan = Scan(
+            ("Main.xaml", Window("<v:Page/>", $"Width=\"400\" FontSize=\"20\" {Views}")),
+            ("Dialog.xaml", Window("<v:Page/>", $"Width=\"400\" FontSize=\"14\" {Views}")),
+            ("Page.xaml", Classed("Page", Hosted)));
+        var site = Site(scan, "Hosted");
+        Assert.Equal(WidthStatus.Unmeasurable, site.Width.Status);
+        Assert.Contains("different FontSize values", site.Width.Reason);
+        Assert.Contains("Main.xaml: 20", site.Width.Reason);
+        Assert.Contains("Dialog.xaml: 14", site.Width.Reason);
+    }
+
+    [Fact]
+    public void The_hosting_chain_is_followed_through_nested_user_controls()
+    {
+        // ZeroCel 的 ToolbarView 放在 ToolOptionsView 裡，ToolOptionsView 放在主視窗裡
+        var scan = Scan(
+            ("Main.xaml", Window("<v:Outer/>", $"Width=\"400\" FontSize=\"20\" {Views}")),
+            ("Dialog.xaml", Window("", "Width=\"400\" FontSize=\"14\"")),
+            ("Outer.xaml", Classed("Outer", "<v:Inner/>")),
+            ("Inner.xaml", Classed("Inner", Hosted)));
+        Assert.Equal(20, Site(scan, "Hosted").FontSize);
+    }
+
+    [Fact]
+    public void The_placing_element_itself_can_set_the_font()
+    {
+        var scan = Scan(
+            ("Main.xaml", Window("<v:Page FontSize=\"16\"/>", $"Width=\"400\" FontSize=\"20\" {Views}")),
+            ("Page.xaml", Classed("Page", Hosted)));
+        Assert.Equal(16, Site(scan, "Hosted").FontSize);
+    }
+
+    [Fact]
+    public void A_circular_placement_is_reported_not_followed_forever()
+    {
+        var scan = Scan(
+            ("Main.xaml", Window("", "Width=\"400\" FontSize=\"20\"")),
+            ("Dialog.xaml", Window("", "Width=\"400\" FontSize=\"14\"")),
+            ("A.xaml", Classed("A", "<v:B/>" + Hosted)),
+            ("B.xaml", Classed("B", "<v:A/>")));
+        var site = Site(scan, "Hosted");
+        Assert.Equal(WidthStatus.Unmeasurable, site.Width.Status);
+        Assert.Contains("circular", site.Width.Reason);
+    }
+
+    [Fact]
+    public void A_control_placed_only_in_a_resource_dictionary_stays_unknown()
+    {
+        var scan = Scan(
+            ("Main.xaml", Window("", "Width=\"400\" FontSize=\"20\"")),
+            ("Dialog.xaml", Window("", "Width=\"400\" FontSize=\"14\"")),
+            ("Templates.xaml", $"<ResourceDictionary {Ns} {Views}><DataTemplate x:Key=\"T\"><v:Page/></DataTemplate></ResourceDictionary>"),
+            ("Page.xaml", Classed("Page", Hosted)));
+        var site = Site(scan, "Hosted");
+        Assert.Equal(WidthStatus.Unmeasurable, site.Width.Status);
+        Assert.Contains("not a window", site.Width.Reason);
+    }
+
+    [Fact]
+    public void A_control_no_file_places_falls_back_to_the_window_consensus()
+    {
+        // 程式碼 new 出來的：沒有任何 XAML 放它，照舊看視窗們的共識（這裡一致）
+        var scan = Scan(
+            ("Main.xaml", Window("", "Width=\"400\" FontSize=\"20\"")),
+            ("Dialog.xaml", Window("", "Width=\"400\" FontSize=\"20\"")),
+            ("Page.xaml", Classed("Page", Hosted)));
+        Assert.Equal(20, Site(scan, "Hosted").FontSize);
+    }
+
     // ───────────────────────── 其他 ─────────────────────────
 
     [Fact]

@@ -260,15 +260,17 @@ WPF 的預設字型不是 Segoe UI，是**系統訊息字型**，而且跟著 Wi
 那個字型不在度量檔裡的話，會回報那個語言「沒有檢查」（exit 3），不會拿別的字型代替。
 
 `UserControl` 的字型是從裝它的視窗繼承來的，而那個視窗在另一個檔案裡。
-工具用同一個應用程式裡所有視窗的共識；它們不一致時，繼承到的值就是不知道，
-除非你用 `defaultFontFamily`／`defaultFontSize` 指定。
+工具順著放置關係找：根元素寫 `x:Class="App.Views.CanvasView"` 的檔案，就裝在寫了 `<views:CanvasView/>` 的地方，
+經過巢狀的 UserControl 一路到視窗，放它的那個元素上的值就是它繼承到的。放在不一致的幾個視窗裡、或放在資源字典裡，
+繼承到的值就是不知道，報告會點名是哪幾個檔案。沒有任何 XAML 放它（程式碼建立的）才退回同一個應用程式裡所有視窗的共識；
+它們不一致時，用 `defaultFontFamily`／`defaultFontSize` 指定。
 
 ## 字型
 
 不用 SkiaSharp、不用 WPF、沒有原生二進位。XamlFit 自己讀字型檔裡的幾張表，把前進寬度加起來。
 
 ```bash
-xamlfit fonts export --family "Segoe UI" --family "Microsoft JhengHei UI"
+xamlfit fonts export --family "Segoe UI" --family "Microsoft JhengHei UI" --family "Segoe UI Symbol"
 git add xamlfit.fonts.json.gz
 ```
 

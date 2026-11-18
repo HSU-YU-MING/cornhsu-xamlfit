@@ -45,6 +45,10 @@ public static class FontFallback
         return list;
     }
 
+    /// <summary>表裡出現過的所有補字字型（fonts export 用來提醒 --family 漏掉了哪些）。</summary>
+    public static IReadOnlyList<string> Families =>
+        Maps.Value.SelectMany(m => m.Targets).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
     /// <summary>這個字在這個語言下，WPF 會依序嘗試哪些字型（以及寬度要乘的倍率）。</summary>
     public static (IReadOnlyList<string> Targets, double Scale) For(int codepoint, string language)
     {

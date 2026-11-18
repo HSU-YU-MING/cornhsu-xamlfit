@@ -226,6 +226,9 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 104 | **古吉拉特文、泰盧固文的叢集會互相影響** | WPF 套字距時**跳過**附加符號：「દૃં」+「ડ」照「દૃ」+「ડ」撐開；這支匯出引擎不處理 LookupFlag，量不到。改成每個交界加「這個叢集或它任何前綴接任何叢集時最多變寬多少」；泰盧固文另外不用連寫值（ళ్కి 偏窄 2.8%）（偏寬 1.9%／7.9%，偏窄 ≤0.03%） | WpfOracle --scripts |
 | 105 | **佈景的範本裡可能有 UseLayoutRounding** | 控制項本身沒設，範本裡的元素設了：內容寬度帶小數時控制項寬度被捨入到像素（HandyControl、WPF-UI 幾乎每個控制項）。用小數寬度的內容在真的視窗裡量才看得出來；當鄰居時多留 1 DIP | LayoutOracle --theme |
 | 88 | **成對的表蓋不住跨三個字以上的上下文規則** | Segoe UI 的 ے 依前面兩個字換長度（另存三字改變量）；Segoe UI 的點避讓字距、Calibri 6.27 的大量 calt 跨更遠。匯出時用 2 萬個隨機字自我檢查，拼窄的字母移出驗證清單（Segoe UI 13 個少用字母），剩不到一半整支不寫（Calibri） | 匯出自我檢查 |
+| 145 | **元素自己有 Width／MaxWidth 時，水平 StackPanel／Auto 欄裡的 Wrap 照樣換行** | WPF 的 MeasureCore 先把可用寬度夾到元素自己的 Width／MaxWidth，父層給無限寬也一樣；「換行失效」只在元素與那個容器之間一層都沒有上界時成立。第一版把 ZeroCel 唯二的 fail 報在 `TextBlock Width="120" TextWrapping="Wrap"` 上（溢出 72 px），實際折成兩行。連帶：換行寬度是**第一個確定的上界**（自己的 Width、固定欄），看得見的寬度是全部上界取小 —— `Width="300"` 放在 100 的欄裡照 300 換行、每行被裁掉 200，之前報成無害的 reflow（`AvailableWidth.WrapPx`、LayoutOracle `--wrap`） | 回報 1（ZeroCel） |
+| 146 | **UserControl 裝在哪個視窗裡，XAML 看得到** | 根元素的 x:Class 對得上放它的 `<views:CanvasView/>`（clr-namespace）。第一版只看「所有視窗的共識」，主視窗沒設字型、對話框設 Segoe UI 就把只放在主視窗裡的三個 UserControl 100 處全擋掉。現在順著放置關係找到視窗；放在不一致的視窗、資源字典、循環 → 仍不知道，原因點名檔案；沒有 XAML 放它才退回共識 | 回報 2 §2（ZeroCel） |
+| 147 | **對照程式量換行要用 DesiredSize.Height，不能用 ActualHeight** | 直接放在視窗裡的 TextBlock 被拉高到整個視窗（300 → 「20 行」）；DesiredSize 才是文字自己的高度。另外有 MaxWidth 的元素換行之後會縮到最寬的那一行（117.5 不是 120），那不是裁切，寬度比對的案例要用不換行的文字 | LayoutOracle `--wrap` |
 
 ### 環境層級的坑
 
@@ -242,11 +245,11 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 726 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 750 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 47 條 CLI 路徑的退出碼
-dotnet run -c Release --project prototype/LayoutOracle   # 228 案 vs 真的 WPF 視窗（--check 用檢查模式的排法再跑一次）（Windows）；有高估就回 1
+dotnet run -c Release --project prototype/LayoutOracle   # 238 案 vs 真的 WPF 視窗（--check 用檢查模式的排法再跑一次；--wrap 比換行的行數）（Windows）；有高估就回 1
 ```
 
 **來源語言自我檢驗**（沒有腳本，手動跑）：對一個已經出貨的 App 跑
@@ -256,7 +259,7 @@ M6 裡它兩次不是零，兩次都是工具錯。
 `prototype/` 底下九個是**拋棄式**工具，不要從裡面複製程式碼：
 
 - `LayoutOracle` —— **版面語意的真值**：同一段 XAML 給真的 WPF 視窗（顯示在螢幕外）與解析器，逐案比對。
-  `-- --defaults` 印佈景預設的 Padding／Border，`-- --text` 印快速鍵、模擬粗體、Display 模式的實測，
+  `-- --wrap` 比換行的行數（寬度比對看不出「換行有沒有發生」），`-- --defaults` 印佈景預設的 Padding／Border，`-- --text` 印快速鍵、模擬粗體、Display 模式的實測，
   `-- --fallback` 印補字與看不見的字，`-- --probe "家族|字重|Italic" 字級 "文字"` 印整句與逐字的寬度、
   主字型缺哪些字、哪支已安裝的字型寬度完全一樣（找 WPF 實際拿來補字的字面）（Windows only）
 - `CorpusRender` —— **真實專案的真值**：把專案的 XAML 連同它的 `App.xaml` 合併字典、來源與各語言字串載進真的 WPF，
