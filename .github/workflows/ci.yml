@@ -45,6 +45,10 @@ jobs:
       - name: CLI smoke test
         run: bash scripts/verify-cli.sh
 
+      # README 的 Action 範例釘的版本要等於 CHANGELOG 最新的已發佈版本（0.3.0 發完才發現還釘著 0.1.0）
+      - name: README pins the released version
+        run: bash scripts/verify-readme-facts.sh
+
   # 分析是純算術，不相依 WPF —— 但使用者大多在 Windows 上跑（路徑分隔、大小寫不分的副檔名）。
   windows:
     runs-on: windows-latest
