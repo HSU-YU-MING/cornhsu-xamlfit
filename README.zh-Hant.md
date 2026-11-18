@@ -450,27 +450,38 @@ Visual Studio 的錯誤清單就看得到：`XF0001`（擋下的）、`XF0002`�
 ```yaml
 permissions:
   contents: read
-  security-events: write          # 只有上傳 SARIF 才需要
+  security-events: write          # 只有 sarif: true 才需要
 steps:
   - uses: actions/checkout@v4
-  - uses: actions/setup-dotnet@v4
-    with:
-      dotnet-version: '10.0.x'
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.3.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.4.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.3.0              # 工具的版本也要釘
-      sarif: xamlfit.sarif
-  - uses: github/codeql-action/upload-sarif@v3
-    if: always()
-    with:
-      sarif_file: xamlfit.sarif
+      version: 0.4.0              # 工具的版本也要釘
+      sarif: true                 # 上傳到 code scanning
 ```
 
-輸入：`root`（必填）、`resx`、`metrics`、`pseudo`、`baseline`、`fail-on`（`fail` 或 `warn`）、
-`min-coverage`（預設 60）、`json`、`sarif`、`version`。沒給 `version` 會裝最新版：工具一發新版，沒人動過的 build 也可能變紅，
-所以要釘。路徑放在 `--` 後面傳，資料夾名字長得像旗標也照樣當資料夾掃。度量檔照平常的規則在 `root` 旁邊找（repo 裡的 `xamlfit.fonts.json.gz`）。
+Action 會自己裝 .NET 與工具、跑 `xamlfit check`、把每一筆 finding 標在 PR 的那一行上、把 JSON 報告上傳成 workflow artifact、
+要的話把 SARIF 上傳到 code scanning，最後才依檢查的退出碼讓 job 紅燈 —— 紅掉的 PR 也看得到完整報告。
+形狀跟 XamlContrast 的 Action 一樣：裝任何東西之前先驗輸入；工具的輸出包在 `::stop-commands::` 裡，因為它印出來的 XAML 與 `.resx` 字串是不可信的輸入。
+
+| 輸入 | 預設 | 作用 |
+|---|---|---|
+| `root` | 必填 | 要掃的資料夾 |
+| `working-directory` | `.` | 執行的資料夾；下面的路徑都相對於它 |
+| `version` | 最新版 | 要裝的工具版本；工具還在 0.x，要釘 |
+| `resx` | 設定檔 | 放 `.resx` 譯文的資料夾 |
+| `metrics` | `root` 旁邊 | 字型度量檔 |
+| `config` | `root` 旁邊 | `xamlfit.config.json` |
+| `baseline` | 無 | 棘輪檔：只有新的 finding 會擋 |
+| `pseudo` | `false` | 不用譯文、模擬膨脹（永遠不讓 job 紅） |
+| `fail-on` | 設定檔，否則 `fail` | `fail` 或 `warn` |
+| `min-coverage` | 設定檔，否則 60 | 解析度下限，低於它 job exit 3 |
+| `sarif` | `false` | 把 SARIF 上傳到 code scanning（要 `security-events: write`） |
+| `upload-report` | `true` | 把 JSON 報告上傳成 artifact |
+| `artifact-name` | `xamlfit-report` | artifact 名稱；同一個 run 跑兩次時也是 code scanning 的 category |
+
+路徑放在 `--` 後面傳，資料夾名字長得像旗標也照樣當資料夾掃。
 
 壓掉單一位置要寫理由 —— 理由必填，而且被壓掉的會計數：
 
