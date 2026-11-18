@@ -28,6 +28,7 @@ using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
 using System.Xml.Linq;
+using XamlFit.Core.Analysis;
 using XamlFit.Core.Fonts;
 using XamlFit.Core.Layout;
 using XamlFit.Core.OpenType;
@@ -339,6 +340,13 @@ internal static class Program
         DefaultFamily = SystemFonts.MessageFontFamily.Source;
         Console.WriteLine($"system message font: {DefaultFamily} {SystemFonts.MessageFontSize}");
         Console.WriteLine();
+
+        if (args.Length > 0 && args[0] == "--wrap")
+        {
+            var mismatches = WrapChecks(fonts, chrome);
+            app.Shutdown();
+            return mismatches > 0 ? 1 : 0;
+        }
 
         Console.WriteLine($"{"case",-50} {"WPF",8} {"XamlFit",9}  verdict");
         Console.WriteLine(new string('-', 100));
@@ -785,7 +793,89 @@ internal static class Program
         // ── 8. 快顯 ──
         Add("text in Button.ToolTip", W($"<Button Width='80' HorizontalAlignment='Left' Content='x'><Button.ToolTip><TextBlock x:Name='probe' Text='{Long}'/></Button.ToolTip></Button>"), Want.Open);
 
+        // ── 9. 元素自己有寬度、放在用無限寬量子元素的容器裡（回報 1：ZeroCel CanvasView.xaml:1171）──
+        //    看得見的寬度是它自己的 Width；換行有沒有發生由 --wrap 另外比
+        foreach (var (name, xaml) in WrapCases(wrap: false))
+            Add(name, xaml);
+
         return cases;
+    }
+
+    /// <summary>
+    /// 換行寬度的案例：probe 一定是 TextBlock、文字夠長。寬度比對照一般案例跑；<c>--wrap</c> 另外比行數。
+    /// </summary>
+    /// <param name="wrap">false = 寬度比對用：不換行。有 MaxWidth 的元素換行之後會縮到最寬的那一行（117.5，不是 120），
+    /// 那不是裁切，拿 ActualWidth 比會誤判成高估；工具報的 120 是 Measure 的約束，對文字來說才是對的。</param>
+    private static IEnumerable<(string Name, string Xaml)> WrapCases(bool wrap)
+    {
+        static string W(string inner) => $"<Window {Ns} Width='700' Height='300' WindowStyle='None' AllowsTransparency='True'>{inner}</Window>";
+        var wrapping = wrap ? " TextWrapping='Wrap'" : "";
+        var probe = $"x:Name='probe'{wrapping} Text='{Long}'";
+
+        yield return ("own width in a horizontal stack", W($"<StackPanel Orientation='Horizontal' Width='300' HorizontalAlignment='Left'><Border Width='50'/><TextBlock Width='120' {probe}/></StackPanel>"));
+        yield return ("own MaxWidth in a horizontal stack", W($"<StackPanel Orientation='Horizontal' Width='300' HorizontalAlignment='Left'><Border Width='50'/><TextBlock MaxWidth='120' {probe}/></StackPanel>"));
+        yield return ("Border width in a horizontal stack", W($"<StackPanel Orientation='Horizontal' Width='300' HorizontalAlignment='Left'><Border Width='50'/><Border Width='120'><TextBlock {probe}/></Border></StackPanel>"));
+        yield return ("no own width in a horizontal stack", W($"<StackPanel Orientation='Horizontal' Width='300' HorizontalAlignment='Left'><Border Width='50'/><TextBlock {probe}/></StackPanel>"));
+        yield return ("own width wider than the stack", W($"<StackPanel Orientation='Horizontal' Width='300' HorizontalAlignment='Left'><Border Width='100'/><TextBlock Width='400' {probe}/></StackPanel>"));
+        yield return ("own width in an Auto column", W($"<Grid Width='300' HorizontalAlignment='Left'><Grid.ColumnDefinitions><ColumnDefinition Width='Auto'/><ColumnDefinition/></Grid.ColumnDefinitions><TextBlock Width='120' {probe}/><Border Grid.Column='1'/></Grid>"));
+        yield return ("own width wider than a fixed column", W($"<Grid Width='300' HorizontalAlignment='Left'><Grid.ColumnDefinitions><ColumnDefinition Width='100'/><ColumnDefinition/></Grid.ColumnDefinitions><TextBlock Width='300' {probe}/><Border Grid.Column='1'/></Grid>"));
+        yield return ("own MaxWidth narrower than a fixed column", W($"<Grid Width='300' HorizontalAlignment='Left'><Grid.ColumnDefinitions><ColumnDefinition Width='200'/><ColumnDefinition/></Grid.ColumnDefinitions><TextBlock MaxWidth='120' HorizontalAlignment='Left' {probe}/><Border Grid.Column='1'/></Grid>"));
+        yield return ("WrapPanel ItemWidth", W($"<WrapPanel ItemWidth='120' Width='300' HorizontalAlignment='Left'><TextBlock {probe}/></WrapPanel>"));
+        yield return ("vertical stack (control)", W($"<StackPanel Width='120' HorizontalAlignment='Left'><TextBlock {probe}/></StackPanel>"));
+    }
+
+    /// <summary>
+    /// --wrap：同一段 XAML 的 probe TextBlock，WPF 實際排成幾行 vs 工具算幾行。
+    /// 比寬度看不出「換行有沒有發生」—— 回報 1 的案例寬度對（120）、行數錯（工具說 1 行、WPF 兩行）。
+    /// 工具這邊走正式的掃描器（字型、寬度、換行旗標都照 check 的路），行數用 CheckAnalyzer 的排法。
+    /// </summary>
+    private static int WrapChecks(FontResolver fonts, ChromeTable chrome)
+    {
+        Console.WriteLine($"{"case",-46} {"WPF lines",9} {"XamlFit",8}  wrap at / visible    verdict");
+        Console.WriteLine(new string('-', 100));
+        var bad = 0;
+
+        foreach (var (name, xaml) in WrapCases(wrap: true))
+        {
+            int wpfLines;
+            double wpfWidth;
+            var window = (Window)XamlReader.Parse(xaml);
+            window.Left = -20000; window.Top = -20000; window.ShowInTaskbar = false; window.ShowActivated = false;
+            window.Show();
+            window.UpdateLayout();
+            var probe = (TextBlock)window.FindName("probe");
+            // ⚠ 不能用 ActualHeight：直接放在視窗裡的 TextBlock 會被拉高到整個視窗。DesiredSize 是文字自己的高度
+            wpfLines = (int)Math.Round(probe.DesiredSize.Height / (probe.FontSize * probe.FontFamily.LineSpacing));
+            wpfWidth = probe.ActualWidth;
+            window.Close();
+
+            var dir = Path.Combine(Path.GetTempPath(), "xamlfit-oracle-wrap-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                File.WriteAllText(Path.Combine(dir, "Case.xaml"), xaml);
+                var scan = new XamlScanner(chrome, new ScanOptions { DefaultFontFamily = DefaultFamily, DefaultFontSize = 12 }, fonts).Scan(dir);
+                var site = scan.Sites.FirstOrDefault(s => s.Text == Long);
+                var ours = site is null ? null : CheckAnalyzer.LineCount(site, Long, fonts, DefaultFamily);
+                var width = site?.Width;
+                var wrapAt = width is null ? "(n/a)"
+                    : width.Status != WidthStatus.Known ? $"({width.Status})"
+                    : width.WrapDefeated ? "defeated"
+                    : $"{width.WrapPx ?? width.Px,6:F1}";
+                var visible = width is { Status: WidthStatus.Known } ? $"{width.Px,6:F1}" : "";
+                string verdict;
+                if (ours is null) { verdict = "WRONG: not measured"; bad++; }
+                else if (ours == wpfLines) verdict = "match";
+                else { verdict = $"MISMATCH (WPF {wpfLines}, XamlFit {ours})"; bad++; }
+                Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                    $"{name,-46} {wpfLines,9} {ours?.ToString() ?? "-",8}  {wrapAt} / {visible,-8}   {verdict}   (WPF ActualWidth {wpfWidth:F1})"));
+            }
+            finally { Directory.Delete(dir, true); }
+        }
+
+        Console.WriteLine();
+        Console.WriteLine(bad == 0 ? "all line counts match" : $"{bad} mismatch(es)");
+        return bad;
     }
 
     /// <summary>probe 的水平範圍，被每一層祖先的版面裁切區交集之後還剩多寬。</summary>

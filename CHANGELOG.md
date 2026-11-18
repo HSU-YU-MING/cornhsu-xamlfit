@@ -3,6 +3,46 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-11-18
+
+Both changes come from a first external trial (ZeroCel, a WPF app with 35 XAML files; reports 1 and 2, 2026-11-18).
+
+**Upgrading**: measurement semantics changed, so findings can move. A `TextBlock` with its own
+`Width`/`MaxWidth` inside a horizontal `StackPanel` or an `Auto` column is no longer reported as
+overflowing when it wraps; a text element whose own `Width` is wider than the column or row that
+holds it is now reported as overflow instead of reflow; and sites in user controls that were
+blocked as "windows in this project set different FontFamily values" are now measured when the
+XAML places the control in one window. If a baseline hides findings in those sites, refresh it
+with `--write-baseline` after reviewing the new report. Nothing else (CLI, config, report
+schema, baseline keys) changed.
+
+### Fixed
+
+- **A text element with its own `Width` or `MaxWidth` inside a horizontal `StackPanel`, an `Auto`
+  column or a `WrapPanel` was judged as if `TextWrapping` had no effect** (report 1: a
+  `TextBlock Width="120" TextWrapping="Wrap"` was the project's only `fail overflow`, 72 px
+  over). WPF clamps the available width to the element's own `Width`/`MaxWidth` before
+  measuring, so the text wraps there even when the panel offers unlimited width. The tool now
+  keeps the wrapping width separately from the visible width: wrapping happens at the first
+  definite bound above the text (its own `Width`, a container's `Width`, a fixed or solved
+  column), and only what the outer layout clips is reported — a `Width="300"` TextBlock in a
+  100 px column wraps at 300 and loses 200 of every line, which was previously reported as a
+  harmless reflow. `LayoutOracle --wrap` compares line counts with real WPF for these cases.
+
+### Changed
+
+- **A `UserControl` now takes its inherited font from the window that actually places it**
+  (report 2 §2: the main window set no font, two dialogs set `Segoe UI`, and 100 sites in three
+  user controls placed only in the main window were blocked as "windows disagree"). The tool
+  matches the root's `x:Class` with `<views:Name/>` elements, follows nested user controls
+  up to a window and reads the value at the placing element. Placed in windows that disagree,
+  in a resource dictionary, or circularly, the value stays unknown and the reason names the
+  files. A control no XAML file places falls back to the windows' consensus as before.
+- **`fonts export --family` says which fallback families it left out** (report 2 §1: six
+  families were exported, `✦` and `✕` were drawn by Segoe UI Symbol and 16 measurements were
+  not possible). It names Segoe UI Symbol / Segoe UI Emoji when they are installed but not
+  listed, and counts the other families WPF falls back to.
+
 ## [0.1.0] - 2026-11-17
 
 First release. The entries below describe the implementation as it stands

@@ -384,6 +384,46 @@ public class SharedPanelTests
         Assert.True(Row(Text).WrapDefeated);
     }
 
+    // ⚠ 回報 1（ZeroCel CanvasView.xaml:1171）：TextBlock 自己有 Width="120"、TextWrapping="Wrap"，放在水平 StackPanel 裡，
+    //   第一版照樣報「換行失效」、判成溢出 72 px。WPF 實測（Measure(∞,∞)）它折成兩行、寬 120：
+    //   MeasureCore 先把可用寬度夾到元素自己的 Width／MaxWidth，父層給無限寬也一樣。LayoutOracle「own width in a horizontal stack」。
+    [Theory]
+    [InlineData("<TextBlock x:Name=\"probe\" Width=\"120\" TextWrapping=\"Wrap\" Text=\"AAAA\"/>")]
+    [InlineData("<TextBlock x:Name=\"probe\" MaxWidth=\"120\" TextWrapping=\"Wrap\" Text=\"AAAA\"/>")]
+    [InlineData("<Border Width=\"120\"><TextBlock x:Name=\"probe\" TextWrapping=\"Wrap\" Text=\"AAAA\"/></Border>")]
+    public void An_own_width_keeps_wrapping_in_a_horizontal_stack(string child)
+    {
+        var w = Row("<Button Width=\"100\"/>" + child);
+        Assert.Equal(120, w.Px);
+        Assert.False(w.WrapDefeated);
+        Assert.Null(w.WrapPx);   // 換行寬度就是看得見的寬度
+    }
+
+    [Fact]
+    public void An_own_width_wider_than_the_row_wraps_at_its_own_width_but_is_clipped()
+    {
+        // Width="400" 放在 300 寬、前面已經有 100 的排裡：照 400 換行，看得見 200
+        var w = Row("<Button Width=\"100\"/><TextBlock x:Name=\"probe\" Width=\"400\" TextWrapping=\"Wrap\" Text=\"AAAA\"/>");
+        Assert.Equal(200, w.Px);
+        Assert.False(w.WrapDefeated);
+        Assert.Equal(400, w.WrapPx);
+    }
+
+    [Fact]
+    public void A_width_above_the_horizontal_stack_does_not_rescue_wrapping()
+    {
+        // 上界在 StackPanel 之上（Border 300）：StackPanel 仍然用無限寬量它的子元素
+        Assert.True(Row("<Button Width=\"100\"/>" + Text).WrapDefeated);
+    }
+
+    [Fact]
+    public void A_wrap_panel_item_width_is_the_wrapping_width()
+    {
+        var w = In("<Border Width=\"300\"><WrapPanel ItemWidth=\"120\">" + Text + "</WrapPanel></Border>");
+        Assert.Equal(120, w.Px);
+        Assert.False(w.WrapDefeated);
+    }
+
     [Fact]
     public void An_unmeasurable_sibling_blocks()
     {

@@ -372,8 +372,12 @@ So text with no explicit `FontFamily` has a different width on different users' 
 font is missing from the metrics file rather than measuring it with the wrong one.
 
 A `UserControl` inherits its font from whichever window hosts it, which is in another file.
-The tool uses the consensus of the windows in the same application; if they disagree, the
-inherited value is unknown until you pin `defaultFontFamily` / `defaultFontSize`.
+The tool follows the placement: the file whose root has `x:Class="App.Views.CanvasView"` is
+hosted wherever `<views:CanvasView/>` appears, through nested user controls up to a window, and
+the value at that element is what the control inherits. Placed in windows that disagree, or in a
+resource dictionary, the inherited value is unknown, and the report names the files. A control no
+XAML file places (created in code) falls back to the consensus of the windows in the same
+application; if they disagree, pin `defaultFontFamily` / `defaultFontSize`.
 
 ## Fonts
 
@@ -381,7 +385,7 @@ No SkiaSharp, no WPF, no native binaries. XamlFit reads a handful of tables out 
 and sums advance widths: `width = Σ advance(codepoint) × fontSize ÷ unitsPerEm`.
 
 ```bash
-xamlfit fonts export --family "Segoe UI" --family "Microsoft JhengHei UI"
+xamlfit fonts export --family "Segoe UI" --family "Microsoft JhengHei UI" --family "Segoe UI Symbol"
 git add xamlfit.fonts.json.gz
 ```
 

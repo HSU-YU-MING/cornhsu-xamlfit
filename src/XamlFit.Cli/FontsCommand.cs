@@ -172,6 +172,24 @@ internal static class FontsCommand
                           $"{deduped.Select(m => m.Family).Distinct(StringComparer.OrdinalIgnoreCase).Count()} families, " +
                           $"{bytes / 1024.0:F0} KB)");
         if (unreadable > 0) Console.WriteLine($"  skipped {unreadable} unreadable file(s)");
+        if (wanted.Count > 0)
+        {
+            // 回報 2 §1（ZeroCel）：--family 只挑了六套，沒帶 Segoe UI Symbol／Emoji，第一次 check 就撞到「✦ 量不到」。
+            // WPF 補字會用到的字型（font-fallback.json 的目標）有裝、但沒匯出的，在這裡就先說
+            var exported = new HashSet<string>(deduped.Select(m => m.Family), StringComparer.OrdinalIgnoreCase);
+            var leftOut = XamlFit.Core.Fonts.FontFallback.Families
+                .Where(f => installed.ContainsKey(f) && !exported.Contains(f))
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var symbols = leftOut.Where(f => f is "Segoe UI Symbol" or "Segoe UI Emoji").ToList();
+            var others = leftOut.Count - symbols.Count;
+            if (leftOut.Count > 0)
+                Console.WriteLine("  note: --family left out " +
+                                  (symbols.Count > 0 ? $"{string.Join(" and ", symbols)} (WPF draws most symbols and emoji with them: ✦ ✕ ▾ …)" : "") +
+                                  (symbols.Count > 0 && others > 0 ? " and " : "") +
+                                  (others > 0 ? $"{others} other families WPF falls back to for scripts the listed families lack" : "") +
+                                  "; characters drawn with a family that is not exported are not measurable — add --family for the ones your strings need");
+        }
         if (hinted)
         {
             Console.WriteLine("  hinted widths for 8–48 px added from GDI (TextFormattingMode=\"Display\")");

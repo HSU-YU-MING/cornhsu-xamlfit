@@ -188,6 +188,7 @@ public sealed partial class XamlScanner
         _styles = new StyleIndex { SystemScrollBarWidth = _chrome.ScrollBarWidth };
         var dialects = new string?[files.Count];           // null = WPF
         var marked = new bool[files.Count];
+        var hosting = new HostingInfo?[files.Count];       // 誰裝誰（UserControl 的字型要往宿主找）
         var themeDeclarations = new List<(int File, ThemeRef Theme, bool AppWide)>();
         var appDirs = new List<string>();
         var stringTables = new List<(string Rel, string Culture, Dictionary<string, string> Values)>();
@@ -216,6 +217,7 @@ public sealed partial class XamlScanner
             ApplyAliases(doc);
             doc.AddAnnotation(new SourceFile(rels[i]));
             _styles.Add(doc, rels[i]);
+            hosting[i] = HostingOf(doc.Root);
 
             var rootName = doc.Root.Name.LocalName;
             if (rootName == "Application") appDirs.Add(DirOf(rels[i]));
@@ -233,7 +235,7 @@ public sealed partial class XamlScanner
         _stringKeys = [.. strings.SelectMany(s => s.Values.Keys)];
         _sourceStrings = SourceStrings(strings);
 
-        ComputeHostFonts(files, rels, dialects, appDirs);
+        ComputeHostFonts(files, rels, dialects, appDirs, hosting);
 
         _files = files;
         _rels = rels;
@@ -335,13 +337,24 @@ public sealed partial class XamlScanner
     /// ⚠ 自我檢驗抓到的（MaterialDesign 的示範程式）：主視窗設了字型，各個分頁是獨立的 UserControl 檔案。
     ///   第一版每個檔案各自從預設值（Segoe UI 12）算起，等於把整個 App 的字型設定丟掉。
     ///
-    /// 靜態不知道哪個控制項裝在哪個視窗裡，所以用「同一個應用程式裡所有視窗的共識」：
+    /// 哪個控制項裝在哪個視窗裡，**從 XAML 看得到**：UserControl 的根元素有 <c>x:Class</c>，放它的檔案寫
+    /// <c>&lt;views:CanvasView/&gt;</c>（命名空間是 <c>clr-namespace:</c>）。所以先照這張圖找：
+    ///   - 在放它的那個元素上算繼承值（它自己設的、它祖先設的、宿主檔案根元素設的）；
+    ///     宿主自己也是 UserControl 就再往它的宿主找，一路到視窗
+    ///   - 每個放它的地方算出來都一樣 → 就是它；不一樣、或有一個算不出來（放在資源字典裡、循環）→ **不知道**，
+    ///     原因裡列出是哪幾個檔案不一致
+    ///
+    /// ⚠ 回報 2（ZeroCel）：主視窗沒設字型、兩個對話框設 Segoe UI，第一版因為「視窗們不一致」把三個 UserControl 的
+    ///   100 處全部擋掉 —— 但它們只被放在主視窗裡（CanvasView、ToolStripView 直接放，ToolbarView 經 ToolOptionsView），
+    ///   順著放置關係看就知道。
+    ///
+    /// 沒有任何 XAML 放它（程式碼 new 出來、Frame.Source 載入、沒有 x:Class）時才退回「同一個應用程式裡所有視窗的共識」：
     ///   - 視窗們都沒設 → 沒人設定，用預設值
     ///   - 視窗們設的值都一樣 → 就是它
     ///   - 設得不一樣、或有的讀不出來 → **不知道**（除非使用者自己指定了預設字型）
     /// 專案裡一個視窗都沒有（純控制項庫）時無從得知，當成沒人設定 —— 這是假設，文件裡有寫。
     /// </summary>
-    private void ComputeHostFonts(List<string> files, List<string> rels, string?[] dialects, List<string> appDirs)
+    private void ComputeHostFonts(List<string> files, List<string> rels, string?[] dialects, List<string> appDirs, HostingInfo?[] hosting)
     {
         string ProjectOf(string rel)
         {
@@ -351,28 +364,57 @@ public sealed partial class XamlScanner
             return best;
         }
 
+        // 專案裡有 x:Class、不是視窗的根元素（UserControl、Page…）：放進別的 XAML 的候選
+        var hostedClasses = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var h in hosting)
+            if (h is { Class: not null, IsWindow: false } && h.RootName is not ("Application" or "ResourceDictionary"))
+                hostedClasses.Add(h.Class);
+
         // (專案, 屬性) → 各個視窗的答案
         var declared = new Dictionary<(string Project, string Property), List<Resolved>>();
+        // (類別, 屬性) → 每一個放它的地方算出來的值
+        var placements = new Dictionary<(string Class, string Property), List<Placement>>();
         _styles.InheritedFromHost = null;
 
         for (var i = 0; i < files.Count; i++)
         {
             if (dialects[i] is not null) continue;
+            var h = hosting[i];
+            var isWindow = h?.IsWindow ?? false;
+            var places = h is not null && h.Uses.Overlaps(hostedClasses);
+            if (!isWindow && !places) continue;
 
             XDocument doc;
             try { doc = SafeXml.Load(files[i]); }
             catch (Exception) { continue; }
-            if (doc.Root is null || !IsWindowRoot(doc.Root)) continue;
+            if (doc.Root is null) continue;
 
             ApplyAliases(doc);
             doc.AddAnnotation(new SourceFile(rels[i]));
 
-            var project = ProjectOf(rels[i]);
-            foreach (var property in HostInherited)
+            if (isWindow)
             {
-                if (!declared.TryGetValue((project, property), out var list))
-                    declared[(project, property)] = list = [];
-                list.Add(_styles.ResolveEx(doc.Root, property, inheritable: false));
+                var project = ProjectOf(rels[i]);
+                foreach (var property in HostInherited)
+                {
+                    if (!declared.TryGetValue((project, property), out var list))
+                        declared[(project, property)] = list = [];
+                    list.Add(_styles.ResolveEx(doc.Root, property, inheritable: false));
+                }
+            }
+
+            if (!places) continue;
+            foreach (var el in doc.Root.Descendants())
+            {
+                if (el.Name.LocalName.Contains('.', StringComparison.Ordinal)) continue;
+                if (ClrClassOf(el) is not { } cls || !hostedClasses.Contains(cls)) continue;
+                foreach (var property in HostInherited)
+                {
+                    if (!placements.TryGetValue((cls, property), out var list))
+                        placements[(cls, property)] = list = [];
+                    // 這裡 InheritedFromHost 還是 null：走到宿主檔案的根元素就停，根元素自己是不是視窗之後再看
+                    list.Add(new Placement(rels[i], h!, _styles.ResolveEx(el, property, inheritable: true)));
+                }
             }
         }
 
@@ -391,14 +433,60 @@ public sealed partial class XamlScanner
                 var values = string.Join(", ", answers.Select(a => a.IsValue ? a.Value : "(not set)").Distinct().Take(4));
                 result = Resolved.Unknown(
                     $"windows in this project set different {key.Property} values ({values}), and an inherited value depends on " +
-                    "which window hosts this control; set defaultFontFamily/defaultFontSize in xamlfit.config.json to pin it");
+                    "which window hosts this control (no XAML file in the project places it, so the host is unknown); " +
+                    "set defaultFontFamily/defaultFontSize in xamlfit.config.json to pin it");
             }
 
-            // 使用者指定了預設字型：家族與字級的不一致以使用者說的為準
-            if (result.IsUnreadable && _options.DefaultFontPinned && key.Property is "FontFamily" or "FontSize")
-                result = Resolved.NotSet;
+            consensus[key] = Pinned(result, key.Property);
+        }
 
-            consensus[key] = result;
+        Resolved ConsensusFor(string file, string property) =>
+            consensus.TryGetValue((ProjectOf(file), property), out var answer) ? answer : Resolved.NotSet;
+
+        var memo = new Dictionary<(string Class, string Property), Resolved>();
+
+        // 順著「誰放它」往上找到視窗。回 null = 沒有任何 XAML 放它，退回視窗的共識
+        Resolved? FromPlacements(string cls, string property, HashSet<string> visiting)
+        {
+            if (memo.TryGetValue((cls, property), out var known)) return known;
+            if (!placements.TryGetValue((cls, property), out var list)) return null;
+            if (!visiting.Add(cls))
+                return Resolved.Unknown($"<{cls}> is placed inside itself (the hosting chain is circular), so the {property} it inherits is unknown");
+
+            var answers = new List<(string File, Resolved R)>();
+            foreach (var p in list)
+            {
+                var r = p.Local;
+                if (r.IsUnreadable)
+                    r = Resolved.Unknown($"where <{cls}> is placed ({p.File}), {property} is not statically readable: {r.Why}");
+                else if (r.Kind == ResolveKind.NotSet)
+                {
+                    if (p.Host.IsWindow) r = Resolved.NotSet;
+                    else if (p.Host.Class is { } hostClass && hostedClasses.Contains(hostClass))
+                        r = FromPlacements(hostClass, property, visiting) ?? ConsensusFor(p.File, property);
+                    else
+                        r = Resolved.Unknown($"<{cls}> is placed in {p.File}, whose root <{p.Host.RootName}> is not a window, so the {property} it inherits is unknown");
+                }
+                answers.Add((p.File, r));
+            }
+            visiting.Remove(cls);
+
+            Resolved result;
+            if (answers.FirstOrDefault(a => a.R.IsUnreadable).R is { IsUnreadable: true } unknown)
+                result = unknown;
+            else if (answers.All(a => a.R.Kind == ResolveKind.NotSet))
+                result = Resolved.NotSet;
+            else if (answers.All(a => a.R.IsValue && a.R.Value == answers[0].R.Value))
+                result = answers[0].R;
+            else
+            {
+                var values = string.Join(", ", answers.Select(a => $"{a.File}: {(a.R.IsValue ? a.R.Value : "(not set)")}").Distinct().Take(4));
+                result = Resolved.Unknown(
+                    $"the files that place <{cls}> give it different {property} values ({values}); " +
+                    "set defaultFontFamily/defaultFontSize in xamlfit.config.json to pin it");
+            }
+
+            return memo[(cls, property)] = Pinned(result, property);
         }
 
         _styles.InheritedFromHost = (element, property) =>
@@ -407,8 +495,42 @@ public sealed partial class XamlScanner
             if (root is null || IsWindowRoot(root)) return Resolved.NotSet;
 
             var file = element.Document?.Annotation<SourceFile>()?.Path ?? "";
-            return consensus.TryGetValue((ProjectOf(file), property), out var answer) ? answer : Resolved.NotSet;
+            var cls = ((string?)root.Attribute(XClass))?.Trim();
+            return (cls is not null ? FromPlacements(cls, property, []) : null) ?? ConsensusFor(file, property);
         };
+    }
+
+    /// <summary>使用者指定了預設字型：家族與字級的不一致以使用者說的為準。</summary>
+    private Resolved Pinned(Resolved result, string property) =>
+        result.IsUnreadable && _options.DefaultFontPinned && property is "FontFamily" or "FontSize" ? Resolved.NotSet : result;
+
+    /// <summary>一份檔案在「誰裝誰」的圖裡的位置：根元素的 x:Class、是不是視窗、它放了專案裡的哪些類別。</summary>
+    private sealed record HostingInfo(string? Class, bool IsWindow, string RootName, HashSet<string> Uses);
+
+    /// <summary>一個放了 UserControl 的地方：在哪個檔案、那個檔案的根是什麼、在放它的元素上算出來的繼承值（到根為止）。</summary>
+    private sealed record Placement(string File, HostingInfo Host, Resolved Local);
+
+    private static readonly XName XClass = XName.Get("Class", "http://schemas.microsoft.com/winfx/2006/xaml");
+
+    private static HostingInfo HostingOf(XElement root)
+    {
+        var uses = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var el in root.Descendants())
+        {
+            if (el.Name.LocalName.Contains('.', StringComparison.Ordinal)) continue;
+            if (ClrClassOf(el) is { } full) uses.Add(full);
+        }
+        return new(((string?)root.Attribute(XClass))?.Trim(), IsWindowRoot(root), root.Name.LocalName, uses);
+    }
+
+    /// <summary>元素的完整類別名（命名空間是 <c>clr-namespace:</c> 時）。assembly 不比 —— x:Class 也沒寫它。</summary>
+    private static string? ClrClassOf(XElement el)
+    {
+        var ns = el.Name.NamespaceName;
+        if (!ns.StartsWith("clr-namespace:", StringComparison.Ordinal)) return null;
+        var end = ns.IndexOf(';');
+        var clr = (end < 0 ? ns["clr-namespace:".Length..] : ns["clr-namespace:".Length..end]).Trim();
+        return clr.Length == 0 ? el.Name.LocalName : clr + "." + el.Name.LocalName;
     }
 
     /// <summary>

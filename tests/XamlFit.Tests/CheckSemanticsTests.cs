@@ -222,6 +222,109 @@ public class CheckSemanticsTests
         Assert.Contains("TextWrapping has no effect", finding.Warning);
     }
 
+    // ⚠ 回報 1（ZeroCel CanvasView.xaml:1171）：TextBlock Width="120" TextWrapping="Wrap" 在水平 StackPanel 裡，
+    //   第一版報 fail overflow（needs 192, has 120）。WPF 實測它照 120 折成兩行。
+    [Theory]
+    [InlineData("Width=\"120\"")]
+    [InlineData("MaxWidth=\"120\"")]
+    public void An_own_width_in_a_horizontal_stack_wraps_instead_of_overflowing(string ownWidth)
+    {
+        // 4 個 10 字的詞 = 215 px，照 120 換行：兩行
+        var result = Check($"""
+            <Border Width="300">
+              <StackPanel Orientation="Horizontal">
+                <Border Width="50"/>
+                <TextBlock {ownWidth} TextWrapping="Wrap" Text="{Key}"/>
+              </StackPanel>
+            </Border>
+            """, Table("de", ("K", Words(4))));
+        Assert.DoesNotContain(result.Findings, f => f.Kind == FitKind.Overflow);
+        var reflow = Assert.Single(result.Findings);
+        Assert.Equal(FitKind.Reflow, reflow.Kind);
+        Assert.Contains("2 line(s)", reflow.Warning);
+    }
+
+    [Fact]
+    public void A_container_width_inside_a_horizontal_stack_also_keeps_wrapping()
+    {
+        var result = Check($"""
+            <StackPanel Orientation="Horizontal">
+              <Border Width="120"><TextBlock TextWrapping="Wrap" Text="{Key}"/></Border>
+            </StackPanel>
+            """, Table("de", ("K", Words(4))));
+        Assert.DoesNotContain(result.Findings, f => f.Kind == FitKind.Overflow);
+    }
+
+    [Fact]
+    public void An_own_width_with_a_fixed_height_still_clips_vertically()
+    {
+        // 兩行要 20 px 高，只給 10
+        var result = Check($"""
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Width="120" Height="10" TextWrapping="Wrap" Text="{Key}"/>
+            </StackPanel>
+            """, Table("de", ("K", Words(4))));
+        Assert.Equal(FitKind.VerticalClip, Assert.Single(result.Findings).Kind);
+    }
+
+    [Fact]
+    public void An_own_width_with_NoWrap_still_overflows()
+    {
+        var result = Check($"""
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Width="120" Text="{Key}"/>
+            </StackPanel>
+            """, Table("de", ("K", Words(4))));
+        Assert.Equal(FitKind.Overflow, Assert.Single(result.Findings).Kind);
+    }
+
+    [Fact]
+    public void A_word_wider_than_the_own_width_overflows_only_with_WrapWithOverflow()
+    {
+        // 30 個字的詞 = 150 px > 120：Wrap 會在詞中間硬斷（WPF 實際行為），WrapWithOverflow 讓它超出去
+        var wrap = Check("<StackPanel Orientation=\"Horizontal\"><TextBlock Width=\"120\" TextWrapping=\"Wrap\" Text=\"" + Key + "\"/></StackPanel>",
+            Table("de", ("K", Words(1, 30))));
+        Assert.DoesNotContain(wrap.Findings, f => f.Kind == FitKind.Overflow);
+
+        var overflow = Check("<StackPanel Orientation=\"Horizontal\"><TextBlock Width=\"120\" TextWrapping=\"WrapWithOverflow\" Text=\"" + Key + "\"/></StackPanel>",
+            Table("de", ("K", Words(1, 30))));
+        Assert.Equal(FitKind.Overflow, Assert.Single(overflow.Findings).Kind);
+    }
+
+    [Fact]
+    public void Text_wider_than_the_row_wraps_at_its_own_width_and_the_rest_is_clipped()
+    {
+        // Width="400" 放在 300 寬、前面已經有 100 的排裡：照 400 換行（4 個詞 215 px 一行放得下），看得見 200
+        var result = Check($"""
+            <Border Width="300">
+              <StackPanel Orientation="Horizontal">
+                <Border Width="100"/>
+                <TextBlock Width="400" TextWrapping="Wrap" Text="{Key}"/>
+              </StackPanel>
+            </Border>
+            """, Table("de", ("K", Words(4))));
+        var finding = Assert.Single(result.Findings);
+        Assert.Equal(FitKind.Overflow, finding.Kind);
+        Assert.Equal(215, finding.ActualPx);
+        Assert.Equal(200, finding.LimitPx);
+        Assert.Contains("wraps at 400.0 px", finding.Warning);
+    }
+
+    [Fact]
+    public void Text_in_a_fixed_column_wraps_at_its_own_width_not_the_column()
+    {
+        // WPF：Grid 給 100 的約束，TextBlock 的 MeasureCore 再夾到它自己的 Width=300 → 照 300 換行，每行被裁到 100
+        var result = Check($"""
+            <Grid Width="300">
+              <Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <TextBlock Width="300" TextWrapping="Wrap" Text="{Key}"/>
+            </Grid>
+            """, Table("de", ("K", Words(4))));
+        var finding = Assert.Single(result.Findings);
+        Assert.Equal(FitKind.Overflow, finding.Kind);
+        Assert.Equal(100, finding.LimitPx);
+    }
+
     // ───────────────────────── --pseudo ─────────────────────────
 
     [Fact]
@@ -497,6 +600,24 @@ public class GridSolverOracleTests
         var w = Grid("<ColumnDefinition Width=\"Auto\"/><ColumnDefinition Width=\"100\"/>", "<TextBlock x:Name=\"probe\" Text=\"AAAA\"/>", 300);
         Assert.Equal(200, w.Px, 3);
         Assert.True(w.WrapDefeated);   // WPF 用無限寬量 Auto 欄裡的子元素
+    }
+
+    [Fact]
+    public void Text_with_its_own_width_in_an_Auto_column_still_wraps()
+    {
+        // 回報 1 的同一條規則：Auto 欄用無限寬量，但元素自己的 Width 先把它夾住
+        var w = Grid("<ColumnDefinition Width=\"Auto\"/><ColumnDefinition Width=\"100\"/>", "<TextBlock x:Name=\"probe\" Width=\"120\" TextWrapping=\"Wrap\" Text=\"AAAA\"/>", 300);
+        Assert.Equal(120, w.Px, 3);
+        Assert.False(w.WrapDefeated);
+    }
+
+    [Fact]
+    public void Text_wider_than_its_fixed_column_wraps_at_its_own_width()
+    {
+        // WPF：欄給 100 的約束，TextBlock 的 MeasureCore 再夾到自己的 Width=300 → 照 300 換行，看得見 100
+        var w = Grid("<ColumnDefinition Width=\"100\"/><ColumnDefinition/>", "<TextBlock x:Name=\"probe\" Width=\"300\" TextWrapping=\"Wrap\"/>", 300);
+        Assert.Equal(100, w.Px, 3);
+        Assert.Equal(300, w.WrapPx);
     }
 
     [Fact]
