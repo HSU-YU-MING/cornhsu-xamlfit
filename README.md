@@ -1,4 +1,4 @@
-# XamlFit
+# <img src="https://raw.githubusercontent.com/HSU-YU-MING/cornhsu-xamlfit/main/icon.png" width="28" alt=""/> XamlFit
 
 **Static text-fit audit for WPF XAML. Computes the pixel budget of every text slot without launching the app — export limits for translators before translation, fail CI on real overflow after.**
 

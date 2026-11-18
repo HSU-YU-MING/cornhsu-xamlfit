@@ -1,4 +1,4 @@
-# XamlFit
+# <img src="https://raw.githubusercontent.com/HSU-YU-MING/cornhsu-xamlfit/main/icon.png" width="28" alt=""/> XamlFit
 
 **WPF XAML 文字容納度的靜態稽核。不開 App 就算出每個文字位置有多少像素 ——
 翻譯之前把限制交給譯者，翻譯之後讓 CI 擋下真正的溢出。**
