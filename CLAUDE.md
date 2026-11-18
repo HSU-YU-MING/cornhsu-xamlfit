@@ -232,6 +232,8 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 148 | **UserControl 的寬度也順著放置關係走** | ZeroCel 351 處「到根都沒有上界」全在 UserControl 裡：走到根就停，而放它的主視窗寫了 Width=1280。走到根時從放它的元素（`WidthResolver.PlacementsOf`，照 x:Class 對 `<views:Name/>`）用 `OuterWidth` 接著往上，取最窄的；有一個放它的地方算不出來就量不到（它可能更窄）；全部查不到上界才是查不到上界。根元素的 Margin 在自己這邊扣，放它的元素的 Margin 在那邊扣 | 回報 2 §3-2（ZeroCel） |
 | 149 | **視窗的 Width 是初始大小，能縮的視窗可以縮到 MinWidth** | 工具一向拿 Width 當上界（偏樂觀）。`assumeWindowMinWidth` 開了才改用 MinWidth（字面值、視窗能縮、MinWidth < Width），報告標明是宣告的最壞情況。LayoutOracle「minwidth:」案例把視窗縮到 MinWidth 再量：三案 0 高估 | 回報 2 §3-2 |
 | 150 | **快顯的內距要真的打開才量得到** | ContextMenu 13（Padding 4 + Border 2 + 範本其他 7）、ToolTip 14、子選單的 Popup 6、裸 Popup 0；MenuItem 子項 85 跟表一致。ChromeGen 離線 Measure 量不到快顯（坑 61）；`LayoutOracle --popups` 放進真的視窗、IsOpen 再量，兩個內容寬度斜率都是 1。這幾個條目只在使用者宣告 `popupMaxWidth` 時用到，不宣告快顯照舊不檢查 | LayoutOracle `--popups` |
+| 151 | **PR 留言截斷要截在整行上** | `head -c 60000` 會把一行切在 code span 中間：收尾的反引號沒了，被切開的那段裡的 `[文字](網址)`、`@帳號` 在留言裡生效（也可能切在 UTF-8 字中間）。每一行都自己關好 code span，所以 `head -c 60000 | sed '$d'` 丟掉最後那半行。XamlContrast 1.8.1 的 action.yml 有同一段 | 提交後的自動安全審查 |
+| 152 | **翻譯完整度只讓會當掉的那一種擋 build** | 漏翻（warn）與寫死的字（info）一升級就會在每個有譯文的專案冒出來；拿它們擋預設的 gate 等於「永遠開火的閘門」。只有 `placeholder-mismatch` 的 fail（譯文的編號超過來源、或大括號不成對 → String.Format 丟例外）擋。看的是整份字串表（程式碼用的字串也是翻譯對象），不是只看 XAML 引用的鍵。來源語言不是組合格式字串（`{name}` 這種）就不比 —— 不知道它怎麼被用 | 設計決定（0.5.0） |
 
 ### 環境層級的坑
 
@@ -248,7 +250,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 773 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 803 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 50 條 CLI 路徑的退出碼
