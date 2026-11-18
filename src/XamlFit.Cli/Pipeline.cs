@@ -44,6 +44,8 @@ internal static class Pipeline
             DefaultFontPinned = opts.DefaultFontPinned,
             ElementLanguage = opts.SourceElementLanguage,
             Sharing = sharing,
+            AssumeWindowMinWidth = opts.AssumeWindowMinWidth,
+            PopupMaxWidth = opts.PopupMaxWidth,
         }, fonts);
 
         return new Prepared(chrome, fonts, scanner, scanner.Scan(opts.Root!));

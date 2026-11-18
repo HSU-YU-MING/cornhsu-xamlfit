@@ -63,7 +63,8 @@ internal static class Kit
         IReadOnlyDictionary<string, double>? chrome = null,
         string? theme = null,
         (string File, string Xaml)[]? dictionaries = null,
-        string file = "Page.xaml")
+        string file = "Page.xaml",
+        double? popupMaxWidth = null)
     {
         var doc = XDocument.Parse(xaml, LoadOptions.SetLineInfo | LoadOptions.PreserveWhitespace);   // 跟 XamlScanner 讀檔一樣保留空白
         doc.AddAnnotation(new SourceFile(file));
@@ -79,12 +80,12 @@ internal static class Kit
             ? new ElementMeasurer(Fonts(), styles, table, MonoFamily, MonoSize)
             : null;
 
-        return new WidthResolver(table, styles, m).Resolve(Probe(doc));
+        return new WidthResolver(table, styles, m) { PopupMaxWidth = popupMaxWidth }.Resolve(Probe(doc));
     }
 
     /// <summary>把片段包在一個沒有欄定義的 Grid 裡（透明容器：不吃寬度、也不提供上界）。</summary>
-    public static AvailableWidth In(string body, bool measurer = true, IReadOnlyDictionary<string, double>? chrome = null) =>
-        Resolve($"<Grid {Ns} xmlns:ui=\"http://example.com/ui\">{body}</Grid>", measurer, chrome);
+    public static AvailableWidth In(string body, bool measurer = true, IReadOnlyDictionary<string, double>? chrome = null, double? popupMaxWidth = null) =>
+        Resolve($"<Grid {Ns} xmlns:ui=\"http://example.com/ui\">{body}</Grid>", measurer, chrome, popupMaxWidth: popupMaxWidth);
 
     /// <summary>建一個暫存目錄、寫入檔案，回傳路徑。用完記得 <see cref="Cleanup"/>。</summary>
     public static string TempProject(params (string Path, string Content)[] files)

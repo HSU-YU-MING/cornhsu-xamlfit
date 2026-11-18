@@ -449,6 +449,102 @@ public class ScannerTests
         Assert.Equal(20, Site(scan, "Hosted").FontSize);
     }
 
+    // ───────────────────────── 寬度也順著放置關係走（回報 2 §3-2，ZeroCel 351 處「到根都沒有上界」）─────────────────────────
+
+    private const string HostedText = "<TextBlock Text=\"Hosted\"/>";   // 沒有自己的寬度：上界要從放它的地方來
+
+    private const string Frameless = "WindowStyle=\"None\" AllowsTransparency=\"True\"";
+
+    [Fact]
+    public void A_user_control_takes_its_width_from_where_it_is_placed()
+    {
+        var scan = Scan(
+            ("Main.xaml", Window("<Border Width=\"200\"><v:Page/></Border>", $"Width=\"400\" {Frameless} {Views}")),
+            ("Page.xaml", Classed("Page", HostedText)));
+        var site = Site(scan, "Hosted");
+        Assert.Equal(WidthStatus.Known, site.Width.Status);
+        Assert.Equal(200, site.Width.Px);
+        Assert.Contains("placed in Main.xaml", site.Width.BoundSource);
+    }
+
+    [Fact]
+    public void A_control_nobody_places_still_has_no_declared_limit()
+    {
+        var scan = Scan(
+            ("Main.xaml", Window("", $"Width=\"400\" {Frameless}")),
+            ("Page.xaml", Classed("Page", HostedText)));
+        Assert.Equal(WidthStatus.NoDeclaredLimit, Site(scan, "Hosted").Width.Status);
+    }
+
+    [Fact]
+    public void Placed_in_two_places_the_narrower_one_wins()
+    {
+        var scan = Scan(
+            ("Main.xaml", Window("<Border Width=\"300\"><v:Page/></Border>", $"Width=\"400\" {Frameless} {Views}")),
+            ("Dialog.xaml", Window("<Border Width=\"200\"><v:Page/></Border>", $"Width=\"400\" {Frameless} {Views}")),
+            ("Page.xaml", Classed("Page", HostedText)));
+        Assert.Equal(200, Site(scan, "Hosted").Width.Px);
+    }
+
+    [Fact]
+    public void A_placement_that_cannot_be_resolved_blocks_the_site()
+    {
+        // 另一個放它的地方可能更窄：不能拿算得出來的那個當答案
+        var scan = Scan(
+            ("Main.xaml", Window("<Border Width=\"300\"><v:Page/></Border>", $"Width=\"400\" {Frameless} {Views}")),
+            ("Dialog.xaml", Window("<Border Width=\"{Binding W}\"><v:Page/></Border>", $"Width=\"400\" {Frameless} {Views}")),
+            ("Page.xaml", Classed("Page", HostedText)));
+        var site = Site(scan, "Hosted");
+        Assert.Equal(WidthStatus.Unmeasurable, site.Width.Status);
+        Assert.Contains("Dialog.xaml", site.Width.Reason);
+    }
+
+    [Fact]
+    public void The_width_follows_nested_user_controls_up_to_the_window()
+    {
+        var scan = Scan(
+            ("Main.xaml", Window("<Border Width=\"250\"><v:Outer/></Border>", $"Width=\"400\" {Frameless} {Views}")),
+            ("Outer.xaml", Classed("Outer", "<Border Padding=\"10,0\"><v:Inner/></Border>")),
+            ("Inner.xaml", Classed("Inner", HostedText)));
+        Assert.Equal(230, Site(scan, "Hosted").Width.Px);
+    }
+
+    [Fact]
+    public void The_placing_element_can_set_the_width_itself()
+    {
+        var scan = Scan(
+            ("Main.xaml", Window("<v:Page Width=\"150\" Margin=\"5\"/>", $"Width=\"400\" {Frameless} {Views}")),
+            ("Page.xaml", Classed("Page", "<Border Padding=\"4,0\">" + HostedText + "</Border>")));
+        Assert.Equal(142, Site(scan, "Hosted").Width.Px);
+    }
+
+    [Fact]
+    public void A_bound_inside_the_control_still_wins_when_narrower()
+    {
+        var scan = Scan(
+            ("Main.xaml", Window("<Border Width=\"300\"><v:Page/></Border>", $"Width=\"400\" {Frameless} {Views}")),
+            ("Page.xaml", Classed("Page", "<Border Width=\"120\">" + HostedText + "</Border>")));
+        Assert.Equal(120, Site(scan, "Hosted").Width.Px);
+    }
+
+    [Fact]
+    public void A_resizable_window_uses_its_MinWidth_only_when_asked()
+    {
+        // 回報 2 §3-2：主視窗 Width=1280 MinWidth=800 可以縮小；預設照 Width 算，開了 assumeWindowMinWidth 才用 MinWidth
+        const string body = "<TextBlock Text=\"Hosted\"/>";
+        var byDefault = Scan(("Main.xaml", Window(body, $"Width=\"1280\" MinWidth=\"800\" {Frameless}")));
+        Assert.Equal(1280, Site(byDefault, "Hosted").Width.Px);
+
+        var options = new ScanOptions { DefaultFontFamily = MonoFamily, DefaultFontSize = MonoSize, AssumeWindowMinWidth = true };
+        var worstCase = Scan(options, ("Main.xaml", Window(body, $"Width=\"1280\" MinWidth=\"800\" {Frameless}")));
+        Assert.Equal(800, Site(worstCase, "Hosted").Width.Px);
+        Assert.Contains("MinWidth", Site(worstCase, "Hosted").Width.BoundSource);
+
+        // 不能縮小的視窗照舊用 Width；沒有 MinWidth 的也是
+        Assert.Equal(1280, Site(Scan(options, ("Main.xaml", Window(body, $"Width=\"1280\" MinWidth=\"800\" ResizeMode=\"NoResize\" {Frameless}"))), "Hosted").Width.Px);
+        Assert.Equal(1280, Site(Scan(options, ("Main.xaml", Window(body, $"Width=\"1280\" {Frameless}"))), "Hosted").Width.Px);
+    }
+
     // ───────────────────────── 其他 ─────────────────────────
 
     [Fact]

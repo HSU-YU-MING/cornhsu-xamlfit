@@ -25,7 +25,9 @@ public class ConfigKeysTests
               "sourceCulture": "zh-Hant",
               "defaultFontByCulture": { "th": "Leelawadee UI" },
               "assumeDefaultTheme": true,
-              "displayScales": [1, 1.25]
+              "displayScales": [1, 1.25],
+              "assumeWindowMinWidth": true,
+              "popupMaxWidth": 400
             }
             """);
 
@@ -35,6 +37,8 @@ public class ConfigKeysTests
         Assert.Equal("zh-Hant", config.SourceCulture);
         Assert.True(config.AssumeDefaultTheme);
         Assert.Equal([1.0, 1.25], config.DisplayScales);
+        Assert.True(config.AssumeWindowMinWidth);
+        Assert.Equal(400, config.PopupMaxWidth);
     }
 
     [Theory]
@@ -46,6 +50,8 @@ public class ConfigKeysTests
     [InlineData("{ \"sourceCulture\": \"\" }", "sourceCulture")]
     [InlineData("{ \"displayScales\": [] }", "displayScales")]
     [InlineData("{ \"displayScales\": [0.1] }", "displayScales")]
+    [InlineData("{ \"popupMaxWidth\": 0 }", "popupMaxWidth")]
+    [InlineData("{ \"popupMaxWidth\": 99999 }", "popupMaxWidth")]
     public void A_bad_value_names_its_field(string json, string field)
     {
         var (_, problems) = Load(json);

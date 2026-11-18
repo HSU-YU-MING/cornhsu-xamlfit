@@ -55,6 +55,9 @@ run 0 "budget --json"              budget "$DEMO" --json "$TMP/b.json"
 run 0 "budget --csv-raw"           budget "$DEMO" --csv-raw --csv "$TMP/raw.csv"
 run 0 "budget --sites"             budget "$DEMO" --sites "$TMP/sites.csv"
 run 0 "budget --assume-default-theme" budget "$DEMO" --assume-default-theme
+run 0 "budget --assume-window-min-width" budget "$DEMO" --assume-window-min-width
+run 0 "budget --popup-max-width 400" budget "$DEMO" --popup-max-width 400
+run 2 "budget --popup-max-width 0 (rejected)" budget "$DEMO" --popup-max-width 0
 run 0 "budget --source-culture"    budget "$DEMO" --source-culture de
 run 2 "budget, missing directory"  budget "$TMP/nope"
 # 明確指定的度量檔不存在：不能默默退回去用預設檔名的那一份

@@ -303,6 +303,8 @@ internal static class Program
             return 0;
         }
 
+        if (args.Length > 0 && args[0] == "--popups") { Popups(); app.Shutdown(); return 0; }
+
         if (args.Length > 0 && args[0] == "--font-source")
         {
             // 沒寫 FontFamily 的文字到底用哪一支：相依屬性的預設值、實際排出來的字型、系統訊息字型
@@ -368,6 +370,8 @@ internal static class Program
                 window.ShowActivated = false;
                 window.Show();
                 window.UpdateLayout();
+                // 「minwidth:」案例：模擬使用者把視窗縮到 MinWidth（設定檔的 assumeWindowMinWidth 回答的就是這個情況）
+                if (c.Name.StartsWith("minwidth:", StringComparison.Ordinal)) { window.Width = window.MinWidth; window.UpdateLayout(); }
                 // DataGrid 的星號欄寬是延後算的（排進 Dispatcher）：先讓它跑完再量
                 window.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
                 window.UpdateLayout();
@@ -385,7 +389,7 @@ internal static class Program
                 continue;
             }
 
-            var ours = ResolveWithXamlFit(c.Xaml, chrome, fonts);
+            var ours = ResolveWithXamlFit(c.Xaml, chrome, fonts, assumeMinWidth: c.Name.StartsWith("minwidth:", StringComparison.Ordinal));
             var clipped = wpfVisible < wpfActual - 0.01 || c.Want == Want.Bound;
             string verdict;
 
@@ -431,7 +435,7 @@ internal static class Program
 
     private static string Short(string s) => s.Length <= 70 ? s : s[..69] + "…";
 
-    private static AvailableWidth ResolveWithXamlFit(string xaml, ChromeTable chrome, FontResolver fonts)
+    private static AvailableWidth ResolveWithXamlFit(string xaml, ChromeTable chrome, FontResolver fonts, bool assumeMinWidth = false)
     {
         var doc = XDocument.Parse(xaml, LoadOptions.PreserveWhitespace);   // 跟 XamlScanner 一樣保留空白（Run 之間的空格）
         doc.AddAnnotation(new SourceFile("oracle.xaml"));
@@ -442,7 +446,7 @@ internal static class Program
         if (ThemeInUse is { } t) styles.ThemeOfFile = _ => t;
 
         var measurer = new ElementMeasurer(fonts, styles, chrome, DefaultFamily, 12);
-        var resolver = new WidthResolver(chrome, styles, measurer) { Sharing = CheckMode ? RowSharing.Preceding : RowSharing.WholeRow };
+        var resolver = new WidthResolver(chrome, styles, measurer) { Sharing = CheckMode ? RowSharing.Preceding : RowSharing.WholeRow, AssumeWindowMinWidth = assumeMinWidth };
 
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
         var probe = doc.Descendants().First(e => (string?)e.Attribute(x + "Name") == "probe");
@@ -483,6 +487,16 @@ internal static class Program
             $"<Window {Ns} Width='400' Height='200'><shell:WindowChrome.WindowChrome><shell:WindowChrome/></shell:WindowChrome.WindowChrome><Grid x:Name='probe'/></Window>");
         Add("window MaxWidth + SizeToContent",
             $"<Window {Ns} MaxWidth='400' Height='200' SizeToContent='Width'><TextBlock x:Name='probe' Text='{Long} {Long}'/></Window>");
+
+        // 回報 2 §3-2：可以縮小的視窗，設定檔開 assumeWindowMinWidth 時用 MinWidth 當上界。
+        // 對照程式把視窗縮到 MinWidth 再量（名字以 minwidth: 開頭的案例）；解析器也開同一個旗標
+        const string threeCols = "<Grid.ColumnDefinitions><ColumnDefinition Width='100'/><ColumnDefinition/><ColumnDefinition Width='100'/></Grid.ColumnDefinitions>";
+        Add("minwidth: resizable window shrunk to MinWidth",
+            $"<Window {Ns} Width='1280' MinWidth='800' Height='200'><Grid>{threeCols}<TextBlock x:Name='probe' Grid.Column='1' Text='{Long} {Long} {Long}'/></Grid></Window>");
+        Add("minwidth: frameless window shrunk to MinWidth",
+            $"<Window {Ns} Width='1280' MinWidth='800' Height='200' WindowStyle='None' AllowsTransparency='True'><Border Padding='10,0'><TextBlock x:Name='probe' TextWrapping='Wrap' Text='{Long} {Long} {Long}'/></Border></Window>");
+        Add("minwidth: window with MaxWidth below Width",
+            $"<Window {Ns} Width='1280' MinWidth='800' MaxWidth='900' Height='200'><Grid>{threeCols}<TextBlock x:Name='probe' Grid.Column='1' Text='{Long} {Long} {Long}'/></Grid></Window>");
 
         // 之後的案例都放在無邊框視窗裡，工作區 = Width
         static string W(string inner, int width = 700, string resources = "") =>
@@ -952,6 +966,84 @@ internal static class Program
             host.UpdateLayout();
             Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
                 $"{c.GetType().Name,-26} padding {c.Padding.Left + c.Padding.Right,5:F1} ({c.Padding})  border {c.BorderThickness.Left + c.BorderThickness.Right,5:F1}  minWidth {c.MinWidth}  fontSize {c.FontSize}"));
+        }
+        host.Close();
+    }
+
+    /// <summary>
+    /// --popups：快顯宿主（ContextMenu、ToolTip、子選單的 Popup、Popup）在內容外面吃掉多少寬度。
+    /// 回報 2 §3-3 要給選單一個宣告的最大寬度（popupMaxWidth），內距表就得有這幾個；快顯沒打開過就沒排版（坑 61），
+    /// 所以放進真的視窗、真的打開再量。內容放一個已知寬度的 Border，量兩個寬度確認斜率是 1。
+    /// </summary>
+    private static void Popups()
+    {
+        var host = Host();
+        var panel = new StackPanel();
+        host.Content = panel;
+        host.Show();
+        host.UpdateLayout();
+        void Idle() => host.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+        static T? Find<T>(DependencyObject d) where T : DependencyObject
+        {
+            for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(d); i++)
+            {
+                var c = System.Windows.Media.VisualTreeHelper.GetChild(d, i);
+                if (c is T t) return t;
+                if (Find<T>(c) is { } deeper) return deeper;
+            }
+            return null;
+        }
+
+        foreach (var w in new[] { 100.0, 200.0 })
+        {
+            // ContextMenu：一個 MenuItem，Header 是已知寬度的 Border
+            var cm = new ContextMenu();
+            var mi = new MenuItem { Header = new Border { Width = w, Height = 20 } };
+            cm.Items.Add(mi);
+            var btn = new Button { Content = "x", ContextMenu = cm };
+            panel.Children.Add(btn);
+            host.UpdateLayout();
+            cm.PlacementTarget = btn;
+            cm.IsOpen = true;
+            Idle();
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"ContextMenu  content {w,5:F0}: menu {cm.ActualWidth,7:F2}  item {mi.ActualWidth,7:F2}  → menu chrome {cm.ActualWidth - mi.ActualWidth,6:F2}  item chrome {mi.ActualWidth - w,6:F2}  (menu Padding {cm.Padding} Border {cm.BorderThickness}; item Padding {mi.Padding} Border {mi.BorderThickness})"));
+            cm.IsOpen = false;
+
+            // ToolTip
+            var tt = new ToolTip { Content = new Border { Width = w, Height = 20 } };
+            var b2 = new Button { Content = "y", ToolTip = tt };
+            panel.Children.Add(b2);
+            host.UpdateLayout();
+            tt.PlacementTarget = b2;
+            tt.IsOpen = true;
+            Idle();
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"ToolTip      content {w,5:F0}: tip  {tt.ActualWidth,7:F2}  → chrome {tt.ActualWidth - w,6:F2}  (Padding {tt.Padding} Border {tt.BorderThickness})"));
+            tt.IsOpen = false;
+
+            // 子選單：Menu > MenuItem(頂層) > MenuItem(子項，Header 是 Border)
+            var menu = new Menu();
+            var top = new MenuItem { Header = "Top" };
+            var sub = new MenuItem { Header = new Border { Width = w, Height = 20 } };
+            top.Items.Add(sub);
+            menu.Items.Add(top);
+            panel.Children.Add(menu);
+            host.UpdateLayout();
+            top.IsSubmenuOpen = true;
+            Idle();
+            var popup = Find<Popup>(top);
+            var popupChild = popup?.Child as FrameworkElement;
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"Submenu      content {w,5:F0}: popup child {(popupChild?.ActualWidth ?? double.NaN),7:F2}  sub item {sub.ActualWidth,7:F2}  → submenu chrome {(popupChild?.ActualWidth ?? double.NaN) - sub.ActualWidth,6:F2}  sub item chrome {sub.ActualWidth - w,6:F2}  (sub Padding {sub.Padding} Border {sub.BorderThickness}; role {sub.Role})"));
+            top.IsSubmenuOpen = false;
+
+            // 裸 Popup：沒有範本，子元素直接排
+            var pop = new Popup { Child = new Border { Width = w, Height = 20 }, PlacementTarget = panel, IsOpen = true };
+            Idle();
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"Popup        content {w,5:F0}: child {((FrameworkElement)pop.Child).ActualWidth,7:F2}"));
+            pop.IsOpen = false;
         }
         host.Close();
     }

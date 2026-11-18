@@ -66,6 +66,28 @@ public sealed class WidthResolver
     /// 傳 null 就退回量不到。</param>
     public RowSharing Sharing { get; init; } = RowSharing.WholeRow;
 
+    /// <summary>
+    /// 走到一份檔案的根元素（UserControl、Page）時，它被放在哪些地方：放它的那些元素（在別的檔案裡）與那些檔案的相對路徑。
+    /// null 或空 = 沒有任何 XAML 放它 → 「查不到上界」。由掃描器提供（照 x:Class 對 <c>&lt;views:Name/&gt;</c>）。
+    ///
+    /// ⚠ 回報 2 §3-2（ZeroCel）：351 處「一路到根都沒有寬度上限」—— 它們全在 UserControl 裡，走到根就停了，
+    ///   而放它的主視窗明明寫了 Width="1280"。順著放置關係接著往上走，數字就有了（不是宣告，是讀出來的）。
+    /// </summary>
+    public Func<XElement, IReadOnlyList<(XElement Element, string File)>?>? PlacementsOf { get; set; }
+
+    /// <summary>
+    /// 視窗可以縮小時，用它的 MinWidth（而不是 Width）當上界：回答「視窗縮到最小時裝不裝得下」。
+    /// 使用者在設定檔開（assumeWindowMinWidth），預設關；報告會說寬度來自 MinWidth。沒有 MinWidth 的視窗照舊用 Width。
+    /// </summary>
+    public bool AssumeWindowMinWidth { get; init; }
+
+    /// <summary>
+    /// 快顯（ContextMenu、ToolTip、Popup、子選單）最寬可以到多寬（DIP），使用者在設定檔宣告（popupMaxWidth）。
+    /// 快顯跟著內容變寬、不裁切，所以預設不檢查（回「查不到上界」）；宣告之後，快顯裡的文字就拿它當上界，
+    /// 扣掉快顯宿主量到的內距（LayoutOracle --popups）。報告標明上界來自宣告。選單列（Menu）的項目不算：它會換列。
+    /// </summary>
+    public double? PopupMaxWidth { get; init; }
+
     public WidthResolver(ChromeTable chrome, StyleIndex? styles = null, IElementMeasurer? measurer = null)
     {
         _chrome = chrome;
@@ -288,8 +310,25 @@ public sealed class WidthResolver
                     return TemplateExit($"inside <{local}>");
 
                 // 規則：快顯與依內容決定大小的宿主不受外層寬度約束（實查：QuillNest NoteEditorWindow.xaml:838）
+                double? popupStop = null;   // 使用者宣告了快顯的最大寬度：這一層扣完內距就用它結算
                 if (!isSite && ContentSizedReason(cur) is { } sized)
-                    return Open(sized);
+                {
+                    var isHeader = ReferenceEquals(cur, headerOwner);
+                    if (owner.PopupMaxWidth is { } popupMax && !isHeader && EndsWithAny(local, "ContextMenu", "ToolTip", "Popup"))
+                        popupStop = popupMax;
+                    else if (owner.PopupMaxWidth is { } subMax && !isHeader && EndsWithAny(local, "MenuItem") && ChromeTable.IsWpf(cur))
+                    {
+                        // 從子項目走到它所屬的 MenuItem：子項目畫在這個 MenuItem 打開的子選單（一個 Popup）裡
+                        var submenu = owner._chrome.Lookup(XName.Get("MenuItem.Submenu", cur.Name.NamespaceName), ThemeOf(cur));
+                        if (submenu.Kind != ChromeKind.Control)
+                            return Unknown(WidthStatus.Unmeasurable, "the chrome of a submenu popup is unknown");
+                        _usedChrome = true;
+                        Candidate(subMax, $"popupMaxWidth={subMax:G} (declared) on the submenu of <{local}>", cur, _deductions + submenu.Chrome, definitive: true);
+                        return Open($"submenu of <{local}> (popupMaxWidth)");
+                    }
+                    else if (!isHeader || owner.PopupMaxWidth is null)
+                        return Open(sized);
+                }
 
                 // 分頁的內容畫在 TabControl 的內容區，不在 TabItem 裡面 ——
                 // TabItem 自己的 Width／Padding／Margin 描述的是標籤，跟內容無關（LayoutOracle 實測）
@@ -309,7 +348,8 @@ public sealed class WidthResolver
                     }
 
                 // 這個元素內部吃掉的寬度
-                var useHeader = ReferenceEquals(cur, headerOwner) || (isSite && siteHasHeaderText);
+                // MenuItem 的「內容」就是它的 Header（ChromeGen 量的 85 就是放 Header 量的），不走標題區的表
+                var useHeader = (ReferenceEquals(cur, headerOwner) || (isSite && siteHasHeaderText)) && !EndsWithAny(local, "MenuItem");
                 var inner = isSite && OuterOnly ? new InsetResult(0, false, false, null)
                     : useHeader ? owner.HeaderInset(cur, theme) : owner.InnerInset(cur, theme);
                 if (inner.Blocked is { } innerWhy) Block(WidthStatus.Unmeasurable, innerWhy);
@@ -329,6 +369,12 @@ public sealed class WidthResolver
                         break;
                 }
 
+                if (popupStop is { } popupWidth)
+                {
+                    Candidate(popupWidth, $"popupMaxWidth={popupWidth:G} (declared) on <{local}>", cur, _deductions + inner.Inset, definitive: true);
+                    return Open($"popup content (<{local}>, popupMaxWidth)");
+                }
+
                 // 往上走：這個元素的 Margin 與內距都吃掉寬度
                 var margin = owner.Thickness(cur, "Margin");
                 if (margin.Blocked is { } marginWhy) Block(WidthStatus.Unmeasurable, marginWhy);
@@ -346,7 +392,55 @@ public sealed class WidthResolver
                 cur = parent;
             }
 
+            // 走到這份檔案的根：它可能被放在別的檔案裡（UserControl 放在視窗的某一欄），從放它的元素接著往上走
+            if (cur is { Parent: null } root && owner.PlacementsOf?.Invoke(root) is { Count: > 0 } placements)
+                return ViaPlacements(root, placements, depth);
+
             return Open("no width bound found up to the root");
+        }
+
+        /// <summary>
+        /// 從每一個放這份檔案的元素往上解它的外框寬，取最窄的當這裡的上界（_deductions 已經含從文字到根的每一層）。
+        /// 任何一個放它的地方算不出來 → 量不到（那個地方可能更窄）；全部都查不到上界 → 查不到上界；
+        /// 有的查不到上界、有的算得出來 → 用算得出來的最窄值（查不到上界的那個地方不會裁得更窄）。
+        /// 根元素的 Margin 已經在迴圈裡扣了；放它的元素自己寫的 Margin 由它那段解析扣。
+        /// </summary>
+        private AvailableWidth ViaPlacements(XElement root, IReadOnlyList<(XElement Element, string File)> placements, int depth)
+        {
+            if (depth > 6) return Blocked(WidthStatus.Unmeasurable, "layout nesting is too deep to resolve");
+            var rootName = root.Name.LocalName;
+
+            double? narrowest = null;
+            var narrowestSource = "";
+            var narrowestAt = root;
+            string? open = null;
+
+            foreach (var (el, file) in placements)
+            {
+                var w = owner.OuterWidth(el, depth + 1);
+                var where = $"placed in {file}:{LineOf(el)}";
+                switch (w.Status)
+                {
+                    case WidthStatus.Known:
+                        if (narrowest is null || w.Px < narrowest)
+                        {
+                            narrowest = w.Px;
+                            narrowestSource = $"{w.BoundSource}, where <{rootName}> is {where}";
+                            narrowestAt = el;
+                        }
+                        _usedChrome |= w.UsedChromeTable;
+                        _assumedScrollBar |= w.AssumedScrollBar;
+                        break;
+                    case WidthStatus.NoDeclaredLimit:
+                        open ??= $"<{rootName}> is {where}, and from there {w.Reason}";
+                        break;
+                    default:
+                        return Unknown(w.Status, $"<{rootName}> is {where}, and from there: {w.Reason}");
+                }
+            }
+
+            if (narrowest is { } px) return Closed(px, narrowestSource, narrowestAt);
+            return Open(open ?? "no width bound found up to the root");
         }
 
         /// <summary>
@@ -370,6 +464,17 @@ public sealed class WidthResolver
                     case "Resources":
                         exit = TemplateExit($"inside <{full}>");
                         return null;
+
+                    case "ToolTip" when owner.PopupMaxWidth is { } tipMax && !EndsWithAny(cur.Name.LocalName, "ToolTip"):
+                    {
+                        // <Button.ToolTip><TextBlock/></Button.ToolTip>：WPF 把內容包進一個 ToolTip 控制項，它的內距照表
+                        var tip = owner._chrome.Lookup(XName.Get("ToolTip", cur.Name.NamespaceName), ThemeOf(cur));
+                        if (tip.Kind != ChromeKind.Control) { exit = Unknown(WidthStatus.Unmeasurable, "the chrome of the implicit ToolTip is unknown"); return null; }
+                        _usedChrome = true;
+                        Candidate(tipMax, $"popupMaxWidth={tipMax:G} (declared) on the implicit <ToolTip>", cur, _deductions + tip.Chrome, definitive: true);
+                        exit = Open("popup content (ToolTip, popupMaxWidth)");
+                        return null;
+                    }
 
                     case "ToolTip" or "ContextMenu":
                         exit = Open($"popup content (<{full}>)");
@@ -779,6 +884,21 @@ public sealed class WidthResolver
 
         if (sizeToContent && m is null)
             return new(BoundKind.SizesToContent, 0, "", false, $"<{local}> sizes to its content");
+
+        // 使用者開了「視窗用 MinWidth 當上界」：可以縮小的視窗，Width 只是初始大小，使用者能把它縮到 MinWidth。
+        // 回報 2 §3-2（ZeroCel 主視窗 Width=1280 MinWidth=800）。只在 MinWidth 是字面數字、而且視窗真的能縮時換；
+        // 讀不出來的 MinWidth 不猜、也不當成沒設（維持用 Width）—— 這條是使用者宣告的最壞情況，不是量到的事實。
+        if (AssumeWindowMinWidth && !sizeToContent && IsWindow(el) && w is { } initial)
+        {
+            var resize = _styles.ResolveEx(el, "ResizeMode", inheritable: false);
+            var resizable = !(resize.IsValue && IsOneOf(resize.Value, "NoResize", "CanMinimize"));
+            var minWidth = _styles.ResolveEx(el, "MinWidth", inheritable: false);
+            if (resizable && minWidth.IsValue && TryLength(minWidth.Value, out var minPx) && minPx > 0 && minPx < initial)
+            {
+                w = minPx;
+                widthLabel = "MinWidth (assumed: the window can be resized down to it; assumeWindowMinWidth)";
+            }
+        }
 
         return (w, m) switch
         {

@@ -45,6 +45,12 @@ public sealed record ScanOptions
 
     /// <summary>沒有寫 xml:lang 的元素的語言。WPF 的預設是 en-US；App 在程式碼裡改了預設值時由設定檔指定。</summary>
     public string ElementLanguage { get; init; } = Fonts.FontFallback.DefaultLanguage;
+
+    /// <summary>可以縮小的視窗用 MinWidth 當上界（設定檔的 assumeWindowMinWidth；見 <see cref="WidthResolver.AssumeWindowMinWidth"/>）。</summary>
+    public bool AssumeWindowMinWidth { get; init; }
+
+    /// <summary>快顯最寬多寬（設定檔的 popupMaxWidth；見 <see cref="WidthResolver.PopupMaxWidth"/>）。null = 不檢查快顯。</summary>
+    public double? PopupMaxWidth { get; init; }
 }
 
 /// <summary>一個不是 WPF 的 XAML 檔（WinUI／UWP、Avalonia、MAUI）。不分析，但要講出來。</summary>
@@ -277,7 +283,14 @@ public sealed partial class XamlScanner
                     : _sourceStrings.TryGetValue(key, out var source) ? source
                     : null,
             };
-        _width = new WidthResolver(_chrome, _styles, measurer) { Sharing = _options.Sharing };
+        _width = new WidthResolver(_chrome, _styles, measurer)
+        {
+            Sharing = _options.Sharing,
+            AssumeWindowMinWidth = _options.AssumeWindowMinWidth,
+            PopupMaxWidth = _options.PopupMaxWidth,
+        };
+        var hostDocs = new Dictionary<string, XDocument?>(StringComparer.Ordinal);
+        _width.PlacementsOf = root => PlacementsOf(root, hostDocs);
         _measurer = measurer;
         _missingFonts.Clear();
 
@@ -369,6 +382,17 @@ public sealed partial class XamlScanner
         foreach (var h in hosting)
             if (h is { Class: not null, IsWindow: false } && h.RootName is not ("Application" or "ResourceDictionary"))
                 hostedClasses.Add(h.Class);
+
+        // 類別 → 放它的檔案（寬度解析時從放它的元素接著往上走，見 WidthResolver.PlacementsOf）
+        _placedIn = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        for (var i = 0; i < files.Count; i++)
+            if (dialects[i] is null && hosting[i] is { } info)
+                foreach (var cls in info.Uses)
+                    if (hostedClasses.Contains(cls))
+                    {
+                        if (!_placedIn.TryGetValue(cls, out var list)) _placedIn[cls] = list = [];
+                        list.Add(rels[i]);
+                    }
 
         // (專案, 屬性) → 各個視窗的答案
         var declared = new Dictionary<(string Project, string Property), List<Resolved>>();
@@ -498,6 +522,43 @@ public sealed partial class XamlScanner
             var cls = ((string?)root.Attribute(XClass))?.Trim();
             return (cls is not null ? FromPlacements(cls, property, []) : null) ?? ConsensusFor(file, property);
         };
+    }
+
+    /// <summary>類別（x:Class）→ 放它的檔案（相對路徑）。ComputeHostFonts 算出來，Rescan 用。</summary>
+    private Dictionary<string, List<string>> _placedIn = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 給 <see cref="WidthResolver.PlacementsOf"/>：這份檔案的根被放在哪些元素裡。放它的檔案每次 Rescan 只載入一次
+    ///（照第二趟同樣的方式：別名、來源檔、外部佈景），跨檔案的解析就用正式的樣式索引與內距表。
+    /// </summary>
+    private IReadOnlyList<(XElement Element, string File)>? PlacementsOf(XElement root, Dictionary<string, XDocument?> cache)
+    {
+        var cls = ((string?)root.Attribute(XClass))?.Trim();
+        if (cls is null || !_placedIn.TryGetValue(cls, out var hosts)) return null;
+
+        var found = new List<(XElement, string)>();
+        foreach (var rel in hosts)
+        {
+            if (!cache.TryGetValue(rel, out var doc))
+            {
+                var i = _rels.IndexOf(rel);
+                try { doc = i < 0 ? null : SafeXml.Load(_files[i], lineInfo: true); }
+                catch (Exception) { doc = null; }
+                if (doc?.Root is not null)
+                {
+                    ApplyAliases(doc);
+                    doc.AddAnnotation(new SourceFile(rel));
+                    if (!_options.TrustDefaultChrome && ThemeFor(rel, _themes) is { } themeName)
+                        doc.AddAnnotation(new ExternalTheme(themeName, ProfileFor(rel, _themes)));
+                }
+                cache[rel] = doc;
+            }
+            if (doc?.Root is null) continue;
+            foreach (var el in doc.Root.Descendants())
+                if (!el.Name.LocalName.Contains('.', StringComparison.Ordinal) && ClrClassOf(el) == cls)
+                    found.Add((el, rel));
+        }
+        return found;
     }
 
     /// <summary>使用者指定了預設字型：家族與字級的不一致以使用者說的為準。</summary>

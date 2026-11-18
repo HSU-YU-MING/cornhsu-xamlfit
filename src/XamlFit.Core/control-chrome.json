@@ -43,7 +43,11 @@
     "ListBox": { "chromeWidth": 4, "padding": 0, "border": 2, "note": "measured via the templated content host (content width does not propagate)" },
     "ListView": { "chromeWidth": 4, "padding": 0, "border": 2, "note": "measured via the templated content host (content width does not propagate)" },
     "TreeView": { "chromeWidth": 4, "padding": 2, "border": 2 },
-    "ItemsControl": { "chromeWidth": 0, "padding": 0, "border": 0, "note": "measured via the templated content host (content width does not propagate)" }
+    "ItemsControl": { "chromeWidth": 0, "padding": 0, "border": 0, "note": "measured via the templated content host (content width does not propagate)" },
+    "ContextMenu": { "chromeWidth": 13, "padding": 4, "border": 2, "note": "LayoutOracle --popups, opened in a real window: a 100-wide item content gives a 198-wide menu with the item at 185 (item chrome 85, menu chrome 13); same at 200. Used only when popupMaxWidth is declared" },
+    "ToolTip": { "chromeWidth": 14, "padding": 12, "border": 2, "note": "LayoutOracle --popups: 100-wide content gives a 114-wide tip; same at 200. Used only when popupMaxWidth is declared" },
+    "Popup": { "chromeWidth": 0, "padding": 0, "border": 0, "note": "LayoutOracle --popups: no template, the child is laid out as is. Used only when popupMaxWidth is declared" },
+    "MenuItem.Submenu": { "chromeWidth": 6, "padding": 0, "border": 2, "note": "the popup a MenuItem opens for its sub-items (not an element): LayoutOracle --popups: popup child 191 around a 185-wide sub-item. Used only when popupMaxWidth is declared" }
   },
 
   "headers": {

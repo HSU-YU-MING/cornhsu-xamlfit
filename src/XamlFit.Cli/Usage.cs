@@ -51,6 +51,13 @@ internal static class Usage
               --assume-default-theme
                                    An external theme was detected, but it does not change control
                                    padding: keep using the built-in chrome table.
+              --assume-window-min-width
+                                   A resizable window can be shrunk to its MinWidth: use that
+                                   (not Width) as the bound, i.e. check the worst case. The
+                                   report says the width comes from MinWidth.
+              --popup-max-width <n>
+                                   The widest a popup (ContextMenu, ToolTip, Popup, submenu) may
+                                   grow, in DIP. Popups are not checked without it.
 
             CHECK
               All BUDGET options, plus:

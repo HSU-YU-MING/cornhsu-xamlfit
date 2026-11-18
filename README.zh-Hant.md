@@ -223,7 +223,15 @@ ScreenToGif 編輯器裡冒出四個下拉選項——也是對的：「Sum even
   "sourceCulture": "zh-Hant",
 
   // 偵測到外部佈景，但它沒有改動控制項的內距
-  "assumeDefaultTheme": false
+  "assumeDefaultTheme": false,
+
+  // 可以縮小的視窗能縮到 MinWidth：用它（不是 Width）當上界，回答「視窗縮到最小時裝不裝得下」——
+  // 翻譯之後最先爆的就是這種情況。預設關；報告會標明上界來自 MinWidth
+  "assumeWindowMinWidth": false,
+
+  // 快顯（ContextMenu、ToolTip、Popup、子選單）最寬可以到多寬。快顯跟著內容變寬、不裁切，所以不宣告就不檢查；
+  // 宣告之後快顯裡的文字拿它當上界（扣掉量到的快顯內距），報告標明上界來自宣告。選單列的項目不受影響：Menu 會換列
+  "popupMaxWidth": 400
 }
 ```
 
@@ -264,6 +272,10 @@ WPF 的預設字型不是 Segoe UI，是**系統訊息字型**，而且跟著 Wi
 經過巢狀的 UserControl 一路到視窗，放它的那個元素上的值就是它繼承到的。放在不一致的幾個視窗裡、或放在資源字典裡，
 繼承到的值就是不知道，報告會點名是哪幾個檔案。沒有任何 XAML 放它（程式碼建立的）才退回同一個應用程式裡所有視窗的共識；
 它們不一致時，用 `defaultFontFamily`／`defaultFontSize` 指定。
+
+同一條放置關係也給 UserControl **寬度**：`CanvasView.xaml` 裡的文字在那份檔案裡沒有上界，
+就從放它的視窗裡那個 `<views:CanvasView/>` 元素接著往上走（它在哪一欄、視窗多寬）。放在好幾個檔案裡取最窄的；
+有一個放它的地方算不出來，這個位置就量不到，因為那個地方可能更窄。沒有任何 XAML 放它的，仍然是查不到上界。
 
 ## 字型
 

@@ -3,6 +3,32 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-11-18
+
+Follow-ups from the ZeroCel trial (report 2 §3-2, §3-3). Only additions: a user control now gets a width from the file that places it (no config), and two new config keys that are off unless declared. Findings can appear in user-control sites that previously had no declared limit.
+
+### Added
+
+- **A `UserControl` now takes its width from where it is placed.** 351 sites in ZeroCel had "no
+  width bound found up to the root": the root was a user control, and the walk stopped there
+  although the main window that places it is 1280 wide. The resolver now continues from the
+  `<views:Name/>` element in the placing file (the same `x:Class` match the font inheritance uses),
+  through nested user controls up to a window. Placed in several files, the narrowest bound
+  wins; a placement that cannot be resolved blocks the site. The report names the placing file
+  and line. Nothing is declared: this is read from the XAML.
+- **`assumeWindowMinWidth`** (config) / `--assume-window-min-width`: a resizable window with a
+  literal `MinWidth` is bounded by it instead of `Width`, so the check answers "does it fit when
+  the window is as small as it gets". Off by default; the bound source says `MinWidth (assumed…)`.
+  Windows with `ResizeMode="NoResize"`/`CanMinimize`, without `MinWidth`, or with `SizeToContent`
+  are unchanged. Verified against WPF with the window shrunk to its MinWidth (`LayoutOracle`
+  "minwidth:" cases).
+- **`popupMaxWidth`** (config) / `--popup-max-width <n>`: the widest a popup may grow. Popups
+  (`ContextMenu`, `ToolTip`, `Popup`, the submenu a `MenuItem` opens) size to their content and
+  never clip, so they are not checked unless you declare this; then text in them is held to it
+  minus the popup chrome measured in a real window (`LayoutOracle --popups`: ContextMenu 13,
+  ToolTip 14, submenu 6, Popup 0; the entries are in `control-chrome.json`). Menu-bar items are
+  unaffected. Findings say the limit is declared.
+
 ## [0.2.0] - 2026-11-18
 
 Both changes come from a first external trial (ZeroCel, a WPF app with 35 XAML files; reports 1 and 2, 2026-11-18).
