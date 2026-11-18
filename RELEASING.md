@@ -17,6 +17,7 @@
 - [ ] `bash scripts/verify-demo.sh` 綠燈（計數斷言）
 - [ ] `bash scripts/verify-budget.sh` 綠燈
 - [ ] 動過 console 輸出的話，README 裡貼的範例要跟著改
+- [ ] `bash scripts/verify-readme-facts.sh` 綠燈：README 的 Action 範例釘的版本 = CHANGELOG 最新版（CHANGELOG 加了新版本段落之後跑 `--update` 重貼；CI 也會擋）
 - [ ] 相依升版了，`THIRD-PARTY-NOTICES.md` 要跟著改
 - [ ] **字型 EULA 的法務功課**（見下）
 

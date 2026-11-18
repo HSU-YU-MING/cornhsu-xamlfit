@@ -615,11 +615,11 @@ steps:
   - uses: actions/setup-dotnet@v4
     with:
       dotnet-version: '10.0.x'
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.1.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.3.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.1.0              # pin the tool too
+      version: 0.3.0              # pin the tool too
       sarif: xamlfit.sarif
   - uses: github/codeql-action/upload-sarif@v3
     if: always()
