@@ -3,9 +3,9 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.0] - 2026-11-18
 
-Follow-ups from the ZeroCel trial (report 2 §3-2, §3-3).
+Follow-ups from the ZeroCel trial (report 2 §3-2, §3-3). Only additions: a user control now gets a width from the file that places it (no config), and two new config keys that are off unless declared. Findings can appear in user-control sites that previously had no declared limit.
 
 ### Added
 
