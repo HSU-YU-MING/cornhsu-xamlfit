@@ -3,6 +3,25 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.11.0] - 2026-11-19
+
+**Upgrading**: a control whose string content is drawn by a `ContentTemplate` or `HeaderTemplate` is now
+measured through that template. A template that is a single `TextBlock Text="{Binding}"` gives the site
+that TextBlock's wrapping and trimming. Any other template (an icon next to the text, its own font,
+`Margin` or binding, a `…TemplateSelector`, a key defined in more than one place) makes the site
+unmeasurable, where before the template was ignored and the text measured as if it were not there.
+None of the five projects in the self-check has such a site, so their numbers are unchanged.
+
+### Fixed (report 4, ZeroCel)
+
+- **A wrapping content template is no longer measured as one line.** ZeroCel's buttons and check boxes
+  use a shared `<DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap"/></DataTemplate>` so that
+  longer translations wrap to two lines. `check --pseudo` reported 23 of them as overflows. The text now
+  wraps at the control's content width, the same width a plain `Content` gets; in a horizontal
+  `StackPanel` without a width it still does not wrap. LayoutOracle `--wrap` has seven new cases
+  (Button in a star column, with `Padding`, aligned left, `Width` in a horizontal stack, CheckBox), and
+  WPF's line counts match.
+
 ## [0.10.1] - 2026-11-19
 
 ### Fixed

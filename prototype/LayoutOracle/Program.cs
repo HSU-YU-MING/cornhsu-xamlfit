@@ -866,6 +866,31 @@ internal static class Program
     }
 
     /// <summary>
+    /// 回報 4（ZeroCel）：按鈕／勾選框的 ContentTemplate 是「TextBlock Text="{Binding}" TextWrapping="Wrap"」。
+    /// probe 是控制項；WPF 這邊數的是範本產生的那個 TextBlock 的行數。
+    /// </summary>
+    private static IEnumerable<(string Name, string Xaml)> ContentTemplateWrapCases()
+    {
+        const string res = "<Window.Resources>"
+            + "<DataTemplate x:Key='WrapCenterText'><TextBlock Text='{Binding}' TextWrapping='Wrap' TextAlignment='Center'/></DataTemplate>"
+            + "<DataTemplate x:Key='WrapLeftText'><TextBlock Text='{Binding}' TextWrapping='Wrap'/></DataTemplate>"
+            + "<DataTemplate x:Key='Plain'><TextBlock Text='{Binding}'/></DataTemplate>"
+            + "</Window.Resources>";
+        static string W(string inner) => $"<Window {Ns} Width='700' Height='400' WindowStyle='None' AllowsTransparency='True'>{res}{inner}</Window>";
+        var center = $"x:Name='probe' ContentTemplate='{{StaticResource WrapCenterText}}' Content='{Long}'";
+        var left = $"x:Name='probe' ContentTemplate='{{StaticResource WrapLeftText}}' Content='{Long}'";
+        const string cols = "<Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>";
+
+        yield return ("template: Button in a star column", W($"<Grid Width='450' HorizontalAlignment='Left' VerticalAlignment='Top'>{cols}<Button Grid.Column='1' {center}/></Grid>"));
+        yield return ("template: Button with Padding", W($"<Grid Width='200' HorizontalAlignment='Left' VerticalAlignment='Top'><Button Padding='20,4' {center}/></Grid>"));
+        yield return ("template: Button aligned left", W($"<Grid Width='200' HorizontalAlignment='Left' VerticalAlignment='Top'><Button HorizontalAlignment='Left' {center}/></Grid>"));
+        yield return ("template: CheckBox in a vertical stack", W($"<StackPanel Width='200' HorizontalAlignment='Left'><CheckBox {left}/></StackPanel>"));
+        yield return ("template: Button in a horizontal stack", W($"<StackPanel Orientation='Horizontal' Width='300' HorizontalAlignment='Left' VerticalAlignment='Top'><Border Width='50'/><Button {center}/></StackPanel>"));
+        yield return ("template: Button Width in a horizontal stack", W($"<StackPanel Orientation='Horizontal' Width='300' HorizontalAlignment='Left' VerticalAlignment='Top'><Border Width='50'/><Button Width='120' {center}/></StackPanel>"));
+        yield return ("template: no wrapping (control)", W($"<StackPanel Width='200' HorizontalAlignment='Left'><Button x:Name='probe' ContentTemplate='{{StaticResource Plain}}' Content='{Long}'/></StackPanel>"));
+    }
+
+    /// <summary>
     /// --wrap：同一段 XAML 的 probe TextBlock，WPF 實際排成幾行 vs 工具算幾行。
     /// 比寬度看不出「換行有沒有發生」—— 回報 1 的案例寬度對（120）、行數錯（工具說 1 行、WPF 兩行）。
     /// 工具這邊走正式的掃描器（字型、寬度、換行旗標都照 check 的路），行數用 CheckAnalyzer 的排法。
@@ -876,7 +901,7 @@ internal static class Program
         Console.WriteLine(new string('-', 100));
         var bad = 0;
 
-        foreach (var (name, xaml) in WrapCases(wrap: true))
+        foreach (var (name, xaml) in WrapCases(wrap: true).Concat(ContentTemplateWrapCases()))
         {
             int wpfLines;
             double wpfWidth;
@@ -884,7 +909,10 @@ internal static class Program
             window.Left = -20000; window.Top = -20000; window.ShowInTaskbar = false; window.ShowActivated = false;
             window.Show();
             window.UpdateLayout();
-            var probe = (TextBlock)window.FindName("probe");
+            // 控制項的 probe（回報 4）：範本產生的 TextBlock 在視覺樹裡，FindName 找不到
+            var named = (FrameworkElement)window.FindName("probe");
+            var probe = named as TextBlock ?? FindText(named, Long)
+                ?? throw new InvalidOperationException($"{name}: no TextBlock showing the probe text");
             // ⚠ 不能用 ActualHeight：直接放在視窗裡的 TextBlock 會被拉高到整個視窗。DesiredSize 是文字自己的高度
             wpfLines = (int)Math.Round(probe.DesiredSize.Height / (probe.FontSize * probe.FontFamily.LineSpacing));
             wpfWidth = probe.ActualWidth;
@@ -917,6 +945,17 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine(bad == 0 ? "all line counts match" : $"{bad} mismatch(es)");
         return bad;
+    }
+
+    private static TextBlock? FindText(DependencyObject root, string text)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is TextBlock t && t.Text == text) return t;
+            if (FindText(child, text) is { } found) return found;
+        }
+        return null;
     }
 
     /// <summary>probe 的水平範圍，被每一層祖先的版面裁切區交集之後還剩多寬。</summary>
