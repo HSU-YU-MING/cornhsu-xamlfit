@@ -1183,6 +1183,23 @@ public sealed partial class XamlScanner
 
         var ignore = IgnoreReason(el);
 
+        var wrap = textHost is null ? WrapMode.NoWrap : ParseWrap(_styles.Resolve(textHost, "TextWrapping", inheritable: false));
+        var trim = textHost is null ? TrimMode.None : ParseTrim(_styles.Resolve(textHost, "TextTrimming", inheritable: false));
+        if (textHost is null && local != "Run" && DrawingTemplate(el, property) is { } drawn)
+        {
+            if (drawn.Unknown is { } why)
+            {
+                // 擋路者不立刻放棄：上面根本沒有上界的話，答案仍然是「查不到上界」
+                if (width.Status == WidthStatus.Known)
+                    width = AvailableWidth.NotKnown(WidthStatus.Unmeasurable, why);
+            }
+            else
+            {
+                wrap = drawn.Wrap;
+                trim = drawn.Trim;
+            }
+        }
+
         return new TextSite
         {
             File = file,
@@ -1197,17 +1214,82 @@ public sealed partial class XamlScanner
             FontWeight = font.Weight,
             FontStyle = font.Style,
             Language = font.Language,
-            Wrap = textHost is null ? WrapMode.NoWrap : ParseWrap(_styles.Resolve(textHost, "TextWrapping", inheritable: false)),
+            Wrap = wrap,
             // 控制項的字串內容（Button Content="…"）：樣式可能把它畫成大寫（MahApps）
             Casing = textHost is null && local != "Run" ? _styles.CasingOf(el) : TextCasing.AsIs,
             DisplayScales = font.Display ? _options.DisplayScales : null,
-            Trim = textHost is null ? TrimMode.None : ParseTrim(_styles.Resolve(textHost, "TextTrimming", inheritable: false)),
+            Trim = trim,
             Height = HeightOf(textHost ?? el),
             Width = width,
             SuppressedReason = ignore is { Length: > 0 } ? ignore : null,
             // 理由必填：空理由的 ignore 不生效，但要讓使用者知道它沒生效
             InvalidIgnore = ignore is { Length: 0 },
         };
+    }
+
+    /// <summary>
+    /// 控制項的字串內容（Button Content="…"、TabItem Header="…"）由 ContentTemplate／HeaderTemplate 畫的時候，
+    /// 字是範本裡的元素畫的，不是 ContentPresenter 自己產生的那個 TextBlock。
+    ///
+    /// ⚠ 回報 4（ZeroCel）：共用樣式裡的 <c>&lt;DataTemplate&gt;&lt;TextBlock Text="{Binding}" TextWrapping="Wrap"/&gt;</c>
+    ///   讓翻譯變長的按鈕折成兩行，工具卻沒讀 ContentTemplate、照一行量 → 23 筆誤報。LayoutOracle --wrap 的「template:」案例：
+    ///   換行寬度就是控制項內容區的寬度（跟 ContentPresenter 自己的 TextBlock 一樣），水平 StackPanel 裡沒有寬度的照樣不換行。
+    /// 認得的只有「整個範本就是一個 TextBlock、Text 是 {Binding}」：字型、寬度跟沒有範本時一樣，換行與裁切照範本的。
+    /// 其他範本（多了圖示、改了字型、Margin、綁別的屬性）畫出來多寬不知道 —— 以前照「沒有範本」量，錯在看起來裝得下那一邊。
+    /// null = 沒有範本。
+    /// </summary>
+    private (WrapMode Wrap, TrimMode Trim, string? Unknown)? DrawingTemplate(XElement el, string property)
+    {
+        if (property is not ("Content" or "Header") || WidthResolver.ColumnHeaderKey(el.Name.LocalName) is not null) return null;
+        var templateProperty = property + "Template";
+        var local = el.Name.LocalName;
+
+        var selector = _styles.ResolveEx(el, templateProperty + "Selector", inheritable: false);
+        if (selector.Kind != ResolveKind.NotSet)
+            return (WrapMode.NoWrap, TrimMode.None, $"<{local}> draws its {property} through a {templateProperty}Selector");
+
+        var (r, template) = _styles.DataTemplateOf(el, templateProperty);
+        if (r.Kind == ResolveKind.NotSet) return null;
+        if (template is null)
+            return (WrapMode.NoWrap, TrimMode.None, $"<{local}> draws its {property} through a {templateProperty} this tool cannot read ({r.Why})");
+
+        var name = template.Attribute(XName.Get("Key", "http://schemas.microsoft.com/winfx/2006/xaml"))?.Value is { } key ? $"'{key}'" : "an inline DataTemplate";
+        string Unknown(string why) => $"<{local}> draws its {property} through {templateProperty} {name}, {why}";
+
+        var children = template.Elements().Where(e => !e.Name.LocalName.Contains('.', StringComparison.Ordinal)).ToList();
+        if (template.Elements().Any(e => e.Name.LocalName.Contains('.', StringComparison.Ordinal)))
+            return (WrapMode.NoWrap, TrimMode.None, Unknown("which has its own resources or triggers"));
+        if (children is not [{ } text] || text.Name.LocalName != "TextBlock" || !ChromeTable.IsWpf(text) || text.HasElements)
+            return (WrapMode.NoWrap, TrimMode.None, Unknown("which is not a single TextBlock"));
+
+        foreach (var attr in text.Attributes())
+        {
+            if (attr.IsNamespaceDeclaration) continue;
+            var n = attr.Name.LocalName;
+            if (n == "Text")
+            {
+                var v = attr.Value.Replace(" ", "", StringComparison.Ordinal);
+                if (v is not ("{Binding}" or "{Binding.}" or "{BindingPath=.}"))
+                    return (WrapMode.NoWrap, TrimMode.None, Unknown($"whose TextBlock shows Text=\"{attr.Value}\" instead of the {property} itself"));
+                continue;
+            }
+            if (n is "TextWrapping" or "TextTrimming" or "TextAlignment" or "HorizontalAlignment" or "VerticalAlignment"
+                or "Foreground" or "Background" or "Opacity" or "ToolTip" or "Name") continue;
+            return (WrapMode.NoWrap, TrimMode.None, Unknown($"whose TextBlock sets {n}"));
+        }
+        if (text.Attribute("Text") is null)
+            return (WrapMode.NoWrap, TrimMode.None, Unknown("whose TextBlock does not show the " + property));
+
+        // 範本裡的 TextBlock 也吃隱含樣式：會改寬度的設定不能當成沒有
+        foreach (var styled in (ReadOnlySpan<string>)["FontFamily", "FontSize", "FontWeight", "FontStyle", "FontStretch", "Margin", "Padding", "Width", "MinWidth", "MaxWidth"])
+        {
+            if (text.Attribute(styled) is not null) continue;
+            if (_styles.ResolveEx(text, styled, inheritable: false).Kind != ResolveKind.NotSet)
+                return (WrapMode.NoWrap, TrimMode.None, Unknown($"whose TextBlock gets {styled} from a Style"));
+        }
+
+        return (ParseWrap(_styles.Resolve(text, "TextWrapping", inheritable: false)),
+                ParseTrim(_styles.Resolve(text, "TextTrimming", inheritable: false)), null);
     }
 
     /// <summary>

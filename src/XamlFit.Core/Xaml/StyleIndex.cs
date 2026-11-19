@@ -97,6 +97,16 @@ public sealed class StyleIndex
     private readonly Dictionary<string, List<StyleRecord>> _implicit = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<(string File, string Value)>> _values = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<(string File, XElement Template)>> _templates = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<(string File, XElement Template)>> _dataTemplates = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 解析到 DataTemplate 資源的屬性值（ContentTemplate="{StaticResource K}"）回傳成這個前綴 + 編號：
+    /// 呼叫端照舊看到「有設定、是個值」（跟之前的「讀不出來」一樣不會拿它去量），
+    /// <see cref="DataTemplateOf"/> 再把編號換回範本元素 —— 樣式鏈、隱含樣式、同檔優先的規則都不用重寫一份。
+    /// </summary>
+    private const string DataTemplateToken = "\u0001DataTemplate#";
+    private readonly List<XElement> _dataTemplateById = [];
+    private readonly Dictionary<XElement, int> _dataTemplateIds = new(ReferenceEqualityComparer.Instance);
 
     private static readonly XName XKey = XName.Get("Key", "http://schemas.microsoft.com/winfx/2006/xaml");
 
@@ -250,6 +260,13 @@ public sealed class StyleIndex
         if (local == "ControlTemplate")
         {
             if (!_templates.TryGetValue(key, out var list)) _templates[key] = list = [];
+            list.Add((file, new XElement(entry)));
+            return;
+        }
+
+        if (local == "DataTemplate")
+        {
+            if (!_dataTemplates.TryGetValue(key, out var list)) _dataTemplates[key] = list = [];
             list.Add((file, new XElement(entry)));
             return;
         }
@@ -700,9 +717,16 @@ public sealed class StyleIndex
         if (ResourceKeyOf(t) is { } key)
         {
             if (from is not null && FindLexical(from, key) is { } lexical)
-                return ValueOfResource(lexical) is { } v
-                    ? Resolved.Of(v)
+                return ValueOfResource(lexical) is { } v ? Resolved.Of(v)
+                    : lexical.Name.LocalName == "DataTemplate" ? Resolved.Of(TokenOf(lexical))
                     : Resolved.Unknown($"resource '{key}' is not a plain value");
+
+            if (_dataTemplates.TryGetValue(key, out var templates) && !_values.ContainsKey(key))
+            {
+                var found = SameFileFirst(templates, x => x.File, file);
+                return found.Count == 1 ? Resolved.Of(TokenOf(found[0].Template))
+                    : Resolved.Unknown($"DataTemplate '{key}' is defined in {found.Count} places");
+            }
 
             if (!_values.TryGetValue(key, out var all))
                 return Resolved.Unknown($"resource '{key}' has no readable value in the project");
@@ -848,6 +872,43 @@ public sealed class StyleIndex
     {
         if (bases.Count == 0) return TemplateInfo.Default;
         return Combine(bases.Select(b => TemplateInChain(b, file, what, depth + 1, Fork(seen))).ToList(), what);
+    }
+
+    private string TokenOf(XElement template)
+    {
+        if (!_dataTemplateIds.TryGetValue(template, out var id))
+        {
+            id = _dataTemplateById.Count;
+            _dataTemplateById.Add(template);
+            _dataTemplateIds[template] = id;
+        }
+        return DataTemplateToken + id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// 元素的 <paramref name="property"/>（ContentTemplate、HeaderTemplate）生效的 DataTemplate。
+    /// 沒設定：(NotSet, null)。設了、而且找得到唯一的那個範本：(Value, 範本)。
+    /// 設了但讀不出來（綁定、Selector 之外的寫法、同名定義好幾份）：(Unreadable, null)，Why 說明原因。
+    /// 本地的屬性元素（&lt;Button.ContentTemplate&gt;&lt;DataTemplate&gt;…）也認。
+    /// </summary>
+    public (Resolved Result, XElement? Template) DataTemplateOf(XElement element, string property)
+    {
+        var holder = element.Elements().FirstOrDefault(e => e.Name.LocalName == $"{element.Name.LocalName}.{property}");
+        if (holder is not null)
+        {
+            var inline = holder.Elements().ToList();
+            return inline is [{ Name.LocalName: "DataTemplate" } only]
+                ? (Resolved.Of(TokenOf(only)), only)
+                : (Resolved.Unknown($"{property} is set to something other than a DataTemplate"), null);
+        }
+
+        var r = ResolveEx(element, property, inheritable: false);
+        if (!r.IsValue) return (r, null);
+        if (r.Value!.StartsWith(DataTemplateToken, StringComparison.Ordinal)
+            && int.TryParse(r.Value.AsSpan(DataTemplateToken.Length), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var id)
+            && id < _dataTemplateById.Count)
+            return (r, _dataTemplateById[id]);
+        return (Resolved.Unknown($"{property}=\"{r.Value}\" is not a DataTemplate this tool can find"), null);
     }
 
     private XElement? FindTemplate(XElement? from, string key, string file)

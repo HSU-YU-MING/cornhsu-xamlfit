@@ -250,6 +250,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 166 | **鄰居量不到時保留上界，不要整個放棄** | 只扣它確定的 Margin＋MinWidth，結果放在 `AvailableWidth.UpperBoundPx`、狀態照舊是卡住（可解析率不變）。check 連上界都放不下就報（「鏡像檢視」整顆在視窗外），放得下列成沒判 —— 不准說沒問題。副作用：原本被第一個擋路者蓋掉的「在範本裡」現在走得到 | 回報 3 §1 |
 | 167 | **條件相反的 Visibility 不會同時出現** | ZeroCel 批次匯出的「跟隨各 .zcel 內設定」（InverseBoolToVis）與「輸入框 + 1–60」（BoolToVis）綁同一個 UseOverrideFps：照坑 79 兩個都扣，多扣了被藏起來那一個的寬度、報出假的溢出。轉換器的意思靜態看不出來 → 設定檔 `visibilityConverters` 宣告；WPF 內建的 BooleanToVisibilityConverter 認得。ConverterParameter、不同來源、自己有 DataContext 的不算。budget 整排扣的時候也一樣：綁同一個屬性的鄰居分成「true 時出現」與「false 時出現」兩組，只扣寬的那組（0.10.1；複驗時那排第一顆 CheckBox 還是兩組都扣，可用 11.0） | 回報 3 §2、§5 |
 | 168 | **照回報的文字重建重現不出來時，要原始 XAML** | 回報 3 第一次照描述重建，兩處都重現不出來（描述沒提「沒寫 Text 的 TextBlock」與「綁同一個屬性的兩個 Visibility」）；拿到原樣摘錄後兩處都準確重現。回報描述的是使用者看到的樣子，不是工具看到的結構 | 回報 3 |
+| 169 | **控制項的字串內容由 ContentTemplate 畫的時候，字是範本畫的** | ZeroCel 的共用樣板 `<DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap"/>` 讓按鈕折成兩行，工具沒讀 ContentTemplate、照一行量 → 23 筆誤報。換行寬度就是控制項的內容區（跟 ContentPresenter 自己的 TextBlock 一樣），水平 StackPanel 裡沒寬度的照樣不換行（LayoutOracle `--wrap`「template:」7 案）。只認「整個範本就是一個 TextBlock、Text 是 {Binding}」，其他範本（圖示、自己的字型或 Margin、綁別的屬性、Selector、同名好幾份、隱含 TextBlock 樣式改了字型）一律量不到 —— 以前照「沒有範本」量，錯在看起來裝得下那一邊。DataTemplate 資源在 StyleIndex 裡解析成帶編號的記號（`DataTemplateOf` 換回元素），樣式鏈、同檔優先不用重寫 | 回報 4 |
 
 ### 環境層級的坑
 
@@ -268,7 +269,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 883 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 897 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 50 條 CLI 路徑的退出碼

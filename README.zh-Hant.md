@@ -365,11 +365,11 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.10.1
+      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.11.0
         with:
           root: src/MyApp
           resx: src/MyApp/Resources
-          version: 0.10.1
+          version: 0.11.0
           export-fonts: Segoe UI, Microsoft JhengHei UI
 ```
 
@@ -464,6 +464,7 @@ WPF 排水平的 `StackPanel`、`DockPanel` 就是這樣，`check` 報的也是�
 | | 處理方式 |
 |---|---|
 | `ControlTemplate`／`DataTemplate` 的內容 | 寬度由使用端決定；另外計數為「在範本裡」 |
+| 用 `ContentTemplate`／`HeaderTemplate` 畫控制項的字串內容 | 整個範本是一個 `TextBlock Text="{Binding}"` 的照它的換行與裁切；其他範本量不到 |
 | 明寫了 `Width` 的元素放在更窄、而且**算不出來**的容器裡 | 照明寫的 `Width` 算。外層算得出來時取小的那個 |
 | 放在 `Auto` 欄裡的標籤 | 預算給到「它會被切掉」為止；在那之前它會先把 `*` 欄擠小 |
 | 控制項範本或程式碼設定的字型 | 看不到；用 XAML 寫的那個 |
@@ -526,11 +527,11 @@ permissions:
   security-events: write          # 只有 sarif: true 才需要
 steps:
   - uses: actions/checkout@v4
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.10.1
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.11.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.10.1              # 工具的版本也要釘
+      version: 0.11.0              # 工具的版本也要釘
       sarif: true                 # 上傳到 code scanning
 ```
 
