@@ -189,6 +189,8 @@ ScreenToGif 6 個視窗（含編輯器的側邊面板與各種下拉選單）、
 重設樣式的欄標題之後，自家 App 冒出兩筆——是對的：用 WPF 畫出來，水平 `StackPanel` 裡的說明需要 935.7 px、只看得到 563.5；
 欄標題需要的寬度跟工具算的一樣是 126.16 px，欄裡只有 114。第四次——工具看懂「跨過 Auto 欄的子元素」之後，
 ScreenToGif 編輯器裡冒出四個下拉選項——也是對的：「Sum evenly with the remaining frames」需要 214.8 px，WPF 只畫出 122.4。
+ScreenToGif 的第五筆後來也查了，一樣是真的：縮放面板「縮放品質」下拉選單的「Nearest neighbor • Lower quality and faster」
+需要 244.6 px，只畫出 224（把面板內嵌進編輯器視窗，用 WPF 畫出來量的）。
 
 ## 要你告訴它的事
 
@@ -235,7 +237,11 @@ ScreenToGif 編輯器裡冒出四個下拉選項——也是對的：「Sum even
 
   // 快顯（ContextMenu、ToolTip、Popup、子選單）最寬可以到多寬。快顯跟著內容變寬、不裁切，所以不宣告就不檢查；
   // 宣告之後快顯裡的文字拿它當上界（扣掉量到的快顯內距），報告標明上界來自宣告。選單列的項目不受影響：Menu 會換列
-  "popupMaxWidth": 400
+  "popupMaxWidth": 400,
+
+  // 一般視窗的標題照 Windows 11 的標題列檢查（100%～175% 實量；只有這個值）。放不下報 trimmed：Windows 會用刪節號縮短。
+  // 不宣告時標題列成 drawn-by-windows、不檢查
+  "windowTitleBar": "windows11"
 }
 ```
 
@@ -355,11 +361,11 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.8.0
+      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.9.0
         with:
           root: src/MyApp
           resx: src/MyApp/Resources
-          version: 0.8.0
+          version: 0.9.0
           export-fonts: Segoe UI, Microsoft JhengHei UI
 ```
 
@@ -426,7 +432,7 @@ jobs:
 拿兩個公開專案的真實譯文去跑 —— Playnite（38 個語言、9,400 筆量測）與
 ScreenToGif（29 個語言、3,067 筆量測）—— 分別報出 21 個位置上的 133 筆溢出、
 與 15 個位置上的 131 筆。Playnite 的 133 筆全部用 WPF 實際畫出來對照過：130 筆真的被裁、3 筆誤報。
-ScreenToGif 英文的 4 筆是真的（見上面）。沒有譯文的字串也會在每個語言自己的版面裡判：WPF 在那裡顯示英文，旁邊的譯文可能比較寬。
+ScreenToGif 英文的 5 筆是真的（見上面）。沒有譯文的字串也會在每個語言自己的版面裡判：WPF 在那裡顯示英文，旁邊的譯文可能比較寬。
 
 一整排控制項是**照文件順序**分寬度的：寫在前面的先拿到它要的，一段很長的譯文會把後面的擠出視窗。
 WPF 排水平的 `StackPanel`、`DockPanel` 就是這樣，`check` 報的也是這個。
@@ -460,7 +466,7 @@ WPF 排水平的 `StackPanel`、`DockPanel` 就是這樣，`check` 報的也是�
 | 觸發器、視覺狀態、code-behind 套用的樣式 | 不追蹤 |
 | `ToolTip` | 是位置；沒宣告 `popupMaxWidth` 時查不到上界，宣告了就是它減掉 ToolTip 的內距 14。用系統字型 12 畫，不是擁有者的字型（WPF 實測） |
 | 浮水印／提示文字 | 在真的視窗裡量過的才量：MahApps 2.4 的 `TextBox`（寬 − 10）、MaterialDesign 5.3 的 `TextBox`（寬 − 它的 `Padding`）、WPF-UI 4.3 的 `ui:TextBox`（寬 − 21.6）。其他函式庫、控制項、設了 `BorderThickness` 或換了樣式：列出來、量不到 |
-| 一般視窗的 `Title` | 列成 `drawn-by-windows`：Windows 畫在標題列上、放不下時加刪節號，工具沒有建模標題列。不算進可解析率 —— 專案沒有辦法讓它量得到 |
+| 一般視窗的 `Title` | 列成 `drawn-by-windows`、不算進可解析率，除非宣告 `windowTitleBar: "windows11"`。宣告之後照 Windows 11 的標題列檢查：在 100%、125%、150%、175% 與四種視窗寬實量，取最大的損失 —— `SingleBorderWindow` 配 `CanResize`、`CanMinimize`、`CanResizeWithGrip` 是 194 DIP，配 `NoResize` 是 96，`ThreeDBorderWindow` 配 `CanResize` 是 200，`ToolWindow` 是 76（其他組合沒量過）。Windows 11 用 Segoe UI 12 畫標題、不是系統的標題字型，22 句實量跟它的線性寬度差在 1 DIP 以內。中日韓表意文字與全形符號算 1 em；Segoe UI 沒有的其他字量不到，因為 Windows 用它自己的字型連結補。Windows 10 與 200% 沒量過 |
 | 執行期用程式碼合併的資源字典 | 假設每個字典檔都有被合併；定義互相矛盾時那個值就是不知道。ScreenToGif、Playnite 與三個應用程式裡沒有任何位置卡在定義矛盾，所以不打算照 `MergedDictionaries` 走合併圖 |
 | 蒙古文 | 每個字母（或合字對）取匯出時同樣情況下最寬的寬度相加、偏寬（約 2.5%）；匯出時沒遇過的情況量不到；對照過產生的字、Windows 地區設定裡的 32 句與 312 句真實譯文 |
 | 印度系文字（天城、孟加拉、古木基、古吉拉特、奧里亞、坦米爾、泰盧固、卡納達、馬拉雅拉姆、僧伽羅文）、高棉文、緬甸文、藏文 | 各字素叢集相加、偏寬（奧里亞、卡納達文最多 2%、緬甸文產生的字 4.2%、真實緬甸文 0.9%）；對照裡最多偏窄 0.18%，包括印度系文字與高棉文的每個兩子音連寫 |
@@ -514,11 +520,11 @@ permissions:
   security-events: write          # 只有 sarif: true 才需要
 steps:
   - uses: actions/checkout@v4
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.8.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.9.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.8.0              # 工具的版本也要釘
+      version: 0.9.0              # 工具的版本也要釘
       sarif: true                 # 上傳到 code scanning
 ```
 

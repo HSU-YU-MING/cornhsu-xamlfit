@@ -52,6 +52,7 @@ public class ConfigKeysTests
     [InlineData("{ \"displayScales\": [0.1] }", "displayScales")]
     [InlineData("{ \"popupMaxWidth\": 0 }", "popupMaxWidth")]
     [InlineData("{ \"popupMaxWidth\": 99999 }", "popupMaxWidth")]
+    [InlineData("{ \"windowTitleBar\": \"windows10\" }", "windowTitleBar")]
     public void A_bad_value_names_its_field(string json, string field)
     {
         var (_, problems) = Load(json);

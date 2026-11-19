@@ -50,6 +50,9 @@ internal sealed class CommonOptions
     /// <summary>快顯最寬多寬（設定檔 popupMaxWidth／--popup-max-width）。null = 不檢查快顯。</summary>
     public double? PopupMaxWidth { get; set; }
 
+    /// <summary>標題照 Windows 11 實量的標題列檢查（設定檔 windowTitleBar: "windows11"）。</summary>
+    public bool WindowTitleBarWindows11 { get; set; }
+
     /// <summary>CSV 不做公式中和。餵進翻譯平台 API、需要逐位元組相同的原文時用。</summary>
     public bool CsvRaw { get; set; }
     public bool Pseudo { get; set; }
@@ -227,6 +230,7 @@ internal sealed class CommonOptions
         if (!o.WasGiven("--assume-default-theme") && config.AssumeDefaultTheme is { } assume) o.AssumeDefaultTheme = assume;
         if (!o.WasGiven("--assume-window-min-width") && config.AssumeWindowMinWidth is { } minWidth) o.AssumeWindowMinWidth = minWidth;
         if (!o.WasGiven("--popup-max-width") && config.PopupMaxWidth is { } popupMaxWidth) o.PopupMaxWidth = popupMaxWidth;
+        if (config.WindowTitleBar == "windows11") o.WindowTitleBarWindows11 = true;
 
         if (!o.WasGiven("--source-culture") && config.SourceCulture is { } sourceCulture) o.SourceCulture = sourceCulture;
         if (config.ElementLanguage is { } elementLanguage) o.ElementLanguage = elementLanguage;

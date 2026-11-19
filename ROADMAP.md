@@ -53,7 +53,7 @@
    卡在「同名定義互相矛盾」。而 Playnite 在執行期從資料夾載入佈景字典 ——「沒被合併的檔案」不代表沒用到，
    照合併圖把它們丟掉，會把「不知道」變成「沒設定」。有語料證明卡住了再談。
 
-5. **標題列的建模。** 視窗標題的可用寬度 = 視窗寬 − 圖示 − 標題列按鈕，系統的標題字型。
+5. ~~**標題列的建模。**~~ ✅ 0.9.0（宣告 `windowTitleBar: "windows11"` 才開；Windows 10 與 200% 沒量過）。原本的筆記： 視窗標題的可用寬度 = 視窗寬 − 圖示 − 標題列按鈕，系統的標題字型。
    要在各 Windows 版本、縮放、WindowStyle／ResizeMode 組合下實量（DpiProbe 的 DWMWA_CAPTION_BUTTON_BOUNDS）才開。
    2026-11-19 在一台 Windows 11、125% 的機器上量過（PrintWindow 前後兩張比對標題像素）：
    可見寬 = Width − 12.8；標題從可見左緣 29.6 DIP 開始（ToolWindow 8.8）；標題列按鈕 CanResize／CanMinimize 148 DIP、

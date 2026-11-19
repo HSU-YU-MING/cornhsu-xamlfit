@@ -1,0 +1,8 @@
+﻿SingleBorderWindow CanResize         scale 1.75: title starts  29.7 DIP in, buttons 148.0 DIP, title loses at most 190.9 DIP of Width (at Width 800)
+SingleBorderWindow CanMinimize       scale 1.75: title starts  29.7 DIP in, buttons 148.0 DIP, title loses at most 190.9 DIP of Width (at Width 800)
+SingleBorderWindow NoResize          scale 1.75: title starts  29.7 DIP in, buttons  49.7 DIP, title loses at most  93.1 DIP of Width (at Width 400)
+SingleBorderWindow CanResizeWithGrip scale 1.75: title starts  29.7 DIP in, buttons 148.0 DIP, title loses at most 190.9 DIP of Width (at Width 800)
+ThreeDBorderWindow CanResize         scale 1.75: title starts  30.9 DIP in, buttons 148.0 DIP, title loses at most 194.9 DIP of Width (at Width 400)
+ToolWindow         CanResize         scale 1.75: title starts   8.6 DIP in, buttons  49.7 DIP, title loses at most  72.0 DIP of Width (at Width 800)
+caption font check: 'Save Document As' ink 98.3 DIP, '另存新檔設定' ink 70.9 DIP; at 12 DIP: Segoe UI 97.9/70.2; Segoe UI Variable Display 97.8/70.2; Segoe UI Variable Text 98.3/70.2; Microsoft JhengHei UI 104.2/70.5; Microsoft YaHei UI 106.6/71.7; Yu Gothic UI 97.9/70.2
+system caption font (WPF SystemFonts): Microsoft JhengHei UI 12; CaptionHeight 22.2857142857143
