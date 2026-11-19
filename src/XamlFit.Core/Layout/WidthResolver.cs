@@ -705,6 +705,7 @@ public sealed class WidthResolver
         {
             _rowShared = true;
             var passedChild = false;
+            var groups = new Conditional(owner, child);
             foreach (var sibling in LayoutChildren(panel))
             {
                 if (ReferenceEquals(sibling, child)) { passedChild = true; continue; }
@@ -714,27 +715,50 @@ public sealed class WidthResolver
 
                 if (owner._measurer?.DesiredWidth(sibling, depth + 1) is { } w)
                 {
-                    _deductions += w;
+                    _deductions += groups.Add(sibling, w);
                     continue;
                 }
 
-                if (UpperOnly(sibling, $"shares the width of {what} with <{sibling.Name.LocalName}>, whose width is not statically knowable")) continue;
+                if (UpperOnly(sibling, $"shares the width of {what} with <{sibling.Name.LocalName}>, whose width is not statically knowable", groups)) continue;
                 return;
             }
+            _deductions += groups.Widest();
+        }
+
+        /// <summary>
+        /// 同一排裡 Visibility 綁同一個來源的兄弟（見 <see cref="MutuallyExclusive"/>）：「true 時看得見」的一組與「false 時」的一組
+        /// 不會同時出現，整排只扣寬的那一組（回報 3 複驗：批次匯出那一排的 CheckBox 仍把兩組都扣了，可用 11.0、扣了 305）。
+        /// 跟目標同一個來源的兄弟：條件相反的已經跳過，條件相同的跟目標一起出現 → 照扣。
+        /// </summary>
+        private sealed class Conditional(WidthResolver owner, XElement child)
+        {
+            private readonly string? _childSource = owner.VisibleWhen(child)?.Source;
+            private readonly Dictionary<string, (double WhenTrue, double WhenFalse)> _groups = new(StringComparer.Ordinal);
+
+            /// <summary>現在要扣多少（有條件的先記著，最後由 <see cref="Widest"/> 一次扣）。</summary>
+            public double Add(XElement sibling, double width)
+            {
+                if (owner.VisibleWhen(sibling) is not { } c || c.Source == _childSource) return width;
+                var g = _groups.GetValueOrDefault(c.Source);
+                _groups[c.Source] = c.WhenTrue ? (g.WhenTrue + width, g.WhenFalse) : (g.WhenTrue, g.WhenFalse + width);
+                return 0;
+            }
+
+            public double Widest() => _groups.Values.Sum(g => Math.Max(g.WhenTrue, g.WhenFalse));
         }
 
         /// <summary>
         /// 同一排有寬度量不到的兄弟：扣掉它確定的最小寬度、繼續算，結果只是上界（<see cref="AvailableWidth.UpperBoundPx"/>）。
         /// 沒有量測器的時候退回原本的「卡住」。
         /// </summary>
-        private bool UpperOnly(XElement sibling, string why)
+        private bool UpperOnly(XElement sibling, string why, Conditional groups)
         {
             if (owner._measurer is not ElementMeasurer measurer)
             {
                 Block(WidthStatus.Unmeasurable, why);
                 return false;
             }
-            _deductions += measurer.MinimumWidth(sibling);
+            _deductions += groups.Add(sibling, measurer.MinimumWidth(sibling));
             _upperOnly ??= why;
             return true;
         }
@@ -778,6 +802,7 @@ public sealed class WidthResolver
             var childFills = lastFills && ReferenceEquals(child, last);
             var onlyPreceding = owner.Sharing == RowSharing.Preceding || (!childHorizontal && !childFills);
             _rowShared = true;
+            var groups = new Conditional(owner, child);
 
             for (var i = 0; i < children.Count; i++)
             {
@@ -796,13 +821,14 @@ public sealed class WidthResolver
 
                 if (owner._measurer?.DesiredWidth(sibling, depth + 1) is { } w)
                 {
-                    _deductions += w;
+                    _deductions += groups.Add(sibling, w);
                     continue;
                 }
 
-                if (UpperOnly(sibling, $"shares the width of a <DockPanel> with <{sibling.Name.LocalName}>, whose width is not statically knowable")) continue;
+                if (UpperOnly(sibling, $"shares the width of a <DockPanel> with <{sibling.Name.LocalName}>, whose width is not statically knowable", groups)) continue;
                 return;
             }
+            _deductions += groups.Widest();
         }
     }
 
@@ -813,12 +839,13 @@ public sealed class WidthResolver
     internal bool MutuallyExclusive(XElement a, XElement b)
     {
         if (VisibleWhen(a) is not { } va || VisibleWhen(b) is not { } vb) return false;
-        if (a.Attribute("DataContext") is not null || b.Attribute("DataContext") is not null) return false;
         return va.Source == vb.Source && va.WhenTrue != vb.WhenTrue;
     }
 
-    private (string Source, bool WhenTrue)? VisibleWhen(XElement e)
+    /// <summary>元素的 Visibility 綁在哪個來源、true 還是 false 時看得見。自己有 DataContext 的不算（綁的來源不一樣）。</summary>
+    internal (string Source, bool WhenTrue)? VisibleWhen(XElement e)
     {
+        if (e.Attribute("DataContext") is not null) return null;
         var raw = e.Attribute("Visibility")?.Value.Trim();
         if (raw is null || !raw.StartsWith("{Binding", StringComparison.Ordinal) || !raw.EndsWith('}')) return null;
         var body = raw["{Binding".Length..^1].Trim();

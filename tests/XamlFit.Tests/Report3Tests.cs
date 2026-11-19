@@ -57,6 +57,34 @@ public class Report3Tests
     }
 
     [Fact]
+    public void A_whole_row_deducts_only_the_wider_of_two_exclusive_siblings()
+    {
+        // 回報 3 複驗：同一排第一顆的 CheckBox 仍把條件相反的兩個鄰居都扣了（可用 11.0、扣了 305）。
+        // 整排扣法（budget）：probe 之外有 A（20 字 = 100）與 B（10 字 = 50），兩個不會同時出現 → 只扣 100
+        var xaml = $"<Grid {Ns}><StackPanel Orientation=\"Horizontal\" Width=\"300\">" +
+                   "<StackPanel.Resources><BooleanToVisibilityConverter x:Key=\"Show\"/></StackPanel.Resources>" +
+                   "<TextBlock x:Name=\"probe\"/>" +
+                   $"<TextBlock Text=\"{new string('A', 20)}\" Visibility=\"{{Binding UseOverride, Converter={{StaticResource Hide}}}}\"/>" +
+                   $"<TextBlock Text=\"{new string('B', 10)}\" Visibility=\"{{Binding UseOverride, Converter={{StaticResource Show}}}}\"/>" +
+                   "</StackPanel></Grid>";
+        Assert.Equal(150, Resolve(xaml).Px, 3);   // 沒宣告：兩個都扣
+        Assert.Equal(200, Resolve(xaml, visibilityConverters: new Dictionary<string, bool> { ["Hide"] = false }).Px, 3);
+    }
+
+    [Fact]
+    public void Siblings_shown_under_the_same_condition_add_up()
+    {
+        // 兩個都是「true 時看得見」：會一起出現，照加
+        var xaml = $"<Grid {Ns}><StackPanel Orientation=\"Horizontal\" Width=\"300\">" +
+                   "<StackPanel.Resources><BooleanToVisibilityConverter x:Key=\"Show\"/></StackPanel.Resources>" +
+                   "<TextBlock x:Name=\"probe\"/>" +
+                   $"<TextBlock Text=\"{new string('A', 20)}\" Visibility=\"{{Binding UseOverride, Converter={{StaticResource Show}}}}\"/>" +
+                   $"<TextBlock Text=\"{new string('B', 10)}\" Visibility=\"{{Binding UseOverride, Converter={{StaticResource Show}}}}\"/>" +
+                   "</StackPanel></Grid>";
+        Assert.Equal(150, Resolve(xaml).Px, 3);
+    }
+
+    [Fact]
     public void The_same_condition_on_both_is_not_exclusive()
     {
         var xaml = string.Format(System.Globalization.CultureInfo.InvariantCulture, Exclusive, new string('A', 20)).Replace("StaticResource Hide", "StaticResource Show");
