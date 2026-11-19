@@ -179,8 +179,15 @@ public sealed class CheckAnalyzer
             .OrderBy(t => t.Key, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        foreach (var site in scan.Sites)
+        foreach (var original in scan.Sites)
         {
+            var site = original;
+            // 同一排有寬度量不到的兄弟：只知道最多有多寬（AvailableWidth.UpperBoundPx）。
+            // 連上界都放不下就是確定的溢出（回報 3：「鏡像檢視」整顆在視窗外）；放得下不判 —— 不准說「沒問題」
+            var upperOnly = !site.Width.IsMeasurable && site.Width.UpperBoundPx is { } && site.SuppressedReason is null;
+            var upperWhy = site.Width.Reason;
+            if (upperOnly)
+                site = site.WithWidth(site.Width with { Status = WidthStatus.Known, Px = site.Width.UpperBoundPx!.Value });
             if (!BudgetAnalyzer.IsLocalizable(site)) continue;
             if (!site.Width.IsMeasurable)
             {
@@ -256,6 +263,25 @@ public sealed class CheckAnalyzer
                     unreliable[(culture, why)] = unreliable.GetValueOrDefault((culture, why)) + 1;
                     var u = perCulture.GetValueOrDefault(culture);
                     perCulture[culture] = (u.Measured, u.Unreliable + 1);
+                    continue;
+                }
+
+                if (upperOnly)
+                {
+                    var bounded = Judge(site, key, culture, text, layout, null, isPseudo, untranslated);
+                    if (bounded is { Kind: FitKind.Overflow })
+                        findings.Add(bounded with
+                        {
+                            Warning = (bounded.Warning is { } w ? w + "; " : "") +
+                                      $"the real limit is smaller still: it {upperWhy[(upperWhy.IndexOf("shares", StringComparison.Ordinal) is var s and >= 0 ? s : 0)..]}, so only the most it can have is known",
+                        });
+                    else
+                    {
+                        var why2 = "only the most width it can have is known (a control in the same row has a width that is not statically knowable), and the text fits within it";
+                        unreliable[(culture, why2)] = unreliable.GetValueOrDefault((culture, why2)) + 1;
+                        var u = perCulture.GetValueOrDefault(culture);
+                        perCulture[culture] = (u.Measured, u.Unreliable + 1);
+                    }
                     continue;
                 }
 
@@ -614,8 +640,11 @@ public sealed class CheckAnalyzer
             warnings.Add("the limit is the window's MinWidth (assumeWindowMinWidth): the worst case when the window is shrunk, not its initial Width");
         if (site.Width.BoundSource.Contains("popupMaxWidth", StringComparison.Ordinal))
             warnings.Add("the limit is the declared popupMaxWidth, not a bound in the XAML: popups grow with their content");
+        // 視窗標題：每種縮放剩多少，讓使用者拿那個縮放自己驗（回報 3：差 2 px 的標題在 125% 看是完整的）
+        if (site.DrawnBySystem && site.Width.BoundSource.IndexOf("the title has ", StringComparison.Ordinal) is var at and >= 0)
+            warnings.Add("Windows 11 title bar: " + site.Width.BoundSource[(at + "the title has ".Length)..]);
         if (site.Width.AssumedScrollBar)
-            warnings.Add("assumes the vertical scroll bar is visible");
+            warnings.Add("assumes the vertical scroll bar is visible (declare it in hiddenScrollBars if it never appears)");
         if (site.Width.DependsOnNeighbourText)
             warnings.Add("the available width is what the other strings in the same row leave in this language");
         if (kind is FitKind.VerticalClip or FitKind.Reflow)

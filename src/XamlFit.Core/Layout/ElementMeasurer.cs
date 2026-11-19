@@ -327,7 +327,8 @@ public sealed class ElementMeasurer : IElementMeasurer
         if (local is "TextBlock" or "Run")
         {
             if (element.HasElements) return (true, null);   // 內含 Run／Span：行內內容，這裡不解
-            return (true, TextRules.ElementText(element));
+            var own = TextRules.ElementText(element);
+            return own.Length == 0 && FilledByCode(element, prop) ? (true, null) : (true, own);
         }
 
         // 內容用子元素給的控制項（<Button><StackPanel>…</StackPanel></Button>）：不是單純的文字。
@@ -335,9 +336,34 @@ public sealed class ElementMeasurer : IElementMeasurer
         var content = element.Elements().Where(e =>
             !e.Name.LocalName.Contains('.', StringComparison.Ordinal) || e.Name.LocalName.EndsWith(".Content", StringComparison.Ordinal));
         var textContent = string.Concat(element.Nodes().OfType<XText>().Select(t => t.Value));
-        return content.Any() || !string.IsNullOrWhiteSpace(textContent)
+        return content.Any() || !string.IsNullOrWhiteSpace(textContent) || FilledByCode(element, prop)
             ? (true, null)
             : (true, "");
+    }
+
+    /// <summary>
+    /// XAML 裡沒寫字、但有名字的文字元素：字是程式填的（回報 3：ZeroCel 分割檢視的 ZoomText，程式填「25%」）。
+    /// 當成空字串量是 0 寬 —— 旁邊的按鈕就多拿到那麼多空間，「實際大小」明明被切、工具說裝得下。寬度不知道。
+    /// 沒有名字的空元素照舊是空的（程式找不到它）；樣式給了值的不算。
+    /// </summary>
+    private bool FilledByCode(XElement element, string property) =>
+        (element.Attribute(XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml")) is not null || element.Attribute("Name") is not null)
+        && _styles.ResolveEx(element, property, inheritable: false).Kind == ResolveKind.NotSet;
+
+    /// <summary>
+    /// 寬度量不到的元素**至少**佔多寬：MinWidth 加左右 Margin（讀不出來就當 0，WPF 的期望寬度不會小於 0）。
+    /// 給 <see cref="AvailableWidth.UpperBoundPx"/>：同一排有它時，剩下的寬度最多就是扣掉這麼多。
+    /// 綁定的 Visibility 照 DesiredWidth 的規矩當成看得見（坑 79）；寫死 Collapsed 的是 0。
+    /// </summary>
+    internal double MinimumWidth(XElement element)
+    {
+        var visibility = _styles.ResolveEx(element, "Visibility", inheritable: false);
+        if (visibility.IsValue && visibility.Value!.Trim().Equals("Collapsed", StringComparison.OrdinalIgnoreCase)) return 0;
+        if (Sum(element, "Margin") is not { } margin) return 0;
+        double min = 0;
+        var minWidth = _styles.ResolveEx(element, "MinWidth", inheritable: false);
+        if (minWidth.IsValue && double.TryParse(minWidth.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var m) && m > 0) min = m;
+        return Math.Max(0, min + margin);
     }
 
     /// <summary>

@@ -3,6 +3,42 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.10.0] - 2026-11-19
+
+**Upgrading**: a text element that has an `x:Name` and no text in the XAML now has an unknown width
+(its text is filled by code), so sites sharing a row with it are blocked instead of measured: Cornea's
+resolution went from 100% to 98.3%. Some sites that were blocked by such a neighbour are now
+`in-template`, because the walk reaches the template that places them.
+
+### Fixed (report 3, ZeroCel with `assumeWindowMinWidth`)
+
+- **A label filled by code is no longer measured as empty.** ZeroCel's split view docks a `TextBlock
+  x:Name="ZoomText"` with no text to the right of four buttons; code fills it with "25%". Measured as
+  0 px, the buttons had 28 px too many, and "實際大小", clipped on screen, passed.
+- **A site next to an element of unknown width keeps an upper bound.** Only the neighbour's `Margin`
+  and `MinWidth` are deducted. `budget` still counts the site as blocked; `check` reports it when the
+  text does not fit even that ("鏡像檢視", entirely outside the window, is still reported) and lists
+  the rest as not judged instead of passing them.
+- **`budget` no longer says "the siblings before it" for the first control in a row.** It deducts the
+  whole row, so it now says "the other controls in the same row".
+- **A trimmed window title lists the room at each scaling** ("46 at 100%, 48 at 125%…"), so the
+  report can be checked at the scaling it names. ZeroCel's 48 px title fits at 125% and is cut at 100%.
+
+### Added
+
+- **`visibilityConverters`** (config): the bound value that makes each converter show its element,
+  such as `{ "BoolToVis": true, "InverseBoolToVis": false }`. Two elements in the same row bound to
+  the same property through opposite converters are never shown together, so one is not deducted from
+  the other. ZeroCel's batch export lost the width of the hidden one, and a false overflow, to that: "跟隨各 .zcel 內設定" and the box with
+  "1–60，僅整數" share `UseOverrideFps`. WPF's `BooleanToVisibilityConverter` is recognised without
+  an entry; a binding with a `ConverterParameter` or another source is not trusted.
+- The note on a finding that assumes a scroll bar now names `hiddenScrollBars`.
+
+### Checked
+
+- `LayoutOracle`, `--check` and the five themes: unchanged, 0 over-estimates. ScreenToGif, Playnite,
+  QuillNest, Cornea and Kindling report the same findings as 0.9.0.
+
 ## [0.9.0] - 2026-11-19
 
 ### Added

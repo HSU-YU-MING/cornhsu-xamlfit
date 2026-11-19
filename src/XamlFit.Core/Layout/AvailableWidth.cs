@@ -78,4 +78,11 @@ public sealed record AvailableWidth(
 
     /// <summary>算得出來。⚠ Px 可以是 0：同一排前面的兄弟已經佔滿，這個元素被擠到看不見。</summary>
     public bool IsMeasurable => Status == WidthStatus.Known && Px >= 0;
+
+    /// <summary>
+    /// 量不到（Status 不是 Known），但知道**最多**有多寬：同一排有寬度量不到的兄弟，只扣了它確定的最小寬度（Margin、MinWidth）。
+    /// budget 照舊算成卡住；check 拿它判「連這麼多都放不下」—— 那種溢出是確定的（回報 3：「鏡像檢視」整顆在視窗外）。
+    /// 放得下就不判（不准說「沒問題」）。
+    /// </summary>
+    public double? UpperBoundPx { get; init; }
 }
