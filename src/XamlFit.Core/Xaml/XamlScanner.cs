@@ -1454,15 +1454,21 @@ public sealed partial class XamlScanner
     /// GDI 的 hinting 寬度反而寬 7～9 DIP（Windows 11 的標題不是用 GDI 畫的）。
     /// 沒量過的組合（ThreeDBorderWindow 的其他 ResizeMode…）不猜。200% 以上沒量過。
     /// </summary>
-    private static readonly Dictionary<(string Style, string Resize), double> Windows11TitleBar = new()
+    /// 每一組記四種縮放各自的損失（100%、125%、150%、175%），檢查用最大的；報告把四個都寫出來 ——
+    /// 回報 3：ZeroCel 的「分割檢視」在 MinWidth 240 下差 2 px，使用者在 125% 看是完整的（125% 只損失 192），
+    /// 報告只寫 194 的話使用者不知道該拿哪個縮放去驗。
+    /// </summary>
+    private static readonly Dictionary<(string Style, string Resize), double[]> Windows11TitleBar = new()
     {
-        [("SingleBorderWindow", "CanResize")] = 194.0,
-        [("SingleBorderWindow", "CanMinimize")] = 194.0,
-        [("SingleBorderWindow", "CanResizeWithGrip")] = 194.0,
-        [("SingleBorderWindow", "NoResize")] = 96.0,
-        [("ThreeDBorderWindow", "CanResize")] = 200.0,
-        [("ToolWindow", "CanResize")] = 76.0,
+        [("SingleBorderWindow", "CanResize")] = [194.0, 192.0, 192.0, 190.9],
+        [("SingleBorderWindow", "CanMinimize")] = [194.0, 192.0, 192.0, 190.9],
+        [("SingleBorderWindow", "CanResizeWithGrip")] = [194.0, 192.0, 192.0, 190.9],
+        [("SingleBorderWindow", "NoResize")] = [96.0, 93.6, 94.7, 93.1],
+        [("ThreeDBorderWindow", "CanResize")] = [200.0, 196.8, 194.7, 194.9],
+        [("ToolWindow", "CanResize")] = [76.0, 72.8, 72.7, 72.0],
     };
+
+    private static readonly string[] TitleBarScales = ["100%", "125%", "150%", "175%"];
 
     /// <summary>宣告了 windowTitleBar: "windows11" 時，一般視窗的標題看得見多寬。這個組合沒量過 → null（照舊 drawn-by-windows）。</summary>
     private AvailableWidth? Windows11Title(XElement window, Resolved style)
@@ -1472,7 +1478,8 @@ public sealed partial class XamlScanner
             return AvailableWidth.NotKnown(WidthStatus.Unmeasurable, "WindowStyle or ResizeMode of the window is not statically readable");
         var s = style.IsValue ? style.Value!.Trim().Replace("WindowStyle.", "", StringComparison.Ordinal) : "SingleBorderWindow";
         var r = resize.IsValue ? resize.Value!.Trim().Replace("ResizeMode.", "", StringComparison.Ordinal) : "CanResize";
-        if (!Windows11TitleBar.TryGetValue((s, r), out var lost)) return null;
+        if (!Windows11TitleBar.TryGetValue((s, r), out var byScale)) return null;
+        var lost = byScale.Max();
 
         // SizeToContent 讓 Width 失效（坑 6）；可以縮的視窗在 assumeWindowMinWidth 下用 MinWidth
         var sizeToContent = _styles.ResolveEx(window, "SizeToContent", inheritable: false);
@@ -1495,9 +1502,13 @@ public sealed partial class XamlScanner
             w = min;
             source = $"MinWidth={min:G} (assumeWindowMinWidth)";
         }
+        // 每個縮放各剩多少：使用者可以拿報告寫的那個縮放自己驗（回報 3）
+        var perScale = string.Join(", ", byScale.Select((l, i) =>
+            string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{Math.Max(0, w - l):0.#} at {TitleBarScales[i]}")));
         return new AvailableWidth(WidthStatus.Known, Math.Max(0, w - lost),
-            $"{source} minus the Windows 11 title bar ({lost:G} DIP for {s}, {r})", WidthResolver.LineOf(window), true,
-            "window title (windowTitleBar: windows11)");
+            string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"{source} minus the Windows 11 title bar ({s}, {r}); the title has {perScale}, and the narrowest is used"),
+            WidthResolver.LineOf(window), true, "window title (windowTitleBar: windows11)");
     }
 
     /// <summary>Thickness 的左右合計（"5"、"5,2"、"1,2,3,4"）。</summary>

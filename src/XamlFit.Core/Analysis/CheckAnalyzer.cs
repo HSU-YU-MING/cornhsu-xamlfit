@@ -614,8 +614,11 @@ public sealed class CheckAnalyzer
             warnings.Add("the limit is the window's MinWidth (assumeWindowMinWidth): the worst case when the window is shrunk, not its initial Width");
         if (site.Width.BoundSource.Contains("popupMaxWidth", StringComparison.Ordinal))
             warnings.Add("the limit is the declared popupMaxWidth, not a bound in the XAML: popups grow with their content");
+        // 視窗標題：每種縮放剩多少，讓使用者拿那個縮放自己驗（回報 3：差 2 px 的標題在 125% 看是完整的）
+        if (site.DrawnBySystem && site.Width.BoundSource.IndexOf("the title has ", StringComparison.Ordinal) is var at and >= 0)
+            warnings.Add("Windows 11 title bar: " + site.Width.BoundSource[(at + "the title has ".Length)..]);
         if (site.Width.AssumedScrollBar)
-            warnings.Add("assumes the vertical scroll bar is visible");
+            warnings.Add("assumes the vertical scroll bar is visible (declare it in hiddenScrollBars if it never appears)");
         if (site.Width.DependsOnNeighbourText)
             warnings.Add("the available width is what the other strings in the same row leave in this language");
         if (kind is FitKind.VerticalClip or FitKind.Reflow)
