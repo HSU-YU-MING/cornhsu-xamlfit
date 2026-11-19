@@ -40,8 +40,9 @@
 1. ~~**清單控制項的自訂範本**（ListBox／ListView／ItemsControl）~~ ✅ 0.7.0：內距照範本裡的 ItemsPresenter 算，
    捲軸照清單自己的 ScrollViewer.* 設定（LayoutOracle 10 案，0 高估）。TreeView、DataGrid 的範本照舊不讀。
 
-2. **標題放在巢狀控制項裡的範本**（Expander 的標題在 ToggleButton 裡）。
-   現在報「標題跟內容並排」，算不出標題那一側有多寬。
+2. ~~**標題放在巢狀控制項裡的範本**（Expander 的標題在 ToggleButton 裡）~~ ✅ 0.8.0 查證：其實已經算得出來
+   （LayoutOracle 加 3 案全部一致）。真正卡住的是 ExpandDirection 左右 —— 0.8.0 照 WPF 預設範本實量的規則算
+   （那一欄 = max(標題寬, 19) + 2 + 左右 Padding）；專案範本與外部佈景的左右標題照舊量不到。
 
 3. ~~**沒掃描的文字屬性**：`ToolTip`、`Title`、浮水印／提示的附加屬性~~ ✅ 0.7.0：ToolTip（系統字型、popupMaxWidth）、
    浮水印（MahApps／MaterialDesign／WPF-UI 在真的視窗裡量過的組合，其他列出來但量不到）、
@@ -54,6 +55,10 @@
 
 5. **標題列的建模。** 視窗標題的可用寬度 = 視窗寬 − 圖示 − 標題列按鈕，系統的標題字型。
    要在各 Windows 版本、縮放、WindowStyle／ResizeMode 組合下實量（DpiProbe 的 DWMWA_CAPTION_BUTTON_BOUNDS）才開。
+   2026-11-19 在一台 Windows 11、125% 的機器上量過（PrintWindow 前後兩張比對標題像素）：
+   可見寬 = Width − 12.8；標題從可見左緣 29.6 DIP 開始（ToolWindow 8.8）；標題列按鈕 CanResize／CanMinimize 148 DIP、
+   NoResize 與 ToolWindow 49.6；刪節號後的字停在按鈕前 1.6～4 DIP；系統標題字型這台是 Microsoft JhengHei UI 12。
+   按鈕一顆 49.3 DIP、不是名義上的 46：DIP 值跟著縮放變，只量一種縮放的模型可能在別的縮放高估 —— 所以還沒開。
 
 **不打算做的**：`SharedSizeGroup`（欄寬由整個 scope 的其他 Grid 共同決定）、
 Auto 欄裡的跨欄子元素（WPF 的分攤規則複雜，算錯會連帶弄錯星號分配）、
