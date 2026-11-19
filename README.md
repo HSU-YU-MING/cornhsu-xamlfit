@@ -510,11 +510,11 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.11.0
+      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.12.0
         with:
           root: src/MyApp
           resx: src/MyApp/Resources
-          version: 0.11.0
+          version: 0.12.0
           export-fonts: Segoe UI, Microsoft JhengHei UI
 ```
 
@@ -634,8 +634,8 @@ fail a build, because a guess should not block someone's pull request.
 
 | | handling |
 |---|---|
-| `ControlTemplate` / `DataTemplate` contents | width is decided where the template is used; counted separately as "in a template" |
-| A `ContentTemplate` / `HeaderTemplate` that draws a control's string content | a template that is a single `TextBlock Text="{Binding}"` is read (its wrapping and trimming apply); any other template makes the site unmeasurable |
+| `ControlTemplate` / `DataTemplate` contents | width is decided where the template is used; counted separately as "in a template". A `DataTemplate DataType=…` in a window's or control's resources is measured where it is drawn when exactly one bound `ContentControl` / `ContentPresenter` in that scope can draw it |
+| A `ContentTemplate` / `HeaderTemplate` that draws a control's string content | a template that is a single `TextBlock Text="{Binding}"` is read (its wrapping and trimming apply, and fixed font values from the application's implicit `TextBlock` style); any other template makes the site unmeasurable |
 | An element with `Width` inside something narrower *and unresolvable* | the explicit `Width` is taken at face value. When the outer width *is* resolvable, the smaller wins |
 | A label in an `Auto` column | budgeted up to the point where it would be clipped; it will squeeze `*` columns before that |
 | Fonts set by a control's own template or by code | not visible; the site's font is whatever the XAML says |
@@ -708,11 +708,11 @@ permissions:
   security-events: write          # only with sarif: true
 steps:
   - uses: actions/checkout@v4
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.11.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.12.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.11.0              # pin the tool too
+      version: 0.12.0              # pin the tool too
       sarif: true                 # upload to code scanning
 ```
 

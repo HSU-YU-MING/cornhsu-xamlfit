@@ -888,7 +888,42 @@ internal static class Program
         yield return ("template: Button in a horizontal stack", W($"<StackPanel Orientation='Horizontal' Width='300' HorizontalAlignment='Left' VerticalAlignment='Top'><Border Width='50'/><Button {center}/></StackPanel>"));
         yield return ("template: Button Width in a horizontal stack", W($"<StackPanel Orientation='Horizontal' Width='300' HorizontalAlignment='Left' VerticalAlignment='Top'><Border Width='50'/><Button Width='120' {center}/></StackPanel>"));
         yield return ("template: no wrapping (control)", W($"<StackPanel Width='200' HorizontalAlignment='Left'><Button x:Name='probe' ContentTemplate='{{StaticResource Plain}}' Content='{Long}'/></StackPanel>"));
+
+        // 回報 4 複驗：範本裡的 TextBlock 吃隱含的 TextBlock 樣式（ZeroCel 的在 App.xaml，實機證實會套）。
+        // 這裡看視窗自己 Resources 裡的會不會跨過 DataTemplate 套進去
+        const string bigger = "<Style TargetType='TextBlock'><Setter Property='FontSize' Value='20'/></Style>";
+        static string WS(string style, string inner) => $"<Window {Ns} Width='700' Height='400' WindowStyle='None' AllowsTransparency='True'>{res.Replace("<Window.Resources>", "<Window.Resources>" + style)}{inner}</Window>";
+        yield return ("template: window's implicit TextBlock style", WS(bigger, $"<Grid Width='200' HorizontalAlignment='Left' VerticalAlignment='Top'><Button {left}/></Grid>"));
+        yield return ("template: Grid's implicit TextBlock style", WS("", $"<Grid Width='200' HorizontalAlignment='Left' VerticalAlignment='Top'><Grid.Resources>{bigger}</Grid.Resources><Button {left}/></Grid>"));
+        // 「APP:」開頭：樣式放進 Application.Resources（工具那邊寫成 App.xaml），範本與視窗照舊
+        yield return ("template: application's implicit TextBlock style", AppPrefix + bigger + AppSplit + W($"<Grid Width='200' HorizontalAlignment='Left' VerticalAlignment='Top'><Button {left}/></Grid>"));
+        yield return ("template: application style, template in App too", AppPrefix + bigger
+            + "<DataTemplate x:Key='AppWrap'><TextBlock Text='{Binding}' TextWrapping='Wrap'/></DataTemplate>" + AppSplit
+            + W($"<Grid Width='200' HorizontalAlignment='Left' VerticalAlignment='Top'><Button x:Name='probe' ContentTemplate='{{StaticResource AppWrap}}' Content='{Long}'/></Grid>"));
     }
+
+    /// <summary>
+    /// 回報 5（ZeroCel 工作室版）：依型別、沒有 key 的 DataTemplate 由 <c>ContentControl Content="{Binding}"</c> 畫（MVVM 換頁）。
+    /// 範本裡的字照 ContentControl 的格子換行。DataContext 用 Thickness 當「ViewModel」（XAML 建得出來、不是畫面元素）。
+    /// </summary>
+    private static IEnumerable<(string Name, string Xaml)> TypedTemplateWrapCases()
+    {
+        static string W(string templateBody, string inner) =>
+            $"<Window {Ns} Width='700' Height='400' WindowStyle='None' AllowsTransparency='True'>"
+            + "<Window.DataContext><Thickness>1</Thickness></Window.DataContext>"
+            + $"<Window.Resources><DataTemplate DataType='{{x:Type Thickness}}'>{templateBody}</DataTemplate></Window.Resources>{inner}</Window>";
+        var text = $"<TextBlock TextWrapping='Wrap' Text='{Long}'/>";
+        const string cols = "<Grid.ColumnDefinitions><ColumnDefinition Width='150'/><ColumnDefinition/></Grid.ColumnDefinitions>";
+
+        yield return ("typed template: ContentControl in a fixed column", W(text, $"<Grid Width='500' HorizontalAlignment='Left' VerticalAlignment='Top'>{cols}<ContentControl Content='{{Binding}}'/></Grid>"));
+        yield return ("typed template: star column, page Margin", W($"<Grid Margin='20,0'>{text}</Grid>",
+            $"<Grid Width='420' HorizontalAlignment='Left' VerticalAlignment='Top'>{cols}<Border Grid.Column='0'/><ContentControl Grid.Column='1' Content='{{Binding}}'/></Grid>"));
+        yield return ("typed template: vertical ScrollViewer in the page", W($"<ScrollViewer VerticalScrollBarVisibility='Visible'><StackPanel Margin='10'>{text}</StackPanel></ScrollViewer>",
+            $"<Grid Width='300' Height='300' HorizontalAlignment='Left' VerticalAlignment='Top'><ContentControl Content='{{Binding}}'/></Grid>"));
+    }
+
+    private const string AppPrefix = "APP:";
+    private const string AppSplit = "|||";
 
     /// <summary>
     /// --wrap：同一段 XAML 的 probe TextBlock，WPF 實際排成幾行 vs 工具算幾行。
@@ -901,28 +936,42 @@ internal static class Program
         Console.WriteLine(new string('-', 100));
         var bad = 0;
 
-        foreach (var (name, xaml) in WrapCases(wrap: true).Concat(ContentTemplateWrapCases()))
+        foreach (var (name, spec) in WrapCases(wrap: true).Concat(ContentTemplateWrapCases()).Concat(TypedTemplateWrapCases()))
         {
             int wpfLines;
             double wpfWidth;
+            string? appResources = null;
+            var xaml = spec;
+            var added = new List<object>();
+            if (spec.StartsWith(AppPrefix, StringComparison.Ordinal))
+            {
+                var cut = spec.IndexOf(AppSplit, StringComparison.Ordinal);
+                appResources = spec[AppPrefix.Length..cut];
+                xaml = spec[(cut + AppSplit.Length)..];
+                var dict = (ResourceDictionary)XamlReader.Parse($"<ResourceDictionary {Ns}>{appResources}</ResourceDictionary>");
+                foreach (var key in dict.Keys) { Application.Current.Resources[key] = dict[key]; added.Add(key); }
+            }
             var window = (Window)XamlReader.Parse(xaml);
             window.Left = -20000; window.Top = -20000; window.ShowInTaskbar = false; window.ShowActivated = false;
             window.Show();
             window.UpdateLayout();
             // 控制項的 probe（回報 4）：範本產生的 TextBlock 在視覺樹裡，FindName 找不到
-            var named = (FrameworkElement)window.FindName("probe");
-            var probe = named as TextBlock ?? FindText(named, Long)
+            var named = window.FindName("probe") as FrameworkElement;
+            var probe = named as TextBlock ?? FindText((DependencyObject?)named ?? window, Long)
                 ?? throw new InvalidOperationException($"{name}: no TextBlock showing the probe text");
             // ⚠ 不能用 ActualHeight：直接放在視窗裡的 TextBlock 會被拉高到整個視窗。DesiredSize 是文字自己的高度
             wpfLines = (int)Math.Round(probe.DesiredSize.Height / (probe.FontSize * probe.FontFamily.LineSpacing));
             wpfWidth = probe.ActualWidth;
             window.Close();
+            foreach (var key in added) Application.Current.Resources.Remove(key);
 
             var dir = Path.Combine(Path.GetTempPath(), "xamlfit-oracle-wrap-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
             try
             {
                 File.WriteAllText(Path.Combine(dir, "Case.xaml"), xaml);
+                if (appResources is not null)
+                    File.WriteAllText(Path.Combine(dir, "App.xaml"), $"<Application {Ns}><Application.Resources>{appResources}</Application.Resources></Application>");
                 var scan = new XamlScanner(chrome, new ScanOptions { DefaultFontFamily = DefaultFamily, DefaultFontSize = 12 }, fonts).Scan(dir);
                 var site = scan.Sites.FirstOrDefault(s => s.Text == Long);
                 var ours = site is null ? null : CheckAnalyzer.LineCount(site, Long, fonts, DefaultFamily);

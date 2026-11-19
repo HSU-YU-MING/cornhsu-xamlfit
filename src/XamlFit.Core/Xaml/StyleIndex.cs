@@ -541,6 +541,18 @@ public sealed class StyleIndex
     }
 
     /// <summary>
+    /// 只看**應用程式層級**（App.xaml 與資源字典檔）的隱含樣式。DataTemplate 裡不是控制項的元素（TextBlock）
+    /// 找隱含樣式時停在範本的邊界，視窗、Grid 自己 Resources 裡的不會套進去，App 層級的會
+    /// （LayoutOracle --wrap「template: … implicit TextBlock style」：視窗、Grid 的 FontSize=20 沒套、App 的有套）。
+    /// </summary>
+    public Resolved ApplicationImplicitSetter(string targetType, string property, string file)
+    {
+        var setterName = property[(property.LastIndexOf('.') + 1)..];
+        var styles = ImplicitStyles(null, targetType, file);
+        return styles.Count == 0 ? Resolved.NotSet : Agree(styles, s => FromRecord(s, setterName, file, 0));
+    }
+
+    /// <summary>
     /// 那個隱含樣式（含 BasedOn 鏈）有沒有可能換掉範本。範本寫在 <c>&lt;Setter.Value&gt;</c> 裡，
     /// 不在 <see cref="ImplicitSetter"/> 看得到的字串 setter 裡。基底讀不出來也算「可能」。
     /// </summary>

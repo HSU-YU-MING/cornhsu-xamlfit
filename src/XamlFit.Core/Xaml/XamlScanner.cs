@@ -1172,7 +1172,9 @@ public sealed partial class XamlScanner
             : key is not null && _sourceStrings.TryGetValue(key, out var known) ? known : null;
         var localizable = source != TextSource.DataBound && BudgetAnalyzer.HasLetter(sourceText ?? text);
 
-        var font = FontSpec.Read(_styles, el, _defaultFont, _options.DefaultFontSize, _language);
+        var drawn = TextPropertyOf(local) is "Content" or "Header" && !local.EndsWith("TextBlock", StringComparison.Ordinal)
+            ? DrawingTemplate(el, property) : null;
+        var font = FontSpec.Read(_styles, el, _defaultFont, _options.DefaultFontSize, _language, drawn?.Font);
         var width = FinalWidth(el, font, localizable);
 
         // 換行與裁切是 TextBlock 自己的屬性，不會繼承。Run 的換行由它所在的 TextBlock 決定；
@@ -1185,9 +1187,9 @@ public sealed partial class XamlScanner
 
         var wrap = textHost is null ? WrapMode.NoWrap : ParseWrap(_styles.Resolve(textHost, "TextWrapping", inheritable: false));
         var trim = textHost is null ? TrimMode.None : ParseTrim(_styles.Resolve(textHost, "TextTrimming", inheritable: false));
-        if (textHost is null && local != "Run" && DrawingTemplate(el, property) is { } drawn)
+        if (textHost is null && drawn is not null)
         {
-            if (drawn.Unknown is { } why)
+            if (drawn.Value.Unknown is { } why)
             {
                 // 擋路者不立刻放棄：上面根本沒有上界的話，答案仍然是「查不到上界」
                 if (width.Status == WidthStatus.Known)
@@ -1195,8 +1197,8 @@ public sealed partial class XamlScanner
             }
             else
             {
-                wrap = drawn.Wrap;
-                trim = drawn.Trim;
+                wrap = drawn.Value.Wrap;
+                trim = drawn.Value.Trim;
             }
         }
 
@@ -1238,7 +1240,7 @@ public sealed partial class XamlScanner
     /// 其他範本（多了圖示、改了字型、Margin、綁別的屬性）畫出來多寬不知道 —— 以前照「沒有範本」量，錯在看起來裝得下那一邊。
     /// null = 沒有範本。
     /// </summary>
-    private (WrapMode Wrap, TrimMode Trim, string? Unknown)? DrawingTemplate(XElement el, string property)
+    private (WrapMode Wrap, TrimMode Trim, string? Unknown, IReadOnlyDictionary<string, Resolved>? Font)? DrawingTemplate(XElement el, string property)
     {
         if (property is not ("Content" or "Header") || WidthResolver.ColumnHeaderKey(el.Name.LocalName) is not null) return null;
         var templateProperty = property + "Template";
@@ -1246,21 +1248,21 @@ public sealed partial class XamlScanner
 
         var selector = _styles.ResolveEx(el, templateProperty + "Selector", inheritable: false);
         if (selector.Kind != ResolveKind.NotSet)
-            return (WrapMode.NoWrap, TrimMode.None, $"<{local}> draws its {property} through a {templateProperty}Selector");
+            return (WrapMode.NoWrap, TrimMode.None, $"<{local}> draws its {property} through a {templateProperty}Selector", null);
 
         var (r, template) = _styles.DataTemplateOf(el, templateProperty);
         if (r.Kind == ResolveKind.NotSet) return null;
         if (template is null)
-            return (WrapMode.NoWrap, TrimMode.None, $"<{local}> draws its {property} through a {templateProperty} this tool cannot read ({r.Why})");
+            return (WrapMode.NoWrap, TrimMode.None, $"<{local}> draws its {property} through a {templateProperty} this tool cannot read ({r.Why})", null);
 
         var name = template.Attribute(XName.Get("Key", "http://schemas.microsoft.com/winfx/2006/xaml"))?.Value is { } key ? $"'{key}'" : "an inline DataTemplate";
         string Unknown(string why) => $"<{local}> draws its {property} through {templateProperty} {name}, {why}";
 
         var children = template.Elements().Where(e => !e.Name.LocalName.Contains('.', StringComparison.Ordinal)).ToList();
         if (template.Elements().Any(e => e.Name.LocalName.Contains('.', StringComparison.Ordinal)))
-            return (WrapMode.NoWrap, TrimMode.None, Unknown("which has its own resources or triggers"));
+            return (WrapMode.NoWrap, TrimMode.None, Unknown("which has its own resources or triggers"), null);
         if (children is not [{ } text] || text.Name.LocalName != "TextBlock" || !ChromeTable.IsWpf(text) || text.HasElements)
-            return (WrapMode.NoWrap, TrimMode.None, Unknown("which is not a single TextBlock"));
+            return (WrapMode.NoWrap, TrimMode.None, Unknown("which is not a single TextBlock"), null);
 
         foreach (var attr in text.Attributes())
         {
@@ -1270,26 +1272,44 @@ public sealed partial class XamlScanner
             {
                 var v = attr.Value.Replace(" ", "", StringComparison.Ordinal);
                 if (v is not ("{Binding}" or "{Binding.}" or "{BindingPath=.}"))
-                    return (WrapMode.NoWrap, TrimMode.None, Unknown($"whose TextBlock shows Text=\"{attr.Value}\" instead of the {property} itself"));
+                    return (WrapMode.NoWrap, TrimMode.None, Unknown($"whose TextBlock shows Text=\"{attr.Value}\" instead of the {property} itself"), null);
                 continue;
             }
             if (n is "TextWrapping" or "TextTrimming" or "TextAlignment" or "HorizontalAlignment" or "VerticalAlignment"
                 or "Foreground" or "Background" or "Opacity" or "ToolTip" or "Name") continue;
-            return (WrapMode.NoWrap, TrimMode.None, Unknown($"whose TextBlock sets {n}"));
+            return (WrapMode.NoWrap, TrimMode.None, Unknown($"whose TextBlock sets {n}"), null);
         }
         if (text.Attribute("Text") is null)
-            return (WrapMode.NoWrap, TrimMode.None, Unknown("whose TextBlock does not show the " + property));
+            return (WrapMode.NoWrap, TrimMode.None, Unknown("whose TextBlock does not show the " + property), null);
 
-        // 範本裡的 TextBlock 也吃隱含樣式：會改寬度的設定不能當成沒有
-        foreach (var styled in (ReadOnlySpan<string>)["FontFamily", "FontSize", "FontWeight", "FontStyle", "FontStretch", "Margin", "Padding", "Width", "MinWidth", "MaxWidth"])
+        // 範本裡的 TextBlock 也吃隱含樣式，但只有 App 層級的（範本邊界擋住視窗、Grid 的；見 ApplicationImplicitSetter）。
+        // ⚠ 回報 4 複驗：0.11.0 只要有樣式設了字型就擋 —— ZeroCel App.xaml 的全域 TextBlock 樣式寫死 FontFamily="Segoe UI"，
+        //   32 處從量到變成擋住（解析度 −4.2 點）。寫死的字型照它量；讀不出來（綁定、動態資源、互相衝突）才擋。
+        //   Margin、Padding、寬度另外要扣，這裡沒建模 → 擋。
+        var file = el.Document?.Annotation<SourceFile>()?.Path ?? "";
+        Resolved Own(string p) => text.Attribute(p) is { } a
+            ? (a.Value.TrimStart().StartsWith('{') ? Resolved.Unknown($"{p} is set by markup") : Resolved.Of(a.Value))
+            : _styles.ApplicationImplicitSetter("TextBlock", p, file);
+
+        foreach (var styled in (ReadOnlySpan<string>)["Margin", "Padding", "Width", "MinWidth", "MaxWidth"])
+            if (_styles.ApplicationImplicitSetter("TextBlock", styled, file).Kind != ResolveKind.NotSet)
+                return (WrapMode.NoWrap, TrimMode.None, Unknown($"whose TextBlock gets {styled} from the application's implicit TextBlock Style"), null);
+
+        var fontOf = new Dictionary<string, Resolved>(StringComparer.Ordinal);
+        foreach (var p in (ReadOnlySpan<string>)["FontFamily", "FontSize", "FontWeight", "FontStyle", "FontStretch", "TextOptions.TextFormattingMode", "Typography.Kerning"])
         {
-            if (text.Attribute(styled) is not null) continue;
-            if (_styles.ResolveEx(text, styled, inheritable: false).Kind != ResolveKind.NotSet)
-                return (WrapMode.NoWrap, TrimMode.None, Unknown($"whose TextBlock gets {styled} from a Style"));
+            var v = text.Attribute(p) is not null ? Resolved.NotSet : _styles.ApplicationImplicitSetter("TextBlock", p, file);
+            if (v.IsUnreadable)
+                return (WrapMode.NoWrap, TrimMode.None, Unknown($"whose TextBlock gets {p} from the application's implicit TextBlock Style, which is not statically readable ({v.Why})"), null);
+            if (v.IsValue) fontOf[p] = v;
         }
 
-        return (ParseWrap(_styles.Resolve(text, "TextWrapping", inheritable: false)),
-                ParseTrim(_styles.Resolve(text, "TextTrimming", inheritable: false)), null);
+        var wrapping = Own("TextWrapping");
+        var trimming = Own("TextTrimming");
+        if (wrapping.IsUnreadable || trimming.IsUnreadable)
+            return (WrapMode.NoWrap, TrimMode.None, Unknown($"whose TextBlock's TextWrapping or TextTrimming is not statically readable"), null);
+
+        return (ParseWrap(wrapping.Value), ParseTrim(trimming.Value), null, fontOf.Count > 0 ? fontOf : null);
     }
 
     /// <summary>
