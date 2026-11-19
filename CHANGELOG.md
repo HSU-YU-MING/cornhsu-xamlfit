@@ -3,6 +3,55 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - 2026-11-19
+
+**Upgrading**: the action installs the tool into its own folder instead of globally, so it no longer
+fails when the tool is already installed or the action runs twice in a job. `check` and `budget` now
+list tooltips, watermarks and window titles, which were not seen at all before. They add sites but
+no failures unless `popupMaxWidth` is declared or a measured watermark does not fit; a hard-coded
+tooltip, watermark or window title in a project with translations is now a `hard-coded-text` (info).
+The JSON summary gains `drawnByWindowsSites`, and the budget CSV a `drawn-by-windows` status.
+
+### Added
+
+- **`export-fonts` action input** (Windows runners): exports the named families from the runner's own
+  fonts, checks with them and deletes the file before anything is uploaded, so a public repository
+  never commits or publishes numbers derived from Windows fonts. Refused on Linux and together with
+  `metrics`. CI runs it on `windows-latest` against a Segoe UI sample: the runner measured the German
+  "Save" at 83.57 px, the same as a Windows 11 desktop.
+- **Tooltips** (`ToolTip="…"`, or plain text in `<X.ToolTip>`): a site with no width bound unless
+  `popupMaxWidth` is declared, then that minus the tooltip's 14. Measured in WPF: a tooltip, a
+  context menu and its items use the system font at 12, not the owner's font; text inside
+  `<X.ToolTip>` and `<X.ContextMenu>` no longer inherits the window's font.
+- **Watermarks and hints**, where they were measured in real windows (`LayoutOracle --watermark`):
+  MahApps 2.4 `TextBoxHelper.Watermark` on a `TextBox` (box width − 10, `Padding` ignored),
+  MaterialDesign 5.3 `HintAssist.Hint` on a `TextBox` (box width − its `Padding`), WPF-UI 4.3
+  `ui:TextBox PlaceholderText` (box width − 21.6). Other libraries, controls, a set `BorderThickness`
+  or another style are listed and not measurable (HandyControl's plain `TextBox` does not draw
+  `InfoElement.Placeholder` at all).
+- **Window titles**: a standard WPF window's `Title` is a `drawn-by-windows` site. Windows draws
+  it and shortens it with an ellipsis; the title bar is not modelled. It is not counted in the
+  resolution, because no project can make it measurable. `WindowStyle="None"`, `WindowChrome` and
+  third-party windows draw their own titles and are not listed.
+
+### Changed
+
+- **`ListBox`, `ListView` and `ItemsControl` templates** of your own are read instead of given up on:
+  the chrome is what lies between the edge and the template's `ItemsPresenter`, and a list still
+  scrolls the way its `ScrollViewer.*` settings say. A template whose `ScrollViewer` fixes its own
+  bars, or lays items out in an `IsItemsHost` panel, is not measurable. `LayoutOracle` gained ten
+  such cases (0 over-estimates). `TreeView` and `DataGrid` templates are still not read.
+- The action installs the tool with `--tool-path` and strips the CR that Windows' `jq` adds to
+  annotations.
+
+### Checked
+
+- ScreenToGif, Playnite, QuillNest, Cornea and Kindling in `--source-only`: the same findings and the
+  same resolution as 0.6.0.
+- Following `MergedDictionaries` to drop unused dictionaries (on the roadmap) is not done: no site in
+  those five projects was blocked by conflicting definitions, and Playnite loads theme dictionaries
+  from folders at run time, so an unmerged file is not an unused one.
+
 ## [0.6.0] - 2026-11-19
 
 **Upgrading**: `fonts export` without `--family` no longer exports Segoe UI Variable; name it with

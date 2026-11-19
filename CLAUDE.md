@@ -235,6 +235,11 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 151 | **PR 留言截斷要截在整行上** | `head -c 60000` 會把一行切在 code span 中間：收尾的反引號沒了，被切開的那段裡的 `[文字](網址)`、`@帳號` 在留言裡生效（也可能切在 UTF-8 字中間）。每一行都自己關好 code span，所以 `head -c 60000 | sed '$d'` 丟掉最後那半行。XamlContrast 1.8.1 的 action.yml 有同一段 | 提交後的自動安全審查 |
 | 152 | **翻譯完整度只讓會當掉的那一種擋 build** | 漏翻（warn）與寫死的字（info）一升級就會在每個有譯文的專案冒出來；拿它們擋預設的 gate 等於「永遠開火的閘門」。只有 `placeholder-mismatch` 的 fail（譯文的編號超過來源、或大括號不成對 → String.Format 丟例外）擋。看的是整份字串表（程式碼用的字串也是翻譯對象），不是只看 XAML 引用的鍵。來源語言不是組合格式字串（`{name}` 這種）就不比 —— 不知道它怎麼被用 | 設計決定（0.5.0） |
 | 153 | **度量檔不該說出匯出那台機器裝了什麼；Segoe UI Variable 不預設匯出** | `installedFamilies` 原本記整台機器的全部家族，只是為了拆「Segoe UI Variable」這種名字。拆名字只需要匯出的家族與「名稱以它們開頭」的家族（`MetricsFile.RelevantInstalledFamilies`；測試比過兩份清單對每個名字的答案一樣）。Segoe UI Variable 依 Microsoft 字型 FAQ 不授權在 Microsoft 產品之外使用：不帶 `--family` 時跳過並說明。CI 現場產生：GitHub 的 windows-2022／2025 字型齊全、寬度跟桌機一樣，只有 Segoe UI 收的字略少（2022 最少）。授權沒有答案，法務筆記在 `docs/歸檔/`（不進 git） | 設計決定（0.6.0）、探測分支實跑 |
+| 154 | **快顯的字型不從擁有者繼承** | WPF 實測（視窗 Courier New 30）：Button 的 ToolTip、ContextMenu、裡面的 MenuItem 都是系統字型 12（ToolTip／ContextMenu 的預設樣式用 SystemFonts 設了字型，樣式贏過繼承）。之前 `<Button.ToolTip><TextBlock/>` 繼承了視窗字型 —— 有宣告 popupMaxWidth 的專案會量錯。StyleIndex.ResolveEx 走到 `<X.ToolTip>`／`<X.ContextMenu>` 就停（只停 Font*）；字串 ToolTip 的寬 = 文字 + 14（`LayoutOracle --popups`） | PowerShell + PresentationFramework、LayoutOracle --popups |
+| 155 | **浮水印不畫在打字的那塊區域** | `LayoutOracle --watermark`：MahApps 2.4 外框 − 10（打字區 − 14，明寫 Padding 不影響浮水印）、MaterialDesign 5.3 外框 − 明寫 Padding（打字區 − 2）、WPF-UI 4.3 ui:TextBox 外框 − 21.6；HandyControl 3.5 的一般 TextBox 根本不畫 InfoElement.Placeholder。拿佈景量到的 TextBox chrome 去算浮水印是錯的。量過的組合以外一律量不到 | LayoutOracle --watermark |
+| 156 | **清單範本的捲軸不在範本裡算** | ListBox／ListView 範本的 ScrollViewer 跟著清單的 ScrollViewer.*（WPF 把它綁到範本的父層）。TemplateChrome 把複本的捲軸關掉只量內距，捲軸與水平捲動留給 Step 的 ScrollingLists（跟預設範本同一套）；範本的 ScrollViewer 自己寫死捲軸 → 不知道（LayoutOracle「ScrollViewer sets its own H=Auto」WPF 185、清單說 Disabled） | LayoutOracle「ListBox template…」 |
+| 157 | **專案改不了的「量不到」不能進可解析率的分母** | 視窗標題第一版用 Unmeasurable：Cornea 100% → 95.2%、QuillNest −1.9 點，而專案沒有任何辦法讓它量得到 —— 就是永遠開火的閘門。改成新的 WidthStatus.DrawnByWindows，跟 InTemplate 一樣單獨列、不進分母 | 五個專案實跑 |
+| 158 | **路線圖上的規則也要先有語料證明它卡住了** | 「照 MergedDictionaries 走合併圖」排在 0.x 第 4 項；實查五個專案（含 ScreenToGif、Playnite）0 個位置卡在定義矛盾，而 Playnite 在執行期從資料夾載入佈景字典。沒做，理由寫進 ROADMAP | budget CSV 全文搜尋 |
 
 ### 環境層級的坑
 
@@ -243,6 +248,8 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 - **`node -e` 裡不要用 `require(絕對路徑)`** 讀 JSON，Windows 路徑會 `MODULE_NOT_FOUND`。
   用 `fs.readFileSync`。
 - **XML 註解裡不能有連續兩個減號。** 寫 `dotnet run --project …` 在註解裡會讓整份 XAML 解析失敗。
+- **`node -e "…"` 用雙引號時，字串裡的反引號會被 bash 當成命令替換**（`ListBox` 變成空字串，還印一堆 command not found）。
+  寫進文件的文字一律放進用 Write 工具寫的 `.js`。
 - 本機沒有 `jq`（**不要為此下載執行檔**）；CI 有。本機要斷言就用 `node`。
 - 專案裡有 `.claude/worktrees/` 的副本，掃描一定要排除點開頭的目錄，否則重複計算三倍。
 
@@ -251,12 +258,12 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 818 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 852 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 50 條 CLI 路徑的退出碼
 bash scripts/verify-readme-facts.sh          # README 的 Action 範例釘的版本 = CHANGELOG 最新版（--update 重貼）
-dotnet run -c Release --project prototype/LayoutOracle   # 241 案 vs 真的 WPF 視窗（--check 用檢查模式的排法再跑一次；--wrap 比換行的行數；--popups 量快顯的內距）（Windows）；有高估就回 1
+dotnet run -c Release --project prototype/LayoutOracle   # 251 案 vs 真的 WPF 視窗（--check 用檢查模式的排法再跑一次；--wrap 比換行的行數；--popups 量快顯的內距）（Windows）；有高估就回 1
 ```
 
 **來源語言自我檢驗**（沒有腳本，手動跑）：對一個已經出貨的 App 跑

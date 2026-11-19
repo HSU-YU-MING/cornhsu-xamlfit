@@ -80,6 +80,10 @@ Measured out of the box, no configuration, on sixteen projects (fonts exported w
 | PowerToys (WPF parts) | 55 | 6 | 28 | 20 | 17.6% |
 | WinUI-Gallery | — | — | — | — | not WPF |
 
+0.7.0 also lists tooltips, watermarks and window titles (below). The table was measured before that.
+They add sites but no measured or blocked ones, so the resolution is unchanged: ScreenToGif goes
+from 1,277 to 1,555 localizable sites, QuillNest from 685 to 746, still 45.2% and 86.2% in `check`.
+
 Read that table as two groups.
 
 **Applications** range from 45% to 100%. What blocks the rest is concrete and printed:
@@ -371,6 +375,12 @@ template, substitutes `{TemplateBinding Padding}` with what the control actually
 works out the chrome. If the same style exists in several theme files (light and dark), it
 computes each and accepts the answer only when they agree.
 
+That includes `ListBox`, `ListView` and `ItemsControl` (0.7.0): the chrome is whatever lies between
+the control's edge and the template's `ItemsPresenter`, and a `ListBox`/`ListView` still scrolls the way
+its own `ScrollViewer.*` settings say. A template whose `ScrollViewer` fixes its own scroll bars, or that
+lays the items out in an `IsItemsHost` panel, is not measurable. `TreeView` and `DataGrid` templates are not
+read.
+
 ### The default font
 
 WPF's default font is not Segoe UI. It is the *system message font*, and it follows the
@@ -487,11 +497,11 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.6.0
+      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.7.0
         with:
           root: src/MyApp
           resx: src/MyApp/Resources
-          version: 0.6.0
+          version: 0.7.0
           export-fonts: Segoe UI, Microsoft JhengHei UI
 ```
 
@@ -616,8 +626,10 @@ fail a build, because a guess should not block someone's pull request.
 | A label in an `Auto` column | budgeted up to the point where it would be clipped; it will squeeze `*` columns before that |
 | Fonts set by a control's own template or by code | not visible; the site's font is whatever the XAML says |
 | Styles applied by triggers, visual states or code-behind | not followed |
-| Text set through properties not scanned (`ToolTip`, `Title`, watermark/hint attached properties, `Hyperlink`/`Span` content) | not seen at all |
-| Resource dictionaries merged in code at run time | every dictionary file is assumed merged; conflicting definitions make the value unknown |
+| `ToolTip` | a site with no width bound, unless `popupMaxWidth` is declared: then that minus the tooltip's 14. Drawn in the system font at 12, not the owner's font (measured in WPF) |
+| Watermark / hint text | measured where it was checked in real windows: MahApps 2.4 `TextBox` (width − 10), MaterialDesign 5.3 `TextBox` (width − its `Padding`), WPF-UI 4.3 `ui:TextBox` (width − 21.6). Other libraries, controls, a set `BorderThickness` or another style: listed, not measurable |
+| A standard window's `Title` | listed as `drawn-by-windows`: Windows draws it in the title bar and shortens it with an ellipsis, and the title bar is not modelled. Not counted in the resolution, since no project can make it measurable |
+| Resource dictionaries merged in code at run time | every dictionary file is assumed merged; conflicting definitions make the value unknown. In ScreenToGif, Playnite and three applications no site was blocked by a conflict, so following `MergedDictionaries` is not planned |
 | Mongolian | the sum of the widest width each letter or ligature pair took in the same situation at export time, erring wide (about 2.5%); a letter in a situation the export never saw is not measurable; checked against generated words, 32 strings from Windows' locale data and 312 real translations |
 | Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala), Khmer, Myanmar, Tibetan | measured as the sum of grapheme clusters, erring wide (Odia and Kannada by up to 2%, Myanmar's generated words by 4.2%, real Burmese by 0.9%); never more than 0.18% narrow in the comparisons, including every two-consonant join of the Indic scripts and Khmer |
 | `TextFormattingMode="Display"` | measured from the font's hinted widths at every scaling in `displayScales` (variable fonts: rounded linear widths); a pixel size a static font does not list is not measurable |
@@ -680,11 +692,11 @@ permissions:
   security-events: write          # only with sarif: true
 steps:
   - uses: actions/checkout@v4
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.6.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.7.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.6.0              # pin the tool too
+      version: 0.7.0              # pin the tool too
       sarif: true                 # upload to code scanning
 ```
 
