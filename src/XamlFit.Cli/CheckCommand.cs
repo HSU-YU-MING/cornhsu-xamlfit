@@ -136,6 +136,26 @@ internal static class CheckCommand
 
         var result = CheckAnalyzer.Merge(parts);
 
+        // ===== 翻譯完整度（0.5.0）：漏鍵、佔位字對不上、寫死的字 —— 看字串表本身，不量寬度 =====
+        // 只在有譯文時：--source-only 已經把譯文濾掉，--pseudo 本來就沒有譯文
+        if (!opts.Pseudo && !opts.SourceOnly)
+        {
+            var rootFull = Path.GetFullPath(opts.Root);
+            // .resx 的路徑相對於目前目錄（或設定檔），XAML 字串字典的已經是掃描根相對 —— 報告一律寫掃描根相對，跟 XAML 的位置一樣
+            string Relativize(string file)
+            {
+                if (!file.EndsWith(".resx", StringComparison.OrdinalIgnoreCase)) return file;
+                try
+                {
+                    var full = Path.GetFullPath(file);
+                    var rel = Path.GetRelativePath(rootFull, full);
+                    return (rel.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(rel) ? full : rel).Replace('\\', '/');
+                }
+                catch (Exception) { return file.Replace('\\', '/'); }
+            }
+            result = CheckAnalyzer.WithExtra(result, TranslationCompleteness.Analyze(cultures, scan.Sites, Relativize));
+        }
+
         var all = result.Findings;
 
         // ===== baseline =====
@@ -198,7 +218,7 @@ internal static class CheckCommand
         Pipeline.PrintBlindSpots(scan, s.Budget);
 
         // ⚠ 用 baseline 時要說清楚幾筆是新的：實際用在 QuillNest 時，摘要寫著「overflow 2」而退出碼是 0，看起來互相矛盾
-        foreach (var kind in new[] { "overflow", "vertical-clip", "trimmed", "tight", "reflow" })
+        foreach (var kind in new[] { "overflow", "vertical-clip", "trimmed", "tight", "reflow", "placeholder-mismatch", "missing-translation", "hard-coded-text" })
             if (s.Counts.TryGetValue(kind, out var n) && n > 0)
             {
                 var fresh = reported.Count(f => FitFinding.KindSlug(f.Kind) == kind);
@@ -214,13 +234,15 @@ internal static class CheckCommand
             {
                 Console.WriteLine(
                     $"  {FitFinding.SeveritySlug(f.Severity),-4} {FitFinding.KindSlug(f.Kind),-13} " +
-                    $"[{f.Culture}] {CheckDiagnostics.ConsoleSafe(f.Site)}");
+                    $"[{f.Culture}] {CheckDiagnostics.ConsoleSafe(f.Site)}" +
+                    (f.IsFit ? "" : $"  {CheckDiagnostics.ConsoleSafe(f.Key)}"));
                 Console.WriteLine(
                     $"       {Pipeline.Trunc(f.Text, 60)}");
-                Console.WriteLine(
-                    $"       needs {f.ActualPx:F1} px, has {f.LimitPx:F1} px" +
-                    (f.OverflowPx > 0 ? $" — over by {f.OverflowPx:F1} px" : "") +
-                    (f.Warning is not null ? $"  ({f.Warning})" : ""));
+                Console.WriteLine(f.IsFit
+                    ? $"       needs {f.ActualPx:F1} px, has {f.LimitPx:F1} px" +
+                      (f.OverflowPx > 0 ? $" — over by {f.OverflowPx:F1} px" : "") +
+                      (f.Warning is not null ? $"  ({f.Warning})" : "")
+                    : $"       {CheckDiagnostics.ConsoleSafe(f.Warning ?? "")}");
             }
             if (reported.Count > 40) Console.WriteLine($"  … and {reported.Count - 40} more");
         }
@@ -251,6 +273,16 @@ internal static class CheckCommand
         {
             if (!Pipeline.TryWrite(opts.SarifPath, CheckDiagnostics.ToSarif(reported, CommonOptions.ToolVersion()))) return 2;
             Console.WriteLine($"wrote {opts.SarifPath}");
+        }
+
+        if (opts.MdPath is not null)
+        {
+            var notChecked = unmeasuredCultures
+                .GroupBy(u => u.Font, StringComparer.OrdinalIgnoreCase)
+                .Select(g => (string.Join(", ", g.Select(u => u.Cultures)), g.Key))
+                .ToList();
+            if (!Pipeline.TryWrite(opts.MdPath, CheckMarkdown.ToMarkdown(result, reported, exitCode, baselined, scan.ParseErrorFiles, notChecked))) return 2;
+            Console.WriteLine($"wrote {opts.MdPath}");
         }
 
         // MSBuild 的診斷走 stdout，Exec 才逐行抓得到

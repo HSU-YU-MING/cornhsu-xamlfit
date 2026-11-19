@@ -356,10 +356,22 @@ WPF 的候選字型在度量檔裡都畫不出來的字算量不到，報告會�
 
 行數是用真的逐詞換行算的，不是總寬除以行寬。
 
+有譯文時，`check` 也看字串表本身 —— 每一個鍵，不只 XAML 引用到的，因為程式碼裡用的字串也是翻譯對象：
+
+| 字串的情形 | 結果 | 嚴重度 |
+|---|---|---|
+| 來源有 `{0}`，譯文用了來源沒有的編號，或有落單的 `{`／`}` | `placeholder-mismatch` —— `String.Format` 丟 `FormatException` | **fail** |
+| 譯文少了來源有的編號（`{1}`） | `placeholder-mismatch` —— 那個值不見了 | warn |
+| 這個語言沒有這個鍵 | `missing-translation` —— WPF 顯示來源語言的字 | warn |
+| 有譯文的專案裡，直接寫在 XAML 的字 | `hard-coded-text` —— 每個語言都一樣 | info |
+
+預設的 gate（`--fail-on fail`）只擋會當掉的那一種；`--fail-on warn` 連漏翻也擋。來源語言是中性語言的表，沒有的話是 `en-US`／`en`。漏翻指向來源 `.resx` 裡那一行；佔位字對不上指向譯文那一行。`--source-only`、`--pseudo` 不跑。
+
 三件容易算錯、而且對照過 WPF 的事：
 
 - **不會發生的換行。** 在水平 `StackPanel`、Grid 的 `Auto` 欄、`WrapPanel` 裡，WPF 用無限寬去量子元素：
-  `TextWrapping="Wrap"` 沒有作用，文字直接被切掉。這會報成 `overflow`，不是無害的 `reflow`。
+  `TextWrapping="Wrap"` 沒有作用，文字直接被切掉。這會報成 `overflow`，不是無害的 `reflow` ——
+  除非文字本身、或它跟那個面板之間有自己的 `Width`／`MaxWidth`，WPF 會照那個寬度換行。
 - **一整排都是譯文。** 一排按鈕共用寬度，留給其中一個的空間取決於其他幾個**在那個語言**有多寬 ——
   所以每個語言都用自己的字串重新排一次。
 - **快速鍵。** `Button`、`Label`、`CheckBox`、`MenuItem`… 上的 `_Save`，底線不會畫出來；
@@ -442,7 +454,7 @@ WPF 排水平的 `StackPanel`、`DockPanel` 就是這樣，`check` 報的也是�
 
 ## CI 輸出
 
-`--sarif` 寫出 SARIF 2.1.0（GitHub code scanning）。`--msbuild` 在 stdout 印 MSBuild 診斷，
+`--md <path>` 寫出給 PR 留言用的 Markdown 報告（從 repo 來的字一律放在 code span 裡，鍵名或路徑不會變成連結或 @ 提及）。`--sarif` 寫出 SARIF 2.1.0（GitHub code scanning）。`--msbuild` 在 stdout 印 MSBuild 診斷，
 Visual Studio 的錯誤清單就看得到：`XF0001`（擋下的）、`XF0002`（警告）、`XF0003`（結果不可信）。
 
 ### GitHub Action
@@ -450,18 +462,19 @@ Visual Studio 的錯誤清單就看得到：`XF0001`（擋下的）、`XF0002`�
 ```yaml
 permissions:
   contents: read
+  pull-requests: write            # PR 留言用
   security-events: write          # 只有 sarif: true 才需要
 steps:
   - uses: actions/checkout@v4
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.4.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.5.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.4.0              # 工具的版本也要釘
+      version: 0.5.0              # 工具的版本也要釘
       sarif: true                 # 上傳到 code scanning
 ```
 
-Action 會自己裝 .NET 與工具、跑 `xamlfit check`、把每一筆 finding 標在 PR 的那一行上、把 JSON 報告上傳成 workflow artifact、
+Action 會自己裝 .NET 與工具、跑 `xamlfit check`、把每一筆 finding 標在 PR 的那一行上、把 Markdown 報告貼成一則 PR 留言（之後的執行會更新同一則）、把 JSON 與 Markdown 報告上傳成 workflow artifact、
 要的話把 SARIF 上傳到 code scanning，最後才依檢查的退出碼讓 job 紅燈 —— 紅掉的 PR 也看得到完整報告。
 形狀跟 XamlContrast 的 Action 一樣：裝任何東西之前先驗輸入；工具的輸出包在 `::stop-commands::` 裡，因為它印出來的 XAML 與 `.resx` 字串是不可信的輸入。
 
@@ -478,7 +491,8 @@ Action 會自己裝 .NET 與工具、跑 `xamlfit check`、把每一筆 finding 
 | `fail-on` | 設定檔，否則 `fail` | `fail` 或 `warn` |
 | `min-coverage` | 設定檔，否則 60 | 解析度下限，低於它 job exit 3 |
 | `sarif` | `false` | 把 SARIF 上傳到 code scanning（要 `security-events: write`） |
-| `upload-report` | `true` | 把 JSON 報告上傳成 artifact |
+| `comment` | `true` | 把報告貼成 PR 留言（要 `pull-requests: write`；沒有的話留言略過，gate 照常） |
+| `upload-report` | `true` | 把 JSON 與 Markdown 報告上傳成 artifact |
 | `artifact-name` | `xamlfit-report` | artifact 名稱；同一個 run 跑兩次時也是 code scanning 的 category |
 
 路徑放在 `--` 後面傳，資料夾名字長得像旗標也照樣當資料夾掃。

@@ -3,6 +3,36 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.5.0] - 2026-11-19
+
+**Upgrading**: `check` reports three new kinds when there are translations. Only one can fail the
+build with the default gate: a translation whose `{n}` index the source does not have, or with a
+stray brace, which makes `String.Format` throw. Missing translations are `warn` (they block with
+`--fail-on warn`), hard-coded text is `info`. If a baseline should absorb what is already there,
+review the report and run `--write-baseline`. The action now posts a PR comment by default: give
+the job `pull-requests: write`, or set `comment: false`.
+
+### Added
+
+- **Translation completeness** (report 2 follow-up): with translations, `check` looks at every key
+  in the string tables, not only those the XAML refers to. `placeholder-mismatch`: the source is a
+  composite format string and the translation uses an index the source does not have or has an
+  unescaped brace (**fail**: `String.Format` throws `FormatException`), or drops one of the source's
+  indices (warn: that value is not shown). `missing-translation` (warn): the source has the key and
+  a language does not, so WPF shows the source text; it points at the key's line in the source
+  `.resx`. `hard-coded-text` (info): literal text in the XAML of a project that has translations.
+  The source is the neutral table, else `en-US`/`en`; a language split across several files is one
+  table. These findings have no pixel values (the JSON leaves `limitPx`/`actualPx` out), go into
+  SARIF as their own rules (`hard-coded-text` is left out, like `reflow`) and into the baseline
+  like the others. Not run with `--source-only` or `--pseudo`. The demo has one of each.
+- **`--md <path>`**: a Markdown report for a PR comment, with what the tool could not see first
+  (cultures not checked, files that failed to parse, measurements not judged). Every string from
+  the repository is in a code span, so a key, a path or a translation cannot become a link or an
+  @mention.
+- **Action input `comment`** (default `true`): posts the Markdown report as one PR comment and
+  updates it on later runs (same step as the XamlContrast action). The report artifact now holds
+  the Markdown too. The CI `action` job runs the action with this branch's CLI from a local feed.
+
 ## [0.4.0] - 2026-11-19
 
 **Upgrading**: the GitHub Action's inputs changed; the CLI did not. `sarif` is now a switch

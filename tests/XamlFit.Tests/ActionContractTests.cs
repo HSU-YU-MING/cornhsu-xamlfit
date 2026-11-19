@@ -13,7 +13,7 @@ public class ActionContractTests
     private static readonly string[] Inputs =
     [
         "root", "working-directory", "version", "resx", "pseudo", "metrics", "config", "baseline",
-        "fail-on", "min-coverage", "upload-report", "sarif", "artifact-name",
+        "fail-on", "min-coverage", "comment", "upload-report", "sarif", "artifact-name",
     ];
 
     private static string? Read(string relative) =>

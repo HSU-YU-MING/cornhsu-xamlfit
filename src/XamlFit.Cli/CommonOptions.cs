@@ -61,6 +61,9 @@ internal sealed class CommonOptions
     public string? WriteBaselinePath { get; set; }
     public string? ConfigPath { get; set; }
     public string? SarifPath { get; set; }
+
+    /// <summary>--md：Markdown 報告（給 PR 留言用）。</summary>
+    public string? MdPath { get; set; }
     public bool MsBuild { get; set; }
 
     /// <summary>旗標有沒有被明寫。⚠ 設定檔只能補旗標**沒給**的值，不能蓋掉旗標 ——
@@ -73,7 +76,7 @@ internal sealed class CommonOptions
     public static readonly string[] BudgetOnly = ["--csv", "--csv-raw", "--sites"];
 
     /// <summary>只屬於 check 的旗標。</summary>
-    public static readonly string[] CheckOnly = ["--baseline", "--write-baseline", "--pseudo", "--source-only", "--sarif", "--msbuild", "--fail-on"];
+    public static readonly string[] CheckOnly = ["--baseline", "--write-baseline", "--pseudo", "--source-only", "--sarif", "--md", "--msbuild", "--fail-on"];
 
     /// <summary>
     /// 給了別的子指令才有的旗標：回傳錯誤訊息（exit 2）。
@@ -124,6 +127,7 @@ internal sealed class CommonOptions
                 case "--csv-raw": o.CsvRaw = true; break;
                 case "--config": o.ConfigPath = Next(a); break;
                 case "--sarif": o.SarifPath = Next(a); break;
+                case "--md": o.MdPath = Next(a); break;
                 case "--msbuild": o.MsBuild = true; break;
                 case "--assume-default-theme": o.AssumeDefaultTheme = true; break;
                 case "--assume-window-min-width": o.AssumeWindowMinWidth = true; break;

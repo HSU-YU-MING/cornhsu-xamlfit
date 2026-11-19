@@ -7,4 +7,6 @@
   <data name="Ok"><value>OK</value></data>
   <data name="Caption"><value>Optionale Angabe</value></data>
   <data name="Unbounded"><value>Diese Beschriftung hat überhaupt keine Breitenbegrenzung.</value></data>
+  <!-- placeholder-mismatch：{2} 來源沒有，String.Format 照來源的兩個引數呼叫會丟 FormatException。Farewell 刻意不翻（missing-translation） -->
+  <data name="SavedCount"><value>{0} von {2} Dateien gespeichert.</value></data>
 </root>

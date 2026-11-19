@@ -1006,10 +1006,11 @@ public sealed partial class XamlScanner
         foreach (var group in tables.GroupBy(t => t.Culture, StringComparer.OrdinalIgnoreCase))
         {
             var merged = new Dictionary<string, string>(StringComparer.Ordinal);
+            var origins = new Dictionary<string, (string File, int Line)>(StringComparer.Ordinal);
             foreach (var t in group)
                 foreach (var (k, v) in t.Values)
-                    merged.TryAdd(k, v);
-            result.Add(new CultureStrings(group.Key, merged, string.Join(", ", group.Select(t => t.Rel).Take(3))));
+                    if (merged.TryAdd(k, v)) origins[k] = (t.Rel, 0);   // 字串字典讀的時候沒記行號：只指得出檔案
+            result.Add(new CultureStrings(group.Key, merged, string.Join(", ", group.Select(t => t.Rel).Take(3))) { Origins = origins });
         }
         return result;
     }

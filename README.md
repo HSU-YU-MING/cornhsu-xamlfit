@@ -499,11 +499,27 @@ The second form is by far the more common in real WPF applications.
 
 Line counts come from real word wrap, not total width divided by line width.
 
+With translations, `check` also looks at the string tables themselves — every key, not only the ones
+the XAML refers to, because strings used from code are translated too:
+
+| the string | result | severity |
+|---|---|---|
+| the source has `{0}`, the translation uses an index the source does not have, or a stray `{`/`}` | `placeholder-mismatch` — `String.Format` throws `FormatException` | **fail** |
+| the translation drops an index the source has (`{1}`) | `placeholder-mismatch` — that value is not shown | warn |
+| the key has no value in a language | `missing-translation` — WPF shows the source text | warn |
+| text written straight into the XAML, in a project that has translations | `hard-coded-text` — every language shows it | info |
+
+The default gate (`--fail-on fail`) only blocks the one that crashes; `--fail-on warn` blocks missing
+translations too. The source language is the neutral table, else `en-US`/`en`. A missing key points
+at its line in the source `.resx`; a placeholder mismatch at its line in the translation. Not run
+with `--source-only` or `--pseudo`.
+
 Three things that are easy to get wrong and are checked against WPF:
 
 - **Wrapping that cannot happen.** Inside a horizontal `StackPanel`, an `Auto` grid column or a
   `WrapPanel`, WPF measures the child with unlimited width: `TextWrapping="Wrap"` does nothing
-  and the text is cut. That is reported as `overflow`, not as harmless `reflow`.
+  and the text is cut. That is reported as `overflow`, not as harmless `reflow` — unless the text
+  or something between it and that panel has its own `Width`/`MaxWidth`, which WPF wraps at.
 - **Rows of translated strings.** A row of buttons shares its width. What is left for one
   depends on how wide the others are *in that language* — so each culture is laid out again
   with its own strings.
@@ -599,7 +615,9 @@ silent skip: the run exits 2 and names it.
 xamlfit check ./src --resx ./Resources --sarif fit.sarif --msbuild
 ```
 
-`--sarif` writes SARIF 2.1.0 for GitHub code scanning. `--msbuild` prints MSBuild diagnostics
+`--md <path>` writes a Markdown report for a PR comment (everything taken from the repository is
+in code spans, so a key or a path cannot turn into a link or an @mention). `--sarif` writes SARIF
+2.1.0 for GitHub code scanning. `--msbuild` prints MSBuild diagnostics
 on stdout, so a build that runs the tool via `Exec` surfaces them in the Visual Studio Error
 List: `XF0001` for gated findings, `XF0002` for warnings, `XF0003` when the result is not
 trustworthy.
@@ -609,19 +627,21 @@ trustworthy.
 ```yaml
 permissions:
   contents: read
+  pull-requests: write            # for the PR comment
   security-events: write          # only with sarif: true
 steps:
   - uses: actions/checkout@v4
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.4.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.5.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.4.0              # pin the tool too
+      version: 0.5.0              # pin the tool too
       sarif: true                 # upload to code scanning
 ```
 
 The action installs .NET and the tool, runs `xamlfit check`, annotates every finding on its line
-in the PR, uploads the JSON report as a workflow artifact, uploads SARIF to code scanning when
+in the PR, posts the Markdown report as one PR comment that later runs update, uploads the JSON and
+Markdown reports as a workflow artifact, uploads SARIF to code scanning when
 asked, and only then fails the job on the check's exit code, so a red PR still shows the whole
 report. It has the same shape as the XamlContrast action (inputs are validated before anything
 is installed; the tool's output is wrapped in `::stop-commands::`, because the XAML and `.resx`
@@ -640,7 +660,8 @@ it prints are untrusted input).
 | `fail-on` | config, else `fail` | `fail` or `warn` |
 | `min-coverage` | config, else 60 | resolution floor; below it the job exits 3 |
 | `sarif` | `false` | upload SARIF to code scanning (needs `security-events: write`) |
-| `upload-report` | `true` | upload the JSON report as an artifact |
+| `comment` | `true` | post the report as a PR comment (needs `pull-requests: write`; without it the comment is skipped, the gate still works) |
+| `upload-report` | `true` | upload the JSON and Markdown reports as an artifact |
 | `artifact-name` | `xamlfit-report` | artifact name, and the code-scanning category when the action runs twice in one run |
 
 The path is passed after `--`, so a folder named like a flag is still scanned as a folder.
