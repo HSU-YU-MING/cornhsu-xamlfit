@@ -510,11 +510,11 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.10.0
+      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.10.1
         with:
           root: src/MyApp
           resx: src/MyApp/Resources
-          version: 0.10.0
+          version: 0.10.1
           export-fonts: Segoe UI, Microsoft JhengHei UI
 ```
 
@@ -707,11 +707,11 @@ permissions:
   security-events: write          # only with sarif: true
 steps:
   - uses: actions/checkout@v4
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.10.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.10.1
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.10.0              # pin the tool too
+      version: 0.10.1              # pin the tool too
       sarif: true                 # upload to code scanning
 ```
 

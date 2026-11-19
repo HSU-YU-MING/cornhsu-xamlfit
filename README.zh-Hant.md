@@ -365,11 +365,11 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.10.0
+      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.10.1
         with:
           root: src/MyApp
           resx: src/MyApp/Resources
-          version: 0.10.0
+          version: 0.10.1
           export-fonts: Segoe UI, Microsoft JhengHei UI
 ```
 
@@ -526,11 +526,11 @@ permissions:
   security-events: write          # 只有 sarif: true 才需要
 steps:
   - uses: actions/checkout@v4
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.10.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.10.1
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.10.0              # 工具的版本也要釘
+      version: 0.10.1              # 工具的版本也要釘
       sarif: true                 # 上傳到 code scanning
 ```
 

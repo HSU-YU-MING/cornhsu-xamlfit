@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.10.1] - 2026-11-19
+
+### Fixed
+
+- **`budget` no longer deducts both of two neighbours that are never shown together.** With
+  `visibilityConverters` declared, `check` already measured each site against only the neighbours
+  that can be on screen with it, but `budget` deducts the whole row, and there both groups were
+  still deducted. Neighbours bound to the same property are now split into a "shown when true" group
+  and a "shown when false" group, and only the wider group is deducted. ZeroCel's batch export: the
+  first CheckBox in the row had 11.0 DIP after a 305 DIP deduction (report 3, re-check on 0.10.0).
+
 ## [0.10.0] - 2026-11-19
 
 **Upgrading**: a text element that has an `x:Name` and no text in the XAML now has an unknown width

@@ -248,7 +248,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 164 | **探針用的副本不能留在語料裡** | 為了讓 CorpusRender 畫 UserControl，把 ResizePanel 內嵌進 Editor 的副本放在語料目錄，下一次掃描就多出 5 筆重複的 finding。副本用完就刪，或放在語料外面 | ScreenToGif 實跑 |
 | 165 | **有名字、沒寫字的文字元素是程式填的** | ZeroCel 分割檢視右邊停靠的 `TextBlock x:Name="ZoomText"`，程式填「25%」。當成空字串量 0 寬 → 旁邊的按鈕多 28 px，「實際大小」實機被切、工具說裝得下。現在寬度不知道（`ElementMeasurer.FilledByCode`）；沒名字的空元素照舊是空的 | 回報 3 §1 |
 | 166 | **鄰居量不到時保留上界，不要整個放棄** | 只扣它確定的 Margin＋MinWidth，結果放在 `AvailableWidth.UpperBoundPx`、狀態照舊是卡住（可解析率不變）。check 連上界都放不下就報（「鏡像檢視」整顆在視窗外），放得下列成沒判 —— 不准說沒問題。副作用：原本被第一個擋路者蓋掉的「在範本裡」現在走得到 | 回報 3 §1 |
-| 167 | **條件相反的 Visibility 不會同時出現** | ZeroCel 批次匯出的「跟隨各 .zcel 內設定」（InverseBoolToVis）與「輸入框 + 1–60」（BoolToVis）綁同一個 UseOverrideFps：照坑 79 兩個都扣，多扣了被藏起來那一個的寬度、報出假的溢出。轉換器的意思靜態看不出來 → 設定檔 `visibilityConverters` 宣告；WPF 內建的 BooleanToVisibilityConverter 認得。ConverterParameter、不同來源、自己有 DataContext 的不算 | 回報 3 §2 |
+| 167 | **條件相反的 Visibility 不會同時出現** | ZeroCel 批次匯出的「跟隨各 .zcel 內設定」（InverseBoolToVis）與「輸入框 + 1–60」（BoolToVis）綁同一個 UseOverrideFps：照坑 79 兩個都扣，多扣了被藏起來那一個的寬度、報出假的溢出。轉換器的意思靜態看不出來 → 設定檔 `visibilityConverters` 宣告；WPF 內建的 BooleanToVisibilityConverter 認得。ConverterParameter、不同來源、自己有 DataContext 的不算。budget 整排扣的時候也一樣：綁同一個屬性的鄰居分成「true 時出現」與「false 時出現」兩組，只扣寬的那組（0.10.1；複驗時那排第一顆 CheckBox 還是兩組都扣，可用 11.0） | 回報 3 §2、§5 |
 | 168 | **照回報的文字重建重現不出來時，要原始 XAML** | 回報 3 第一次照描述重建，兩處都重現不出來（描述沒提「沒寫 Text 的 TextBlock」與「綁同一個屬性的兩個 Visibility」）；拿到原樣摘錄後兩處都準確重現。回報描述的是使用者看到的樣子，不是工具看到的結構 | 回報 3 |
 
 ### 環境層級的坑
@@ -268,7 +268,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 881 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 883 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 50 條 CLI 路徑的退出碼
