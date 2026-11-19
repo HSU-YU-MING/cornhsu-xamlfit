@@ -281,7 +281,10 @@ learned to measure Runs and restyled column headers — it was right: drawn by W
 horizontal `StackPanel` needs 935.7 px and shows 563.5, and a column header needs exactly the
 126.16 px the tool computed in a 114 px slot. The fourth — four drop-down options in ScreenToGif's
 editor, measurable once children spanning an `Auto` column were understood — was right too: WPF
-shows 122.4 px of "Sum evenly with the remaining frames", which needs 214.8.
+shows 122.4 px of "Sum evenly with the remaining frames", which needs 214.8. A fifth in ScreenToGif,
+checked later, is real as well: the scaling-quality drop-down of the resize panel shows 224 px of
+"Nearest neighbor • Lower quality and faster", which needs 244.6 (drawn in WPF with the panel inlined
+into the editor window).
 
 ## What you have to tell it
 
@@ -588,7 +591,7 @@ Three things that are easy to get wrong and are checked against WPF:
 On two public projects with their real translations — Playnite (38 languages, 9,400
 measurements) and ScreenToGif (29 languages, 3,067 measurements) — it reported 133 overflows at
 21 sites and 131 at 15. All 133 in Playnite were checked by drawing the windows in WPF: 130 are
-really clipped, 3 are false alarms. ScreenToGif's 4 in English are real (see above). A string
+really clipped, 3 are false alarms. ScreenToGif's 5 in English are real (see above). A string
 with no translation is judged too, in each language's own layout: WPF shows the English text
 there, next to translated neighbours that may be wider.
 
