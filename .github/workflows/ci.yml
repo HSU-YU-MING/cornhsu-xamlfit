@@ -102,6 +102,63 @@ jobs:
         run: |
           test "$OUTCOME" = failure || { echo "expected fail-on: Warn to be refused, got $OUTCOME"; exit 1; }
 
+      # export-fonts 在 Linux 上沒有字型可匯出：要在裝任何東西之前擋下，不能看起來像跑過
+      - name: export-fonts is refused on Linux
+        id: linuxfonts
+        continue-on-error: true
+        uses: ./
+        with:
+          root: samples/windows-fonts
+          export-fonts: Segoe UI
+          upload-report: false
+      - name: The Linux export-fonts call failed the step
+        env:
+          OUTCOME: ${{ steps.linuxfonts.outcome }}
+        run: |
+          test "$OUTCOME" = failure || { echo "expected export-fonts to be refused on Linux, got $OUTCOME"; exit 1; }
+
+  # 同一個 Action 在 Windows runner 上：Git Bash 的路徑、jq 的 CRLF，以及 export-fonts 用 runner 自己的字型
+  # （README「字型度量與授權」：公開 repo 不 commit 度量檔的做法）。度量檔用完要刪掉、不能進 artifact
+  action-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+      - name: Pack this branch's CLI into a local feed
+        run: |
+          dotnet pack src/XamlFit.Cli/XamlFit.Cli.csproj -c Release -o ci-feed -p:Version=0.0.0-ci
+          printf '<configuration><packageSources><add key="ci" value="ci-feed" /></packageSources></configuration>\n' > nuget.config
+
+      # Save 的德文用 Segoe UI 12 量是 83.6 px，放在 60 寬裡：gate 一定要紅
+      - name: Run the action with the runner's fonts (expects the gate to fail)
+        id: winfonts
+        continue-on-error: true
+        uses: ./
+        with:
+          root: samples/windows-fonts
+          export-fonts: Segoe UI
+          version: 0.0.0-ci
+          artifact-name: xamlfit-windows-report
+      - name: The gate failed, the overflow was measured, the metrics are gone
+        env:
+          OUTCOME: ${{ steps.winfonts.outcome }}
+        run: |
+          test "$OUTCOME" = failure || { echo "expected the sample to fail the gate, got $OUTCOME"; exit 1; }
+          r="$RUNNER_TEMP/xamlfit-report.json"
+          test -s "$r" || { echo "no JSON report"; exit 1; }
+          n=$(jq '[.findings[] | select(.kind == "overflow" and .key == "Save" and .culture == "de")] | length' "$r" | tr -d '\r')
+          test "$n" -eq 1 || { echo "expected the German Save to overflow, got $n"; exit 1; }
+          px=$(jq '.findings[] | select(.key == "Save") | .actualPx' "$r" | tr -d '\r')
+          echo "Save [de] needs $px px with the runner's Segoe UI"
+          test ! -e "$RUNNER_TEMP/xamlfit-fonts" || { echo "the exported metrics were not deleted"; exit 1; }
+          test -z "$(git status --porcelain -- samples)" || { echo "the action wrote into the workspace"; git status --porcelain; exit 1; }
+          echo "ok"
+
   # 分析是純算術，不相依 WPF —— 但使用者大多在 Windows 上跑（路徑分隔、大小寫不分的副檔名）。
   windows:
     runs-on: windows-latest

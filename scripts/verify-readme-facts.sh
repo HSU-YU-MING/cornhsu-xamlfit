@@ -29,7 +29,7 @@ for f in README.md README.zh-Hant.md; do
   PIN="$(grep -oE '^[[:space:]]+version: [0-9]+\.[0-9]+\.[0-9]+' "$f" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -u | tr '\n' ' ')"
   # 「在 CI 裡產生度量檔」的範例直接裝工具（--tool-path），版本也要跟著
   TOOL="$(grep -oE 'Cornhsu\.XamlFit --version [0-9]+\.[0-9]+\.[0-9]+' "$f" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+$' | sort -u | tr '\n' ' ')"
-  if [ "$USES" != "cornhsu-xamlfit@v$VER " ] || [ "$PIN" != "$VER " ] || [ "$TOOL" != "$VER " ]; then
+  if [ "$USES" != "cornhsu-xamlfit@v$VER " ] || [ "$PIN" != "$VER " ] || { [ -n "$TOOL" ] && [ "$TOOL" != "$VER " ]; }; then
     echo "FAIL: $f pins [${USES% }] / version [${PIN% }] / tool install [${TOOL% }], but the latest released version in CHANGELOG.md is $VER"
     echo "      (run: bash scripts/verify-readme-facts.sh --update)"
     FAIL=1

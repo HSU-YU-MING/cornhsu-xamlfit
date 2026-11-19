@@ -12,7 +12,7 @@ public class ActionContractTests
 {
     private static readonly string[] Inputs =
     [
-        "root", "working-directory", "version", "resx", "pseudo", "metrics", "config", "baseline",
+        "root", "working-directory", "version", "resx", "pseudo", "metrics", "export-fonts", "config", "baseline",
         "fail-on", "min-coverage", "comment", "upload-report", "sarif", "artifact-name",
     ];
 
@@ -52,6 +52,22 @@ public class ActionContractTests
         Assert.NotEmpty(uses);
         foreach (var u in uses)
             Assert.Matches(@"^[^@]+@[0-9a-f]{40}$", u);
+    }
+
+    [Fact]
+    public void Exported_metrics_are_deleted_and_never_uploaded()
+    {
+        // export-fonts 的整個意義是「從商用字型算出來的數字不進 repo、不上傳」（README「字型度量與授權」）。
+        // 公開 repo 的 artifact 任何人都下載得到：上傳的路徑不能碰到匯出的資料夾，而且 job 結束前一定刪掉
+        if (Read("action.yml") is not { } yaml) return;
+        Assert.Contains("export-fonts needs a Windows runner", yaml);
+        Assert.Contains("rm -rf -- \"$RUNNER_TEMP/xamlfit-fonts\"", yaml);
+        var discard = yaml.IndexOf("- name: Discard the exported metrics", StringComparison.Ordinal);
+        Assert.True(discard > 0);
+        Assert.Contains("if: ${{ always() && inputs.export-fonts != '' }}", yaml[discard..]);
+        Assert.True(discard < yaml.IndexOf("- name: Upload report", StringComparison.Ordinal), "the metrics must be gone before anything is uploaded");
+        foreach (Match m in Regex.Matches(yaml, @"(?:path|sarif_file):[^\n]*(?:\n {10}\S[^\n]*)*"))
+            Assert.DoesNotContain("xamlfit-fonts", m.Value);
     }
 
     [Fact]

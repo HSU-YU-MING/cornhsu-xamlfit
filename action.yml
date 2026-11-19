@@ -34,6 +34,10 @@ inputs:
     description: 'Path to the font metrics file (xamlfit.fonts.json.gz or xamlfit.fonts.json). Omit to use the config file''s metrics, else the file next to root'
     required: false
     default: ''
+  export-fonts:
+    description: 'Windows runners only: comma-separated font families to export from the runner''s own fonts before the check, such as "Segoe UI, Microsoft JhengHei UI". The metrics are used for this check and deleted afterwards, so nothing derived from the fonts is committed or uploaded. Cannot be combined with metrics'
+    required: false
+    default: ''
   config:
     description: 'Path to xamlfit.config.json (default: the file next to root)'
     required: false
@@ -83,6 +87,7 @@ runs:
         XF_RESX: ${{ inputs.resx }}
         XF_PSEUDO: ${{ inputs.pseudo }}
         XF_METRICS: ${{ inputs.metrics }}
+        XF_EXPORT_FONTS: ${{ inputs.export-fonts }}
         XF_CONFIG: ${{ inputs.config }}
         XF_BASELINE: ${{ inputs.baseline }}
         XF_FAIL_ON: ${{ inputs.fail-on }}
@@ -98,9 +103,24 @@ runs:
         refuse() { echo "::error title=XamlFit action::$1"; bad=1; }
         # 帶換行的值一律拒絕：CLI／dotnet 的錯誤訊息會把它原樣印出，換行後的內容落在行首就成了
         # runner 會解析的 workflow command（::error …、::add-mask::）。這些值本來就跑不起來，提早擋不改變行為
-        case "$XF_ROOT$XF_WORKDIR$XF_VERSION$XF_RESX$XF_METRICS$XF_CONFIG$XF_BASELINE$XF_MIN_COVERAGE" in
-          *$'\n'* | *$'\r'*) refuse "root, working-directory, version, resx, metrics, config, baseline and min-coverage must not contain a line break" ;;
+        case "$XF_ROOT$XF_WORKDIR$XF_VERSION$XF_RESX$XF_METRICS$XF_EXPORT_FONTS$XF_CONFIG$XF_BASELINE$XF_MIN_COVERAGE" in
+          *$'\n'* | *$'\r'*) refuse "root, working-directory, version, resx, metrics, export-fonts, config, baseline and min-coverage must not contain a line break" ;;
         esac
+        # export-fonts：字型來自 runner 自己的 Windows（README「字型度量與授權」：公開 repo 不 commit 度量檔的做法）。
+        # Linux／macOS 上沒有那些字型，匯出只會得到空檔、每個位置都量不到 —— 提早擋，不讓它看起來像跑過
+        if [ -n "$XF_EXPORT_FONTS" ]; then
+          [ "$RUNNER_OS" = "Windows" ] || refuse "export-fonts needs a Windows runner (runs-on: windows-latest): the fonts come from the runner's own Windows"
+          [ -z "$XF_METRICS" ] || refuse "metrics and export-fonts cannot be combined: export-fonts makes the metrics file"
+          IFS=',' read -ra fams <<< "$XF_EXPORT_FONTS"
+          n=0
+          for f in "${fams[@]}"; do
+            f="${f#"${f%%[![:space:]]*}"}"; f="${f%"${f##*[![:space:]]}"}"
+            [ -z "$f" ] && continue
+            n=$((n + 1))
+            case "$f" in -*) refuse "export-fonts: a family name must not start with '-'" ;; esac
+          done
+          [ "$n" -gt 0 ] || refuse "export-fonts has no family names (separate them with commas)"
+        fi
         # 以 - 開頭的路徑會被 CLI 當成旗標：root: --version 印版本、exit 0，什麼都沒稽核就綠燈。
         # Run check 另外以 -- 傳 root（雙重保險），這裡先點名擋下
         case "$XF_ROOT" in -*) refuse "root must not start with '-' (write ./-name for such a directory)" ;; esac
@@ -136,13 +156,39 @@ runs:
       env:
         XF_VERSION: ${{ inputs.version }}
       run: |
+        # 0.7.0 起裝進 $RUNNER_TEMP 的專用資料夾，不裝成全域工具：
+        #   - 使用者自己先 `dotnet tool install --global` 過（例如自己匯出字型）時，全域安裝會失敗；
+        #   - 同一個 job 呼叫兩次時，第二次的全域安裝也會失敗（「已經安裝」）；
+        #   - Windows runner 上 $HOME/.dotnet/tools 寫進 GITHUB_PATH 的是 Git Bash 的路徑，不可靠。
+        dir="$RUNNER_TEMP/xamlfit-tool"
+        rm -rf -- "$dir"
         if [ -n "$XF_VERSION" ]; then
-          dotnet tool install --global Cornhsu.XamlFit --version "$XF_VERSION"
+          dotnet tool install --tool-path "$dir" Cornhsu.XamlFit --version "$XF_VERSION"
         else
           # 0.x 沒有「只跟隨一個 major」的承諾可以給：不釘版本就是最新版。README 教使用者釘
-          dotnet tool install --global Cornhsu.XamlFit
+          dotnet tool install --tool-path "$dir" Cornhsu.XamlFit
         fi
-        echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+    # export-fonts：用 runner 自己的字型產生度量檔，只給這一次檢查用，最後一步之前刪掉（不上傳、不留在 workspace）
+    - name: Export the runner's fonts
+      id: fonts
+      if: ${{ inputs.export-fonts != '' }}
+      shell: bash
+      env:
+        XF_EXPORT_FONTS: ${{ inputs.export-fonts }}
+      run: |
+        xf="$RUNNER_TEMP/xamlfit-tool/xamlfit"
+        out="$RUNNER_TEMP/xamlfit-fonts"
+        rm -rf -- "$out" && mkdir -p -- "$out"
+        args=(fonts export)
+        IFS=',' read -ra fams <<< "$XF_EXPORT_FONTS"
+        for f in "${fams[@]}"; do
+          f="${f#"${f%%[![:space:]]*}"}"; f="${f%"${f##*[![:space:]]}"}"
+          [ -n "$f" ] && args+=(--family "$f")
+        done
+        args+=(--out "$out/xamlfit.fonts.json.gz")
+        "$xf" "${args[@]}"
+        echo "metrics=$out/xamlfit.fonts.json.gz" >> "$GITHUB_OUTPUT"
 
     # 先跑、先產報告與註記，最後一步才依結論擋（讓失敗的 PR 也看得到完整輸出）
     - name: Run check
@@ -154,6 +200,7 @@ runs:
         XF_RESX: ${{ inputs.resx }}
         XF_PSEUDO: ${{ inputs.pseudo }}
         XF_METRICS: ${{ inputs.metrics }}
+        XF_EXPORTED: ${{ steps.fonts.outputs.metrics }}
         XF_CONFIG: ${{ inputs.config }}
         XF_BASELINE: ${{ inputs.baseline }}
         XF_FAIL_ON: ${{ inputs.fail-on }}
@@ -161,6 +208,7 @@ runs:
         XF_SARIF: ${{ inputs.sarif }}
       run: |
         set +e
+        [ -n "$XF_EXPORTED" ] && XF_METRICS="$XF_EXPORTED"
         args=(check --json "$RUNNER_TEMP/xamlfit-report.json" --md "$RUNNER_TEMP/xamlfit-report.md")
         [ "$XF_SARIF" = "true" ] && args+=(--sarif "$RUNNER_TEMP/xamlfit.sarif")
         [ -n "$XF_RESX" ]     && args+=(--resx "$XF_RESX")
@@ -177,10 +225,16 @@ runs:
         # 報告會把它們的字串原樣印出 —— 這段期間 runner 不解析任何 workflow command。token 每次隨機（固定的 token 可以被輸出內容提前關掉）
         token=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
         echo "::stop-commands::$token"
-        xamlfit "${args[@]}"
+        "$RUNNER_TEMP/xamlfit-tool/xamlfit" "${args[@]}"
         code=$?
         echo "::$token::"
         echo "exit=$code" >> "$GITHUB_OUTPUT"
+
+    # 匯出的度量檔用完就刪：之後的步驟（包括使用者自己的上傳）都拿不到
+    - name: Discard the exported metrics
+      if: ${{ always() && inputs.export-fonts != '' }}
+      shell: bash
+      run: rm -rf -- "$RUNNER_TEMP/xamlfit-fonts"
 
     # 把檢查報告貼成 PR 留言（同一則反覆更新，不洗版）—— 整段照 XamlContrast 的 action.yml。
     # 行內註記只標在出問題的那一行，PR 上沒有總覽：reviewer 看不到總共幾筆、哪個語言整批沒檢查、解析度多少。
@@ -245,7 +299,8 @@ runs:
           | (if .severity == "fail" then "error" elif .severity == "warn" then "warning" else "notice" end) as $level
           | ("\(.kind) [\(.culture)] \(.key)" + (if .actualPx != null and .limitPx != null then ": needs \(.actualPx) px, has \(.limitPx) px" else "" end) + (if .warning then " (" + .warning + ")" else "" end)) as $msg
           | if $loc then "::\($level) file=\(($root + $loc.file) | prop),line=\($loc.line)::\($msg | esc)" else "::\($level)::\($msg | esc)" end
-        ' "$report" || true
+        ' "$report" | tr -d '\r' || true
+        # tr：Windows 上的 jq 以 CRLF 換行；訊息裡的 \r 上面已經跳脫成 %0D，這裡只會拿掉行尾那個
 
     # SARIF 的路徑是 root 相對 —— 先補上前綴變成 repo 相對，code scanning 才對得上檔案
     - name: Make SARIF paths repo-relative

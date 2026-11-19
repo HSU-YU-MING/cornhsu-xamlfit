@@ -336,29 +336,27 @@ WPF 的候選字型在度量檔裡都畫不出來的字算量不到，報告會�
 Microsoft YaHei UI、Yu Gothic UI、Malgun Gothic、Nirmala UI、Leelawadee UI、Myanmar Text、Mongolian Baiti、Calibri、Tahoma、Arial 等；
 Segoe UI Variable 只有 `windows-2025` 有。匯出三個家族約 30 秒，加 `--hinted` 約 4 分鐘。
 比對過的每個字，寬度都跟 Windows 11 桌機匯出的一樣。機器上的 Segoe UI 收的字略少（`windows-2022` 最少），
-所以桌機量得到的罕用字在那裡可能量不到：會報出來，不會量錯。建議用 `windows-latest`。
-度量檔放在 job 的暫存資料夾，job 結束就消失：
+所以桌機量得到的罕用字在那裡可能量不到：會報出來，不會量錯。建議用 `windows-latest`。[GitHub Action](#github-action) 會替你做：
 
 ```yaml
 jobs:
   fit:
     runs-on: windows-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.6.0
         with:
-          dotnet-version: '10.0.x'
-      - name: XamlFit with this runner's fonts
-        shell: bash
-        run: |
-          dotnet tool install --tool-path "$RUNNER_TEMP/xf" Cornhsu.XamlFit --version 0.6.0
-          "$RUNNER_TEMP/xf/xamlfit" fonts export --family "Segoe UI" --family "Microsoft JhengHei UI" \
-            --out "$RUNNER_TEMP/xamlfit.fonts.json.gz"
-          "$RUNNER_TEMP/xf/xamlfit" check src/MyApp --resx src/MyApp/Resources \
-            --metrics "$RUNNER_TEMP/xamlfit.fonts.json.gz"
+          root: src/MyApp
+          resx: src/MyApp/Resources
+          version: 0.6.0
+          export-fonts: Segoe UI, Microsoft JhengHei UI
 ```
 
-[GitHub Action](#github-action) 是在 Linux 機器上測的，那裡沒有 Windows 字型；在 Windows 機器上請像上面那樣直接跑工具。
+`export-fonts` 用機器自己的字型匯出這些家族、拿它們檢查，並在上傳任何東西之前刪掉檔案。
+只能在 Windows 機器上用（Linux 上會被拒絕），不能跟 `metrics` 一起用。
 
 ## `budget` —— 翻譯之前
 
@@ -525,6 +523,7 @@ Action 會自己裝 .NET 與工具、跑 `xamlfit check`、把每一筆 finding 
 | `version` | 最新版 | 要裝的工具版本；工具還在 0.x，要釘 |
 | `resx` | 設定檔 | 放 `.resx` 譯文的資料夾 |
 | `metrics` | `root` 旁邊 | 字型度量檔 |
+| `export-fonts` | 無 | Windows 機器：用逗號分開的家族，從機器自己的字型匯出給這次檢查用；上傳任何東西之前就刪掉（見[字型度量與授權](#字型度量與授權)） |
 | `config` | `root` 旁邊 | `xamlfit.config.json` |
 | `baseline` | 無 | 棘輪檔：只有新的 finding 會擋 |
 | `pseudo` | `false` | 不用譯文、模擬膨脹（永遠不讓 job 紅） |

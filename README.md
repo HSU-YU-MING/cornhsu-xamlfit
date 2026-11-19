@@ -476,29 +476,28 @@ Segoe UI Variable is on `windows-2025` only. Exporting three families took about
 `--hinted` about 4 minutes. The widths matched a Windows 11 desktop export for every character
 compared. The runners' Segoe UI covers slightly fewer code points (`windows-2022` the fewest), so a
 rare character a desktop export can measure may be unmeasurable there: reported, not measured wrong.
-Prefer `windows-latest`. The metrics live in the job's temporary folder and go away with it:
+Prefer `windows-latest`. The [GitHub Action](#github-action) does it for you:
 
 ```yaml
 jobs:
   fit:
     runs-on: windows-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.6.0
         with:
-          dotnet-version: '10.0.x'
-      - name: XamlFit with this runner's fonts
-        shell: bash
-        run: |
-          dotnet tool install --tool-path "$RUNNER_TEMP/xf" Cornhsu.XamlFit --version 0.6.0
-          "$RUNNER_TEMP/xf/xamlfit" fonts export --family "Segoe UI" --family "Microsoft JhengHei UI" \
-            --out "$RUNNER_TEMP/xamlfit.fonts.json.gz"
-          "$RUNNER_TEMP/xf/xamlfit" check src/MyApp --resx src/MyApp/Resources \
-            --metrics "$RUNNER_TEMP/xamlfit.fonts.json.gz"
+          root: src/MyApp
+          resx: src/MyApp/Resources
+          version: 0.6.0
+          export-fonts: Segoe UI, Microsoft JhengHei UI
 ```
 
-The [GitHub Action](#github-action) is tested on Linux runners, where there are no Windows fonts; on
-a Windows runner run the tool directly as above.
+`export-fonts` exports those families from the runner's fonts, runs the check with them and deletes
+the file before anything is uploaded. It needs a Windows runner (on Linux it is refused) and cannot
+be combined with `metrics`.
 
 ## `budget` — before translation
 
@@ -704,6 +703,7 @@ it prints are untrusted input).
 | `version` | latest | tool version to install; the tool is 0.x, so pin it |
 | `resx` | config file | folder holding the `.resx` translations |
 | `metrics` | next to `root` | font metrics file |
+| `export-fonts` | none | Windows runners: comma-separated families to export from the runner's fonts for this check; deleted before anything is uploaded (see [Font metrics and licensing](#font-metrics-and-licensing)) |
 | `config` | next to `root` | `xamlfit.config.json` |
 | `baseline` | none | ratchet file: only new findings fail |
 | `pseudo` | `false` | simulate expansion instead of real translations (never fails the job) |
