@@ -64,7 +64,9 @@ internal static class Kit
         string? theme = null,
         (string File, string Xaml)[]? dictionaries = null,
         string file = "Page.xaml",
-        double? popupMaxWidth = null)
+        double? popupMaxWidth = null,
+        IReadOnlyDictionary<string, bool>? visibilityConverters = null,
+        RowSharing sharing = RowSharing.WholeRow)
     {
         var doc = XDocument.Parse(xaml, LoadOptions.SetLineInfo | LoadOptions.PreserveWhitespace);   // 跟 XamlScanner 讀檔一樣保留空白
         doc.AddAnnotation(new SourceFile(file));
@@ -80,7 +82,12 @@ internal static class Kit
             ? new ElementMeasurer(Fonts(), styles, table, MonoFamily, MonoSize)
             : null;
 
-        return new WidthResolver(table, styles, m) { PopupMaxWidth = popupMaxWidth }.Resolve(Probe(doc));
+        return new WidthResolver(table, styles, m)
+        {
+            PopupMaxWidth = popupMaxWidth,
+            VisibilityConverters = visibilityConverters ?? new Dictionary<string, bool>(),
+            Sharing = sharing,
+        }.Resolve(Probe(doc));
     }
 
     /// <summary>把片段包在一個沒有欄定義的 Grid 裡（透明容器：不吃寬度、也不提供上界）。</summary>

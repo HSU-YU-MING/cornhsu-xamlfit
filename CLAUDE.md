@@ -246,6 +246,10 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 162 | **Windows 11 的標題不是用系統的標題字型、也不是 GDI 畫的** | WPF 的 SystemFonts.CaptionFontFamily 在繁中 Windows 回報 Microsoft JhengHei UI，標題實際是 Segoe UI（「Save Document As」正黑體 104.2、Segoe UI 97.9、畫出 99.2）。GDI 的 hinting 寬度又寬 7～9 DIP。22 句畫出來的字跟 Segoe UI 12 的線性寬度差在 1 DIP 以內 | prototype/TitleBar |
 | 163 | **量標題列可用寬度用刪節號停的地方** | 一長串 l 的刪節號停在真正右緣前 1.6～4 DIP，當下界剛好保守。四種縮放的損失 100% 最大（194／192／192／190.9）；按鈕 146～148 DIP，不是名義上的 46×3。改縮放是使用者的事：請他切，一種縮放跑一次 titlebar.ps1。⚠ 量到一半縮放被切回去，GetDpiForWindow 會照實回報 —— 看輸出第一行的 scale，不要照自己以為的縮放記 | prototype/TitleBar |
 | 164 | **探針用的副本不能留在語料裡** | 為了讓 CorpusRender 畫 UserControl，把 ResizePanel 內嵌進 Editor 的副本放在語料目錄，下一次掃描就多出 5 筆重複的 finding。副本用完就刪，或放在語料外面 | ScreenToGif 實跑 |
+| 165 | **有名字、沒寫字的文字元素是程式填的** | ZeroCel 分割檢視右邊停靠的 `TextBlock x:Name="ZoomText"`，程式填「25%」。當成空字串量 0 寬 → 旁邊的按鈕多 28 px，「實際大小」實機被切、工具說裝得下。現在寬度不知道（`ElementMeasurer.FilledByCode`）；沒名字的空元素照舊是空的 | 回報 3 §1 |
+| 166 | **鄰居量不到時保留上界，不要整個放棄** | 只扣它確定的 Margin＋MinWidth，結果放在 `AvailableWidth.UpperBoundPx`、狀態照舊是卡住（可解析率不變）。check 連上界都放不下就報（「鏡像檢視」整顆在視窗外），放得下列成沒判 —— 不准說沒問題。副作用：原本被第一個擋路者蓋掉的「在範本裡」現在走得到 | 回報 3 §1 |
+| 167 | **條件相反的 Visibility 不會同時出現** | ZeroCel 批次匯出的「跟隨各 .zcel 內設定」（InverseBoolToVis）與「輸入框 + 1–60」（BoolToVis）綁同一個 UseOverrideFps：照坑 79 兩個都扣，多扣了被藏起來那一個的寬度、報出假的溢出。轉換器的意思靜態看不出來 → 設定檔 `visibilityConverters` 宣告；WPF 內建的 BooleanToVisibilityConverter 認得。ConverterParameter、不同來源、自己有 DataContext 的不算 | 回報 3 §2 |
+| 168 | **照回報的文字重建重現不出來時，要原始 XAML** | 回報 3 第一次照描述重建，兩處都重現不出來（描述沒提「沒寫 Text 的 TextBlock」與「綁同一個屬性的兩個 Visibility」）；拿到原樣摘錄後兩處都準確重現。回報描述的是使用者看到的樣子，不是工具看到的結構 | 回報 3 |
 
 ### 環境層級的坑
 
@@ -264,7 +268,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 872 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 881 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 50 條 CLI 路徑的退出碼

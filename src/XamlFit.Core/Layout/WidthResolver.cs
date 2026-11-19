@@ -88,6 +88,13 @@ public sealed class WidthResolver
     /// </summary>
     public double? PopupMaxWidth { get; init; }
 
+    /// <summary>
+    /// Visibility 轉換器的鍵 → 綁定的值是 true 還是 false 時看得見（設定檔的 visibilityConverters）。
+    /// 同一排裡兩個元素綁同一個屬性、轉換器相反時，兩個不會同時出現（回報 3：ZeroCel 批次匯出的「跟隨各 .zcel 內設定」
+    /// 與「輸入框 + 1–60，僅整數」）—— 算其中一個的寬度時不扣另一個。WPF 內建的 BooleanToVisibilityConverter 不用宣告。
+    /// </summary>
+    public IReadOnlyDictionary<string, bool> VisibilityConverters { get; init; } = new Dictionary<string, bool>();
+
     public WidthResolver(ChromeTable chrome, StyleIndex? styles = null, IElementMeasurer? measurer = null)
     {
         _chrome = chrome;
@@ -190,6 +197,9 @@ public sealed class WidthResolver
         /// 不是「內距比上界還大、我們一定算錯了」。</summary>
         private bool _rowShared;
 
+        /// <summary>同一排有寬度量不到的兄弟：只扣了它的最小寬度，算出來的是上界（見 <see cref="AvailableWidth.UpperBoundPx"/>）。</summary>
+        private string? _upperOnly;
+
         private (double Px, string Source, XElement At, double Deducted)? _best;
         private bool _anchored;                              // 手上有明寫 Width 的候選
         private (WidthStatus Status, string Reason)? _pending;   // 第一個擋路者
@@ -260,13 +270,23 @@ public sealed class WidthResolver
 
         private AvailableWidth Known((double Px, string Source, XElement At, double Deducted) b)
         {
+            if (_upperOnly is { } upperWhy)
+                return Blocked(WidthStatus.Unmeasurable, upperWhy) with
+                {
+                    UpperBoundPx = Math.Max(0, b.Px),
+                    DependsOnNeighbourText = owner.ResourceLookups > _resourceLookupsAtStart,
+                };
+
             if (b.Px <= 0 && !_rowShared)
                 return Blocked(WidthStatus.Unmeasurable,
                     $"insets ({b.Deducted:F1}) exceed the bound ({b.Source})");
 
             if (b.Px <= 0)
                 return new AvailableWidth(WidthStatus.Known, 0, b.Source, LineOf(b.At), _usedChrome,
-                    "the siblings before it in the same row already take all the width")
+                    // budget 扣的是整排（讓後面的也留在畫面裡），check 只扣前面的（回報 3：第一顆前面什麼都沒有，說「前面的」讓人看不懂）
+                    owner.Sharing == RowSharing.Preceding
+                        ? "the controls before it in the same row already take all the width"
+                        : "the other controls in the same row already take all the width (budget keeps the whole row on screen)")
                 {
                     WrapDefeated = true,
                     DependsOnNeighbourText = owner.ResourceLookups > _resourceLookupsAtStart,
@@ -690,6 +710,7 @@ public sealed class WidthResolver
                 if (ReferenceEquals(sibling, child)) { passedChild = true; continue; }
                 if (passedChild && owner.Sharing == RowSharing.Preceding) break;
                 if (!counts(sibling)) continue;
+                if (owner.MutuallyExclusive(sibling, child)) continue;
 
                 if (owner._measurer?.DesiredWidth(sibling, depth + 1) is { } w)
                 {
@@ -697,10 +718,25 @@ public sealed class WidthResolver
                     continue;
                 }
 
-                Block(WidthStatus.Unmeasurable,
-                    $"shares the width of {what} with <{sibling.Name.LocalName}>, whose width is not statically knowable");
+                if (UpperOnly(sibling, $"shares the width of {what} with <{sibling.Name.LocalName}>, whose width is not statically knowable")) continue;
                 return;
             }
+        }
+
+        /// <summary>
+        /// 同一排有寬度量不到的兄弟：扣掉它確定的最小寬度、繼續算，結果只是上界（<see cref="AvailableWidth.UpperBoundPx"/>）。
+        /// 沒有量測器的時候退回原本的「卡住」。
+        /// </summary>
+        private bool UpperOnly(XElement sibling, string why)
+        {
+            if (owner._measurer is not ElementMeasurer measurer)
+            {
+                Block(WidthStatus.Unmeasurable, why);
+                return false;
+            }
+            _deductions += measurer.MinimumWidth(sibling);
+            _upperOnly ??= why;
+            return true;
         }
 
         /// <summary>
@@ -756,6 +792,7 @@ public sealed class WidthResolver
                     return;
                 }
                 if (!siblingHorizontal) continue;
+                if (owner.MutuallyExclusive(sibling, child)) continue;
 
                 if (owner._measurer?.DesiredWidth(sibling, depth + 1) is { } w)
                 {
@@ -763,11 +800,72 @@ public sealed class WidthResolver
                     continue;
                 }
 
-                Block(WidthStatus.Unmeasurable,
-                    $"shares the width of a <DockPanel> with <{sibling.Name.LocalName}>, whose width is not statically knowable");
+                if (UpperOnly(sibling, $"shares the width of a <DockPanel> with <{sibling.Name.LocalName}>, whose width is not statically knowable")) continue;
                 return;
             }
         }
+    }
+
+    /// <summary>
+    /// 兩個元素不會同時看得見：Visibility 綁同一個來源、轉換器的意思相反（宣告在 visibilityConverters，或是 WPF 內建的
+    /// BooleanToVisibilityConverter）。兩邊都沒有自己的 DataContext；有 ConverterParameter 的不算（意思可能被參數改掉）。
+    /// </summary>
+    internal bool MutuallyExclusive(XElement a, XElement b)
+    {
+        if (VisibleWhen(a) is not { } va || VisibleWhen(b) is not { } vb) return false;
+        if (a.Attribute("DataContext") is not null || b.Attribute("DataContext") is not null) return false;
+        return va.Source == vb.Source && va.WhenTrue != vb.WhenTrue;
+    }
+
+    private (string Source, bool WhenTrue)? VisibleWhen(XElement e)
+    {
+        var raw = e.Attribute("Visibility")?.Value.Trim();
+        if (raw is null || !raw.StartsWith("{Binding", StringComparison.Ordinal) || !raw.EndsWith('}')) return null;
+        var body = raw["{Binding".Length..^1].Trim();
+        var parts = new List<string>();
+        var depth = 0; var start = 0;
+        for (var i = 0; i < body.Length; i++)
+        {
+            if (body[i] == '{') depth++;
+            else if (body[i] == '}') depth--;
+            else if (body[i] == ',' && depth == 0) { parts.Add(body[start..i].Trim()); start = i + 1; }
+        }
+        parts.Add(body[start..].Trim());
+
+        string? converter = null;
+        var source = new List<string>();
+        foreach (var part in parts.Where(p => p.Length > 0))
+        {
+            var eq = part.IndexOf('=');
+            var name = eq < 0 ? "Path" : part[..eq].Trim();
+            var value = eq < 0 ? part : part[(eq + 1)..].Trim();
+            switch (name)
+            {
+                case "Converter":
+                    var key = System.Text.RegularExpressions.Regex.Match(value, @"^\{(?:Static|Dynamic)Resource\s+([^}]+)\}$");
+                    if (!key.Success) return null;
+                    converter = key.Groups[1].Value.Trim();
+                    break;
+                case "ConverterParameter" or "ConverterCulture" or "FallbackValue" or "TargetNullValue": return null;
+                case "Mode" or "UpdateSourceTrigger" or "NotifyOnSourceUpdated" or "NotifyOnTargetUpdated" or "IsAsync": break;
+                default: source.Add(name + "=" + value); break;
+            }
+        }
+        if (converter is null) return null;
+        bool? whenTrue = VisibilityConverters.TryGetValue(converter, out var declared) ? declared
+            : IsBuiltinBooleanToVisibility(e, converter) ? true : null;
+        return whenTrue is { } w ? (string.Join(";", source.Order(StringComparer.Ordinal)), w) : null;
+    }
+
+    /// <summary>從這個元素往上找得到的資源裡，這個鍵是不是 WPF 內建的 BooleanToVisibilityConverter（true 時看得見）。</summary>
+    private static bool IsBuiltinBooleanToVisibility(XElement from, string key)
+    {
+        var x = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
+        foreach (var holder in from.AncestorsAndSelf().SelectMany(a => a.Elements()).Where(e => e.Name.LocalName.EndsWith(".Resources", StringComparison.Ordinal)))
+            foreach (var entry in holder.Descendants())
+                if ((string?)entry.Attribute(x + "Key") == key)
+                    return ChromeTable.IsWpf(entry, "BooleanToVisibilityConverter");
+        return false;
     }
 
     private static AvailableWidth Blocked(WidthStatus status, string reason) =>

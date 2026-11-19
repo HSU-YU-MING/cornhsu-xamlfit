@@ -58,7 +58,15 @@ public sealed class TextSite
     /// <summary>宣告的高度（垂直裁切判定要用）。</summary>
     public double? Height { get; init; }
 
-    public required AvailableWidth Width { get; init; }
+    public required AvailableWidth Width { get; set; }
+
+    /// <summary>換一個寬度的複本（check 拿 <see cref="AvailableWidth.UpperBoundPx"/> 當上界判溢出時用）。</summary>
+    internal TextSite WithWidth(AvailableWidth width)
+    {
+        var copy = (TextSite)MemberwiseClone();
+        copy.Width = width;
+        return copy;
+    }
 
     /// <summary>被 ignore 註解壓掉的理由。
     /// ⚠ **理由必填**：沒寫理由的 ignore 是無效的（<see cref="InvalidIgnore"/> 會是 true，

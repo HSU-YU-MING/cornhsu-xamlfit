@@ -179,8 +179,15 @@ public sealed class CheckAnalyzer
             .OrderBy(t => t.Key, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        foreach (var site in scan.Sites)
+        foreach (var original in scan.Sites)
         {
+            var site = original;
+            // 同一排有寬度量不到的兄弟：只知道最多有多寬（AvailableWidth.UpperBoundPx）。
+            // 連上界都放不下就是確定的溢出（回報 3：「鏡像檢視」整顆在視窗外）；放得下不判 —— 不准說「沒問題」
+            var upperOnly = !site.Width.IsMeasurable && site.Width.UpperBoundPx is { } && site.SuppressedReason is null;
+            var upperWhy = site.Width.Reason;
+            if (upperOnly)
+                site = site.WithWidth(site.Width with { Status = WidthStatus.Known, Px = site.Width.UpperBoundPx!.Value });
             if (!BudgetAnalyzer.IsLocalizable(site)) continue;
             if (!site.Width.IsMeasurable)
             {
@@ -256,6 +263,25 @@ public sealed class CheckAnalyzer
                     unreliable[(culture, why)] = unreliable.GetValueOrDefault((culture, why)) + 1;
                     var u = perCulture.GetValueOrDefault(culture);
                     perCulture[culture] = (u.Measured, u.Unreliable + 1);
+                    continue;
+                }
+
+                if (upperOnly)
+                {
+                    var bounded = Judge(site, key, culture, text, layout, null, isPseudo, untranslated);
+                    if (bounded is { Kind: FitKind.Overflow })
+                        findings.Add(bounded with
+                        {
+                            Warning = (bounded.Warning is { } w ? w + "; " : "") +
+                                      $"the real limit is smaller still: it {upperWhy[(upperWhy.IndexOf("shares", StringComparison.Ordinal) is var s and >= 0 ? s : 0)..]}, so only the most it can have is known",
+                        });
+                    else
+                    {
+                        var why2 = "only the most width it can have is known (a control in the same row has a width that is not statically knowable), and the text fits within it";
+                        unreliable[(culture, why2)] = unreliable.GetValueOrDefault((culture, why2)) + 1;
+                        var u = perCulture.GetValueOrDefault(culture);
+                        perCulture[culture] = (u.Measured, u.Unreliable + 1);
+                    }
                     continue;
                 }
 

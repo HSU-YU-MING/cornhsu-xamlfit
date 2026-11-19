@@ -47,6 +47,7 @@ internal static class Pipeline
             AssumeWindowMinWidth = opts.AssumeWindowMinWidth,
             PopupMaxWidth = opts.PopupMaxWidth,
             WindowTitleBarWindows11 = opts.WindowTitleBarWindows11,
+            VisibilityConverters = opts.VisibilityConverters,
         }, fonts);
 
         return new Prepared(chrome, fonts, scanner, scanner.Scan(opts.Root!));

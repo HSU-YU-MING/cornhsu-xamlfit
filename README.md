@@ -343,7 +343,12 @@ them once in `xamlfit.config.json`.
   // Check standard window titles against the Windows 11 title bar, measured at 100–175% (the only
   // value). A title that does not fit is reported as trimmed: Windows shortens it with an ellipsis.
   // Without it, titles are listed as drawn-by-windows and not checked.
-  "windowTitleBar": "windows11"
+  "windowTitleBar": "windows11",
+
+  // What your Visibility converters mean: the bound value that makes the element visible. Two
+  // elements in the same row bound to the same property through opposite converters are never shown
+  // together, so one is not deducted from the other. WPF's BooleanToVisibilityConverter needs no entry.
+  "visibilityConverters": { "BoolToVis": true, "InverseBoolToVis": false }
 }
 ```
 
@@ -505,11 +510,11 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.9.0
+      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.10.0
         with:
           root: src/MyApp
           resx: src/MyApp/Resources
-          version: 0.9.0
+          version: 0.10.0
           export-fonts: Segoe UI, Microsoft JhengHei UI
 ```
 
@@ -636,6 +641,8 @@ fail a build, because a guess should not block someone's pull request.
 | Styles applied by triggers, visual states or code-behind | not followed |
 | `ToolTip` | a site with no width bound, unless `popupMaxWidth` is declared: then that minus the tooltip's 14. Drawn in the system font at 12, not the owner's font (measured in WPF) |
 | Watermark / hint text | measured where it was checked in real windows: MahApps 2.4 `TextBox` (width − 10), MaterialDesign 5.3 `TextBox` (width − its `Padding`), WPF-UI 4.3 `ui:TextBox` (width − 21.6). Other libraries, controls, a set `BorderThickness` or another style: listed, not measurable |
+| A text element with an `x:Name` and no text in the XAML | its text is filled by code, so its width is unknown. A site sharing a row with it gets only an upper bound: it is counted as blocked, and `check` still reports it when the text does not fit even that (the neighbour's `Margin` and `MinWidth` are all that is deducted) |
+| Elements whose `Visibility` is bound | counted as visible when they share a row, which can only make the space look smaller. Declare `visibilityConverters` so that two elements shown under opposite conditions are not deducted from each other |
 | A standard window's `Title` | listed as `drawn-by-windows` and not counted in the resolution, unless `windowTitleBar: "windows11"` is declared. Then it is checked against the Windows 11 title bar, measured at 100%, 125%, 150% and 175% with four window widths, taking the largest loss: 194 DIP for `SingleBorderWindow` with `CanResize`, `CanMinimize` or `CanResizeWithGrip`, 96 with `NoResize`, 200 for `ThreeDBorderWindow` with `CanResize`, 76 for `ToolWindow` (other combinations are not measured). Windows 11 draws titles in Segoe UI 12, not the system caption font, within 1 DIP of its linear widths across 22 strings. CJK ideographs and full-width forms count as 1 em; other characters Segoe UI lacks are not measurable, because Windows fills them with its own font linking. Windows 10 and 200% are not measured |
 | Resource dictionaries merged in code at run time | every dictionary file is assumed merged; conflicting definitions make the value unknown. In ScreenToGif, Playnite and three applications no site was blocked by a conflict, so following `MergedDictionaries` is not planned |
 | Mongolian | the sum of the widest width each letter or ligature pair took in the same situation at export time, erring wide (about 2.5%); a letter in a situation the export never saw is not measurable; checked against generated words, 32 strings from Windows' locale data and 312 real translations |
@@ -700,11 +707,11 @@ permissions:
   security-events: write          # only with sarif: true
 steps:
   - uses: actions/checkout@v4
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.9.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.10.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.9.0              # pin the tool too
+      version: 0.10.0              # pin the tool too
       sarif: true                 # upload to code scanning
 ```
 

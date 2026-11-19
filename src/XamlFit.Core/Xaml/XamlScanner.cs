@@ -54,6 +54,9 @@ public sealed record ScanOptions
 
     /// <summary>標題照 Windows 11 實量的標題列檢查（設定檔的 windowTitleBar: "windows11"）。false = 標題是 drawn-by-windows。</summary>
     public bool WindowTitleBarWindows11 { get; init; }
+
+    /// <summary>Visibility 轉換器的鍵 → 綁定的值是 true 還是 false 時看得見（設定檔的 visibilityConverters；見 <see cref="WidthResolver.VisibilityConverters"/>）。</summary>
+    public IReadOnlyDictionary<string, bool> VisibilityConverters { get; init; } = new Dictionary<string, bool>();
 }
 
 /// <summary>一個不是 WPF 的 XAML 檔（WinUI／UWP、Avalonia、MAUI）。不分析，但要講出來。</summary>
@@ -291,6 +294,7 @@ public sealed partial class XamlScanner
             Sharing = _options.Sharing,
             AssumeWindowMinWidth = _options.AssumeWindowMinWidth,
             PopupMaxWidth = _options.PopupMaxWidth,
+            VisibilityConverters = _options.VisibilityConverters,
         };
         var hostDocs = new Dictionary<string, XDocument?>(StringComparer.Ordinal);
         _width.PlacementsOf = root => PlacementsOf(root, hostDocs);

@@ -108,6 +108,12 @@ public sealed class FitConfig
     /// </summary>
     [JsonPropertyName("windowTitleBar")] public string? WindowTitleBar { get; set; }
 
+    /// <summary>
+    /// Visibility 轉換器的鍵 → 綁定的值是 true 還是 false 時看得見：<c>{ "BoolToVis": true, "InverseBoolToVis": false }</c>。
+    /// 同一排裡兩個元素綁同一個屬性、轉換器相反時，算其中一個的寬度不扣另一個。WPF 內建的 BooleanToVisibilityConverter 不用寫。
+    /// </summary>
+    [JsonPropertyName("visibilityConverters")] public Dictionary<string, bool>? VisibilityConverters { get; set; }
+
     [JsonPropertyName("cultures")] public List<string>? Cultures { get; set; }
     [JsonPropertyName("resx")] public List<string>? Resx { get; set; }
 
