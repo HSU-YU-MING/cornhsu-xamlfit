@@ -237,7 +237,11 @@ ScreenToGif 的第五筆後來也查了，一樣是真的：縮放面板「縮�
 
   // 快顯（ContextMenu、ToolTip、Popup、子選單）最寬可以到多寬。快顯跟著內容變寬、不裁切，所以不宣告就不檢查；
   // 宣告之後快顯裡的文字拿它當上界（扣掉量到的快顯內距），報告標明上界來自宣告。選單列的項目不受影響：Menu 會換列
-  "popupMaxWidth": 400
+  "popupMaxWidth": 400,
+
+  // 一般視窗的標題照 Windows 11 的標題列檢查（100%～175% 實量；只有這個值）。放不下報 trimmed：Windows 會用刪節號縮短。
+  // 不宣告時標題列成 drawn-by-windows、不檢查
+  "windowTitleBar": "windows11"
 }
 ```
 
@@ -357,11 +361,11 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.8.0
+      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.9.0
         with:
           root: src/MyApp
           resx: src/MyApp/Resources
-          version: 0.8.0
+          version: 0.9.0
           export-fonts: Segoe UI, Microsoft JhengHei UI
 ```
 
@@ -462,7 +466,7 @@ WPF 排水平的 `StackPanel`、`DockPanel` 就是這樣，`check` 報的也是�
 | 觸發器、視覺狀態、code-behind 套用的樣式 | 不追蹤 |
 | `ToolTip` | 是位置；沒宣告 `popupMaxWidth` 時查不到上界，宣告了就是它減掉 ToolTip 的內距 14。用系統字型 12 畫，不是擁有者的字型（WPF 實測） |
 | 浮水印／提示文字 | 在真的視窗裡量過的才量：MahApps 2.4 的 `TextBox`（寬 − 10）、MaterialDesign 5.3 的 `TextBox`（寬 − 它的 `Padding`）、WPF-UI 4.3 的 `ui:TextBox`（寬 − 21.6）。其他函式庫、控制項、設了 `BorderThickness` 或換了樣式：列出來、量不到 |
-| 一般視窗的 `Title` | 列成 `drawn-by-windows`：Windows 畫在標題列上、放不下時加刪節號，工具沒有建模標題列。不算進可解析率 —— 專案沒有辦法讓它量得到 |
+| 一般視窗的 `Title` | 列成 `drawn-by-windows`、不算進可解析率，除非宣告 `windowTitleBar: "windows11"`。宣告之後照 Windows 11 的標題列檢查：在 100%、125%、150%、175% 與四種視窗寬實量，取最大的損失 —— `SingleBorderWindow` 配 `CanResize`、`CanMinimize`、`CanResizeWithGrip` 是 194 DIP，配 `NoResize` 是 96，`ThreeDBorderWindow` 配 `CanResize` 是 200，`ToolWindow` 是 76（其他組合沒量過）。Windows 11 用 Segoe UI 12 畫標題、不是系統的標題字型，22 句實量跟它的線性寬度差在 1 DIP 以內。中日韓表意文字與全形符號算 1 em；Segoe UI 沒有的其他字量不到，因為 Windows 用它自己的字型連結補。Windows 10 與 200% 沒量過 |
 | 執行期用程式碼合併的資源字典 | 假設每個字典檔都有被合併；定義互相矛盾時那個值就是不知道。ScreenToGif、Playnite 與三個應用程式裡沒有任何位置卡在定義矛盾，所以不打算照 `MergedDictionaries` 走合併圖 |
 | 蒙古文 | 每個字母（或合字對）取匯出時同樣情況下最寬的寬度相加、偏寬（約 2.5%）；匯出時沒遇過的情況量不到；對照過產生的字、Windows 地區設定裡的 32 句與 312 句真實譯文 |
 | 印度系文字（天城、孟加拉、古木基、古吉拉特、奧里亞、坦米爾、泰盧固、卡納達、馬拉雅拉姆、僧伽羅文）、高棉文、緬甸文、藏文 | 各字素叢集相加、偏寬（奧里亞、卡納達文最多 2%、緬甸文產生的字 4.2%、真實緬甸文 0.9%）；對照裡最多偏窄 0.18%，包括印度系文字與高棉文的每個兩子音連寫 |
@@ -516,11 +520,11 @@ permissions:
   security-events: write          # 只有 sarif: true 才需要
 steps:
   - uses: actions/checkout@v4
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.8.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.9.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.8.0              # 工具的版本也要釘
+      version: 0.9.0              # 工具的版本也要釘
       sarif: true                 # 上傳到 code scanning
 ```
 

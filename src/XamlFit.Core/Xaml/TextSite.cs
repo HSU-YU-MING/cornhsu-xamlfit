@@ -68,6 +68,10 @@ public sealed class TextSite
     /// <summary>有 ignore 註解但沒寫理由 —— 不生效，而且要警告。</summary>
     public bool InvalidIgnore { get; init; }
 
+    /// <summary>Windows 自己畫的文字（宣告了 windowTitleBar 時的視窗標題）。WPF 的後備字型表不適用：
+    /// Segoe UI 沒有的字，Windows 用它自己的字型連結補 —— 那種字量不到。</summary>
+    public bool DrawnBySystem { get; init; }
+
     public string Location => $"{File}:{Line}";
 
     public override string ToString() => $"<{Element}> \"{Text}\" @ {Location}";

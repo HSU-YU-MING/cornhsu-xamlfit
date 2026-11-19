@@ -338,7 +338,12 @@ them once in `xamlfit.config.json`.
   // content and never clip, so they are not checked unless you declare this; then text in them
   // is held to it (minus the measured popup chrome) and the report says the limit is declared.
   // Menu-bar items are not affected: a Menu wraps its items.
-  "popupMaxWidth": 400
+  "popupMaxWidth": 400,
+
+  // Check standard window titles against the Windows 11 title bar, measured at 100–175% (the only
+  // value). A title that does not fit is reported as trimmed: Windows shortens it with an ellipsis.
+  // Without it, titles are listed as drawn-by-windows and not checked.
+  "windowTitleBar": "windows11"
 }
 ```
 
@@ -500,11 +505,11 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.8.0
+      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.9.0
         with:
           root: src/MyApp
           resx: src/MyApp/Resources
-          version: 0.8.0
+          version: 0.9.0
           export-fonts: Segoe UI, Microsoft JhengHei UI
 ```
 
@@ -631,7 +636,7 @@ fail a build, because a guess should not block someone's pull request.
 | Styles applied by triggers, visual states or code-behind | not followed |
 | `ToolTip` | a site with no width bound, unless `popupMaxWidth` is declared: then that minus the tooltip's 14. Drawn in the system font at 12, not the owner's font (measured in WPF) |
 | Watermark / hint text | measured where it was checked in real windows: MahApps 2.4 `TextBox` (width − 10), MaterialDesign 5.3 `TextBox` (width − its `Padding`), WPF-UI 4.3 `ui:TextBox` (width − 21.6). Other libraries, controls, a set `BorderThickness` or another style: listed, not measurable |
-| A standard window's `Title` | listed as `drawn-by-windows`: Windows draws it in the title bar and shortens it with an ellipsis, and the title bar is not modelled. Not counted in the resolution, since no project can make it measurable |
+| A standard window's `Title` | listed as `drawn-by-windows` and not counted in the resolution, unless `windowTitleBar: "windows11"` is declared. Then it is checked against the Windows 11 title bar, measured at 100%, 125%, 150% and 175% with four window widths, taking the largest loss: 194 DIP for `SingleBorderWindow` with `CanResize`, `CanMinimize` or `CanResizeWithGrip`, 96 with `NoResize`, 200 for `ThreeDBorderWindow` with `CanResize`, 76 for `ToolWindow` (other combinations are not measured). Windows 11 draws titles in Segoe UI 12, not the system caption font, within 1 DIP of its linear widths across 22 strings. CJK ideographs and full-width forms count as 1 em; other characters Segoe UI lacks are not measurable, because Windows fills them with its own font linking. Windows 10 and 200% are not measured |
 | Resource dictionaries merged in code at run time | every dictionary file is assumed merged; conflicting definitions make the value unknown. In ScreenToGif, Playnite and three applications no site was blocked by a conflict, so following `MergedDictionaries` is not planned |
 | Mongolian | the sum of the widest width each letter or ligature pair took in the same situation at export time, erring wide (about 2.5%); a letter in a situation the export never saw is not measurable; checked against generated words, 32 strings from Windows' locale data and 312 real translations |
 | Indic scripts (Devanagari, Bengali, Gurmukhi, Gujarati, Odia, Tamil, Telugu, Kannada, Malayalam, Sinhala), Khmer, Myanmar, Tibetan | measured as the sum of grapheme clusters, erring wide (Odia and Kannada by up to 2%, Myanmar's generated words by 4.2%, real Burmese by 0.9%); never more than 0.18% narrow in the comparisons, including every two-consonant join of the Indic scripts and Khmer |
@@ -695,11 +700,11 @@ permissions:
   security-events: write          # only with sarif: true
 steps:
   - uses: actions/checkout@v4
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.8.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.9.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.8.0              # pin the tool too
+      version: 0.9.0              # pin the tool too
       sarif: true                 # upload to code scanning
 ```
 

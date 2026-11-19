@@ -3,6 +3,33 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.9.0] - 2026-11-19
+
+### Added
+
+- **`windowTitleBar: "windows11"`** (config): standard window titles are checked against the Windows 11
+  title bar instead of being listed as `drawn-by-windows`. It was measured on one Windows 11 machine at
+  100%, 125%, 150% and 175% with window widths 300, 400, 550 and 800, by comparing captures of the
+  title bar (`prototype/TitleBar`), taking the largest loss for each kind of window: 194 DIP for
+  `SingleBorderWindow` with `CanResize`, `CanMinimize` or `CanResizeWithGrip`, 96 with `NoResize`, 200
+  for `ThreeDBorderWindow` with `CanResize`, 76 for `ToolWindow`. Other combinations stay
+  `drawn-by-windows`. A title that does not fit is `trimmed`, because Windows shortens it with an
+  ellipsis.
+- Titles are measured in Segoe UI 12 with linear widths. Windows 11 does not use the system caption
+  font (Microsoft JhengHei UI on the machine measured) and does not use GDI hinting (7 to 9 DIP wider);
+  22 drawn strings, Latin, Cyrillic, Greek and accented, came within 1 DIP of the linear widths. CJK
+  ideographs, CJK punctuation and full-width forms count as 1 em each (a six-character Chinese title
+  drew at 70.4 to 72 DIP, which is 6 x 12, at all four scalings). Other characters Segoe UI lacks are
+  not measurable: Windows fills them with its own font linking, not WPF's fallback table.
+
+### Checked
+
+- The fifth source-language overflow in ScreenToGif is real as well: the resize panel's
+  scaling-quality drop-down shows 224 px of "Nearest neighbor • Lower quality and faster", which needs
+  244.6 (drawn in WPF with the panel inlined into the editor window). The README listed four.
+- With `windowTitleBar` declared, ScreenToGif, Playnite, QuillNest, Cornea and Kindling report the
+  same findings as before: every measured title fits.
+
 ## [0.8.0] - 2026-11-19
 
 **Upgrading**: text inside an `Expander` whose `ExpandDirection` is `Left` or `Right` is now measured

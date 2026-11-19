@@ -440,7 +440,10 @@ public sealed class CheckAnalyzer
 
         foreach (var line in TextRules.Lines(display))
         {
-            var whole = TextMeasure.Measure(line, lookup, site.FontSize, site.DisplayScales);
+            // Windows 畫的視窗標題：Segoe UI 量得到的字照 Segoe UI，中日韓表意文字 1 em，其他的字量不到（SiteMeasure.SystemTitle）
+            var whole = site.DrawnBySystem
+                ? SiteMeasure.SystemTitle(line, lookup, site.FontSize)
+                : TextMeasure.Measure(line, lookup, site.FontSize, site.DisplayScales);
             if (!whole.IsReliable)
                 return new TextLayout(0, 0, 0, 0, false, false, whole.UnreliableReason)
                     { FirstMissing = whole.ComplexScript || whole.Unsupported is not null ? -1 : whole.FirstMissing };

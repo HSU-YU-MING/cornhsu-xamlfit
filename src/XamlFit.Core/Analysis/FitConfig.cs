@@ -102,6 +102,12 @@ public sealed class FitConfig
     /// </summary>
     [JsonPropertyName("popupMaxWidth")] public double? PopupMaxWidth { get; set; }
 
+    /// <summary>
+    /// 一般視窗的標題畫在哪個標題列上。唯一的值 "windows11"：照 Windows 11 實量的標題列（100%～175%）檢查標題，
+    /// 放不下就報 trimmed（Windows 用刪節號縮短）。沒宣告時標題是 drawn-by-windows、不檢查 —— Windows 10 的標題列沒量過。
+    /// </summary>
+    [JsonPropertyName("windowTitleBar")] public string? WindowTitleBar { get; set; }
+
     [JsonPropertyName("cultures")] public List<string>? Cultures { get; set; }
     [JsonPropertyName("resx")] public List<string>? Resx { get; set; }
 
@@ -150,6 +156,8 @@ public sealed class FitConfig
         Check("marginPercent", config.MarginPercent, 0, 100);
         Check("minCoverage", config.MinCoverage, 0, 100);
         Check("popupMaxWidth", config.PopupMaxWidth, 1, 4000);
+        if (config.WindowTitleBar is { } titleBar && titleBar != "windows11")
+            problems.Add(new Problem("windowTitleBar", "must be \"windows11\" (the only title bar that has been measured)"));
 
         if (config.DefaultFontFamily is { Length: 0 })
             problems.Add(new Problem("defaultFontFamily", "must not be empty"));

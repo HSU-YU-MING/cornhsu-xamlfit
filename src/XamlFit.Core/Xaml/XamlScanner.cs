@@ -51,6 +51,9 @@ public sealed record ScanOptions
 
     /// <summary>快顯最寬多寬（設定檔的 popupMaxWidth；見 <see cref="WidthResolver.PopupMaxWidth"/>）。null = 不檢查快顯。</summary>
     public double? PopupMaxWidth { get; init; }
+
+    /// <summary>標題照 Windows 11 實量的標題列檢查（設定檔的 windowTitleBar: "windows11"）。false = 標題是 drawn-by-windows。</summary>
+    public bool WindowTitleBarWindows11 { get; init; }
 }
 
 /// <summary>一個不是 WPF 的 XAML 檔（WinUI／UWP、Avalonia、MAUI）。不分析，但要講出來。</summary>
@@ -1409,6 +1412,14 @@ public sealed partial class XamlScanner
         var sourceText = source == TextSource.Literal ? text
             : key is not null && _sourceStrings.TryGetValue(key, out var known) ? known : null;
         var ignore = IgnoreReason(el);
+        var localizable = source != TextSource.DataBound && BudgetAnalyzer.HasLetter(sourceText ?? text);
+        var measured = _options.WindowTitleBarWindows11 ? Windows11Title(el, style) : null;
+        var width = measured ?? AvailableWidth.NotKnown(WidthStatus.DrawnByWindows,
+            "drawn by Windows in the title bar, shortened with an ellipsis; the title bar's layout is not modeled" +
+            (_options.WindowTitleBarWindows11 ? "" : " (declare windowTitleBar: \"windows11\" to check titles)"));
+        if (measured is { Status: WidthStatus.Known })
+            width = FinalFont(width, new FontSpec(TitleFont, TitleSize, 400, FontStyleKind.Normal, null), localizable);
+
         return new TextSite
         {
             File = file,
@@ -1418,16 +1429,75 @@ public sealed partial class XamlScanner
             Text = text,
             ResourceKey = key,
             SourceText = sourceText,
-            FontFamily = _defaultFont,
-            FontSize = _options.DefaultFontSize,
-            Width = AvailableWidth.NotKnown(WidthStatus.DrawnByWindows,
-                "drawn by Windows in the title bar, shortened with an ellipsis; the title bar's layout is not modeled"),
+            FontFamily = measured is null ? _defaultFont : TitleFont,
+            FontSize = measured is null ? _options.DefaultFontSize : TitleSize,
+            Trim = measured is null ? TrimMode.None : TrimMode.CharacterEllipsis,
+            DrawnBySystem = measured is not null,
+            Width = width,
             SuppressedReason = ignore is { Length: > 0 } ? ignore : null,
             InvalidIgnore = ignore is { Length: 0 },
         };
 
         static bool IsNone(string? v) => string.Equals(v?.Trim(), "None", StringComparison.OrdinalIgnoreCase)
                                          || string.Equals(v?.Trim(), "WindowStyle.None", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Windows 11 畫標題用的字型與大小（實量：跟系統回報的標題字型無關，繁中 Windows 回報 Microsoft JhengHei UI 也一樣）。</summary>
+    private const string TitleFont = "Segoe UI";
+    private const double TitleSize = 12;
+
+    /// <summary>
+    /// Windows 11 的標題列吃掉多少寬度（DIP），鍵是 (WindowStyle, ResizeMode)。
+    /// 2026-11-19 在一台 Windows 11 上實量（prototype/TitleBar）：視窗寬 300／400／550／800、顯示縮放 100%／125%／150%／175%，
+    /// 一長串 l 的刪節號停在哪裡（比真正的右緣早 1.6～4 DIP，保守），每一組取最大的 —— 全部出自 100%。
+    /// 標題文字的寬度：22 句（拉丁、西里爾、希臘、帶重音的字）畫出來的字跟 Segoe UI 12 的線性寬度差在 1 DIP 以內；
+    /// GDI 的 hinting 寬度反而寬 7～9 DIP（Windows 11 的標題不是用 GDI 畫的）。
+    /// 沒量過的組合（ThreeDBorderWindow 的其他 ResizeMode…）不猜。200% 以上沒量過。
+    /// </summary>
+    private static readonly Dictionary<(string Style, string Resize), double> Windows11TitleBar = new()
+    {
+        [("SingleBorderWindow", "CanResize")] = 194.0,
+        [("SingleBorderWindow", "CanMinimize")] = 194.0,
+        [("SingleBorderWindow", "CanResizeWithGrip")] = 194.0,
+        [("SingleBorderWindow", "NoResize")] = 96.0,
+        [("ThreeDBorderWindow", "CanResize")] = 200.0,
+        [("ToolWindow", "CanResize")] = 76.0,
+    };
+
+    /// <summary>宣告了 windowTitleBar: "windows11" 時，一般視窗的標題看得見多寬。這個組合沒量過 → null（照舊 drawn-by-windows）。</summary>
+    private AvailableWidth? Windows11Title(XElement window, Resolved style)
+    {
+        var resize = _styles.ResolveEx(window, "ResizeMode", inheritable: false);
+        if (style.IsUnreadable || resize.IsUnreadable)
+            return AvailableWidth.NotKnown(WidthStatus.Unmeasurable, "WindowStyle or ResizeMode of the window is not statically readable");
+        var s = style.IsValue ? style.Value!.Trim().Replace("WindowStyle.", "", StringComparison.Ordinal) : "SingleBorderWindow";
+        var r = resize.IsValue ? resize.Value!.Trim().Replace("ResizeMode.", "", StringComparison.Ordinal) : "CanResize";
+        if (!Windows11TitleBar.TryGetValue((s, r), out var lost)) return null;
+
+        // SizeToContent 讓 Width 失效（坑 6）；可以縮的視窗在 assumeWindowMinWidth 下用 MinWidth
+        var sizeToContent = _styles.ResolveEx(window, "SizeToContent", inheritable: false);
+        if (sizeToContent.IsUnreadable)
+            return AvailableWidth.NotKnown(WidthStatus.Unmeasurable, "SizeToContent of the window is not statically readable");
+        if (sizeToContent.IsValue && sizeToContent.Value!.Trim() is "Width" or "WidthAndHeight")
+            return AvailableWidth.NotKnown(WidthStatus.NoDeclaredLimit, "the window sizes to its content, so its title bar does too");
+
+        static double? Number(Resolved v) =>
+            v.IsValue && double.TryParse(v.Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
+        var widthValue = _styles.ResolveEx(window, "Width", inheritable: false);
+        if (widthValue.IsUnreadable)
+            return AvailableWidth.NotKnown(WidthStatus.Unmeasurable, "Width of the window is not statically readable");
+        if (Number(widthValue) is not { } w)
+            return AvailableWidth.NotKnown(WidthStatus.NoDeclaredLimit, "the window declares no Width");
+        var source = $"Width={w:G}";
+        if (_options.AssumeWindowMinWidth && r is "CanResize" or "CanResizeWithGrip"
+            && Number(_styles.ResolveEx(window, "MinWidth", inheritable: false)) is { } min && min < w)
+        {
+            w = min;
+            source = $"MinWidth={min:G} (assumeWindowMinWidth)";
+        }
+        return new AvailableWidth(WidthStatus.Known, Math.Max(0, w - lost),
+            $"{source} minus the Windows 11 title bar ({lost:G} DIP for {s}, {r})", WidthResolver.LineOf(window), true,
+            "window title (windowTitleBar: windows11)");
     }
 
     /// <summary>Thickness 的左右合計（"5"、"5,2"、"1,2,3,4"）。</summary>

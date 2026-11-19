@@ -243,6 +243,9 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 159 | **Expander 左右展開時標題不轉向** | 直覺以為標題轉 90 度、旁邊那欄只有一行字高；WPF 實測那一欄 = max(標題寬, 箭頭 19) + 2 + 左右 Padding，內容區再扣一次 Padding（ToggleButton 與 ExpandSite 都綁 Padding）。字級 12／20 兩組量出來的「欄寬 − 字寬」都是 2，用來確認常數 | LayoutOracle「Expander Right／Left content…」 |
 | 160 | **路線圖寫的卡點要先重現** | 「標題在巢狀 ToggleButton 裡算不出來」寫進 ROADMAP 時是對的，0.8.0 加案例時已經全部一致（後來的 TemplateChrome 早就處理了）；真正還卡著的是左右展開。先加案例看工具現在怎麼答，再決定要修什麼 | LayoutOracle |
 | 161 | **標題列的 DIP 尺寸跟著縮放變** | 125% 時標題列按鈕一顆 49.3 DIP，不是名義上的 46。只在一種縮放量出來的模型拿去其他縮放可能高估，所以標題維持 drawn-by-windows。改縮放是系統設定，不要為了量測去改；要在不同縮放的機器上各量一次 | titlebar 量測（PrintWindow 比對） |
+| 162 | **Windows 11 的標題不是用系統的標題字型、也不是 GDI 畫的** | WPF 的 SystemFonts.CaptionFontFamily 在繁中 Windows 回報 Microsoft JhengHei UI，標題實際是 Segoe UI（「Save Document As」正黑體 104.2、Segoe UI 97.9、畫出 99.2）。GDI 的 hinting 寬度又寬 7～9 DIP。22 句畫出來的字跟 Segoe UI 12 的線性寬度差在 1 DIP 以內 | prototype/TitleBar |
+| 163 | **量標題列可用寬度用刪節號停的地方** | 一長串 l 的刪節號停在真正右緣前 1.6～4 DIP，當下界剛好保守。四種縮放的損失 100% 最大（194／192／192／190.9）；按鈕 146～148 DIP，不是名義上的 46×3。改縮放是使用者的事：請他切，一種縮放跑一次 titlebar.ps1。⚠ 量到一半縮放被切回去，GetDpiForWindow 會照實回報 —— 看輸出第一行的 scale，不要照自己以為的縮放記 | prototype/TitleBar |
+| 164 | **探針用的副本不能留在語料裡** | 為了讓 CorpusRender 畫 UserControl，把 ResizePanel 內嵌進 Editor 的副本放在語料目錄，下一次掃描就多出 5 筆重複的 finding。副本用完就刪，或放在語料外面 | ScreenToGif 實跑 |
 
 ### 環境層級的坑
 
@@ -261,7 +264,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 859 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 872 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 50 條 CLI 路徑的退出碼
@@ -284,6 +287,7 @@ M6 裡它兩次不是零，兩次都是工具錯。
   `lines`、`replace`、`output`）；跟工具的判斷逐筆比對的腳本不在 repo 裡（它要語料）。畫不出下拉選單的內容與資料範本（Windows only）
 - `ThemeChrome` —— 量控制項函式庫的佈景：`themechrome mahapps|md2|md3|handycontrol|wpfui out.json`，再用 `node prototype/ThemeChrome/combine.js <輸出目錄> data/theme-chrome.json`
   合成（之後複製到 `src/XamlFit.Core/`）。套件版本寫在它的 csproj；換版本要重量。LayoutOracle `-- --theme mahapps|md2|md3|handycontrol|wpfui`（可加 `--check`）拿真的視窗驗（Windows only）
+- `TitleBar` —— Windows 11 標題列的實量（PowerShell，不是專案）：`titlebar.ps1` 量每種 WindowStyle／ResizeMode 的標題損失與標題字型，`titletext.ps1` 比畫出來的字跟 Segoe UI 的線性寬度；`results-*.txt` 是 2026-11-19 四種縮放的結果。要加 Windows 10 或 200% 就照樣跑（Windows only）
 - `DpiProbe` —— 各縮放比例下的視窗邊框與捲軸寬度（`AdjustWindowRectExForDpi`、`GetSystemMetricsForDpi`）。
   內距表裡的 16／20／17.5 就是從這裡確認的（Windows only）
 

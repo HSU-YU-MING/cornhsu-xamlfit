@@ -479,6 +479,53 @@ public static class SiteMeasure
         return f.UnitsPerEm == 0 ? 0 : (double)f.LineHeight * site.FontSize / f.UnitsPerEm;
     }
 
+    /// <summary>
+    /// Windows 11 畫的視窗標題有多寬。Segoe UI 畫得出來的字照 Segoe UI 量（線性寬度：22 句實量差在 1 DIP 以內）。
+    /// Segoe UI 沒有的字由 Windows 自己的字型連結補，不是 WPF 的後備字型表：
+    /// 中日韓表意文字、CJK 標點、全形符號一律 1 em（實量「另存新檔設定」在 100%～175% 畫出 70.4～72 DIP = 6 × 12；
+    /// 中日韓 UI 字型的這些字都是 1 em，偏寬只會多報）；其他的字量不到。
+    /// </summary>
+    public static Measurement SystemTitle(string text, FontLookup lookup, double fontSize)
+    {
+        if (lookup.Chain.Count == 0) return new Measurement(0, 1, false);
+        var face = lookup.Chain[0];
+        var only = lookup with { Chain = [face], Fallback = null };
+        double width = 0;
+        var run = new System.Text.StringBuilder();
+        string? Flush()
+        {
+            if (run.Length == 0) return null;
+            var m = TextMeasure.Measure(run.ToString(), only, fontSize);
+            run.Clear();
+            if (!m.IsReliable) return m.UnreliableReason;
+            width += m.WidthPx;
+            return null;
+        }
+        foreach (var rune in text.EnumerateRunes())
+        {
+            var cp = rune.Value;
+            if (face.TryAdvance(cp, out _) || cp is 0x20 or 0x200B or 0x200D or 0xFEFF) { run.Append(rune.ToString()); continue; }
+            if (Flush() is { } why) return new Measurement(0, 1, false) { Unsupported = why };
+            if (IsFullWidth(cp)) { width += fontSize; continue; }
+            return new Measurement(0, 1, false)
+            {
+                FirstMissing = cp,
+                Unsupported = $"Windows draws U+{cp:X4}, which {face.Family} lacks, with its own font linking; only CJK ideographs and full-width forms (1 em) are modelled",
+            };
+        }
+        if (Flush() is { } last) return new Measurement(0, 1, false) { Unsupported = last };
+        return new Measurement(width, 0, false);
+
+        static bool IsFullWidth(int cp) =>
+            cp is >= 0x3000 and <= 0x303F       // CJK 標點
+                or >= 0x3400 and <= 0x4DBF      // 擴充 A
+                or >= 0x4E00 and <= 0x9FFF      // 統一表意文字
+                or >= 0xF900 and <= 0xFAFF      // 相容表意文字
+                or >= 0xFF01 and <= 0xFF60      // 全形 ASCII 與標點
+                or >= 0xFFE0 and <= 0xFFE6      // 全形符號
+                or >= 0x20000 and <= 0x2FA1F;   // 擴充 B 以後
+    }
+
     public static Measurement Widest(TextSite site, string text, FontLookup lookup)
     {
         double widest = 0;
@@ -490,7 +537,7 @@ public static class SiteMeasure
 
         foreach (var line in TextRules.Lines(TextRules.Cased(TextRules.Display(site.Element, text), site.Casing)))
         {
-            var m = TextMeasure.Measure(line, lookup, site.FontSize, site.DisplayScales);
+            var m = site.DrawnBySystem ? SystemTitle(line, lookup, site.FontSize) : TextMeasure.Measure(line, lookup, site.FontSize, site.DisplayScales);
             widest = Math.Max(widest, m.WidthPx);
             missing += m.MissingGlyphs;
             complex |= m.ComplexScript;

@@ -1,0 +1,24 @@
+﻿scale 1.25
+Settings                                     drawn ink   42.4 | Segoe UI advance   42.6 ink   41.4 | Variable Text advance   42.6 | drawn ink vs Segoe UI advance  -0.6%
+Export as GIF                                drawn ink   68.0 | Segoe UI advance   69.0 ink   67.4 | Variable Text advance   69.0 | drawn ink vs Segoe UI advance  -1.4%
+Preferences                                  drawn ink   60.8 | Segoe UI advance   61.4 ink   59.8 | Variable Text advance   61.4 | drawn ink vs Segoe UI advance  -0.9%
+Save Document As                             drawn ink   99.2 | Segoe UI advance   99.2 ink   97.9 | Variable Text advance   99.2 | drawn ink vs Segoe UI advance   0.0%
+WWWWWWWWWW                                   drawn ink  112.0 | Segoe UI advance  112.1 ink  111.8 | Variable Text advance  112.1 | drawn ink vs Segoe UI advance  -0.1%
+iiiiiiiiiiiiiiii                             drawn ink   45.6 | Segoe UI advance   46.5 ink   44.8 | Variable Text advance   46.5 | drawn ink vs Segoe UI advance  -1.9%
+mmmmmmmmmm                                   drawn ink  101.6 | Segoe UI advance  103.4 ink  101.5 | Variable Text advance  103.4 | drawn ink vs Segoe UI advance  -1.7%
+Benutzereinstellungen speichern              drawn ink  170.4 | Segoe UI advance  171.8 ink  169.9 | Variable Text advance  171.8 | drawn ink vs Segoe UI advance  -0.8%
+Paramètres d'exportation                     drawn ink  132.0 | Segoe UI advance  133.0 ink  131.1 | Variable Text advance  133.0 | drawn ink vs Segoe UI advance  -0.8%
+Configuración avanzada del editor            drawn ink  181.6 | Segoe UI advance  181.4 ink  180.8 | Variable Text advance  181.4 | drawn ink vs Segoe UI advance   0.1%
+Impostazioni di registrazione                drawn ink  152.0 | Segoe UI advance  152.8 ink  151.2 | Variable Text advance  152.8 | drawn ink vs Segoe UI advance  -0.5%
+Настройки экспорта видео                     drawn ink  147.2 | Segoe UI advance  148.0 ink  146.3 | Variable Text advance  148.0 | drawn ink vs Segoe UI advance  -0.5%
+Ρυθμίσεις εξαγωγής                           drawn ink  106.4 | Segoe UI advance  107.2 ink  105.9 | Variable Text advance  107.2 | drawn ink vs Segoe UI advance  -0.8%
+Ustawienia nagrywania ekranu                 drawn ink  159.2 | Segoe UI advance  160.4 ink  158.4 | Variable Text advance  160.4 | drawn ink vs Segoe UI advance  -0.7%
+Opções de gravação da tela                   drawn ink  146.4 | Segoe UI advance  146.9 ink  145.6 | Variable Text advance  146.9 | drawn ink vs Segoe UI advance  -0.4%
+ScreenToGif - Editor                         drawn ink  105.6 | Segoe UI advance  105.2 ink  104.4 | Variable Text advance  105.2 | drawn ink vs Segoe UI advance   0.4%
+Kindling — Workspace                         drawn ink  119.2 | Segoe UI advance  119.9 ink  118.4 | Variable Text advance  119.9 | drawn ink vs Segoe UI advance  -0.6%
+A                                            drawn ink    8.0 | Segoe UI advance    7.7 ink    7.5 | Variable Text advance    7.7 | drawn ink vs Segoe UI advance   3.3%
+The quick brown fox jumps over the lazy dog  drawn ink  237.6 | Segoe UI advance  237.9 ink  236.7 | Variable Text advance  237.9 | drawn ink vs Segoe UI advance  -0.1%
+Ünïçødé Àççéñtš                              drawn ink   87.2 | Segoe UI advance   88.2 ink   86.7 | Variable Text advance   88.2 | drawn ink vs Segoe UI advance  -1.1%
+1234567890                                   drawn ink   64.0 | Segoe UI advance   64.7 ink   62.9 | Variable Text advance   62.8 | drawn ink vs Segoe UI advance  -1.1%
+Export (12 frames, 1920x1080)                drawn ink  158.4 | Segoe UI advance  159.6 ink  157.7 | Variable Text advance  153.8 | drawn ink vs Segoe UI advance  -0.7%
+worst: drawn ink exceeds the Segoe UI 12 advance by 3.3% ('A')

@@ -46,6 +46,7 @@ internal static class Pipeline
             Sharing = sharing,
             AssumeWindowMinWidth = opts.AssumeWindowMinWidth,
             PopupMaxWidth = opts.PopupMaxWidth,
+            WindowTitleBarWindows11 = opts.WindowTitleBarWindows11,
         }, fonts);
 
         return new Prepared(chrome, fonts, scanner, scanner.Scan(opts.Root!));
