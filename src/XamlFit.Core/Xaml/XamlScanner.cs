@@ -325,6 +325,7 @@ public sealed partial class XamlScanner
                 if (site is not null) sites.Add(site);
                 if (TryToolTipSite(el, rels[i]) is { } tip) sites.Add(tip);
                 if (TryWatermarkSite(el, rels[i]) is { } mark) sites.Add(mark);
+                if (TryTitleSite(el, rels[i]) is { } title) sites.Add(title);
             }
             if (doc.Root.DescendantsAndSelf().Any(e => string.Equals((string?)e.Attribute("UseLayoutRounding"), "True", StringComparison.OrdinalIgnoreCase)))
                 rounding.Add(rels[i]);
@@ -1381,6 +1382,52 @@ public sealed partial class XamlScanner
             SuppressedReason = ignore is { Length: > 0 } ? ignore : null,
             InvalidIgnore = ignore is { Length: 0 },
         };
+    }
+
+    /// <summary>
+    /// 一般視窗的 <c>Title</c>：Windows 自己畫在標題列上，放不下時用刪節號縮短。
+    /// 標題列的排法（圖示、最小化／最大化／關閉按鈕、系統的標題字型）工具沒有建模，所以量不到，
+    /// 但位置要列出來 —— 0.7.0 之前工具不知道它存在（寫死的標題連 hard-coded-text 都不會報）。
+    /// 狀態是 <see cref="WidthStatus.DrawnByWindows"/>，不是 Unmeasurable：專案沒有任何辦法讓它量得到，
+    /// 算進可解析率的分母只會讓每個專案永久掉幾個百分點（實測 Cornea 100% → 95.2%），那就是永遠開火的閘門。
+    /// WindowStyle="None"、WindowChrome（本地或樣式設的）：標題由視窗自己的範本畫（或根本不畫），那裡的文字另外是位置 → 不列。
+    /// 只認 WPF 的 Window：MetroWindow 這類子類別的標題畫在它自己的範本裡。
+    /// </summary>
+    private TextSite? TryTitleSite(XElement el, string file)
+    {
+        if (el.Parent is not null || !ChromeTable.IsWpf(el, "Window")) return null;
+        var (source, text, key) = ExtractText(el, "Title");
+        if (text is null) return null;
+
+        var style = _styles.ResolveEx(el, "WindowStyle", inheritable: false);
+        if (style.IsValue && IsNone(style.Value)) return null;
+        if (el.Attribute(XName.Get("WindowChrome.WindowChrome")) is not null
+            || el.Elements().Any(e => e.Name.LocalName == "WindowChrome.WindowChrome")
+            || _styles.ResolveEx(el, "WindowChrome.WindowChrome", inheritable: false).Kind != ResolveKind.NotSet)
+            return null;
+
+        var sourceText = source == TextSource.Literal ? text
+            : key is not null && _sourceStrings.TryGetValue(key, out var known) ? known : null;
+        var ignore = IgnoreReason(el);
+        return new TextSite
+        {
+            File = file,
+            Line = WidthResolver.LineOf(el),
+            Element = "Window.Title",
+            Source = source,
+            Text = text,
+            ResourceKey = key,
+            SourceText = sourceText,
+            FontFamily = _defaultFont,
+            FontSize = _options.DefaultFontSize,
+            Width = AvailableWidth.NotKnown(WidthStatus.DrawnByWindows,
+                "drawn by Windows in the title bar, shortened with an ellipsis; the title bar's layout is not modeled"),
+            SuppressedReason = ignore is { Length: > 0 } ? ignore : null,
+            InvalidIgnore = ignore is { Length: 0 },
+        };
+
+        static bool IsNone(string? v) => string.Equals(v?.Trim(), "None", StringComparison.OrdinalIgnoreCase)
+                                         || string.Equals(v?.Trim(), "WindowStyle.None", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Thickness 的左右合計（"5"、"5,2"、"1,2,3,4"）。</summary>

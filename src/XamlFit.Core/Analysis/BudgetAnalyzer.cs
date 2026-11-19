@@ -83,6 +83,9 @@ public sealed record BudgetSummary
     /// 但要單獨列出來 —— 它們是實實在在沒被分析的文字。</summary>
     public int InTemplateSites { get; init; }
 
+    /// <summary>Windows 自己畫的文字（視窗標題）。不進閘門的分母，單獨列出來（0.7.0）。</summary>
+    public int DrawnByWindowsSites { get; init; }
+
     /// <summary>純符號／數字，沒有任何文字 —— 箭頭、圖示字型、「00」。不是翻譯對象。</summary>
     public int SymbolOnlySites { get; init; }
 
@@ -299,6 +302,7 @@ public sealed class BudgetAnalyzer
             BlockedSites = blocked.Count,
             NoDeclaredLimitSites = localizable.Count(s => s.Width.Status == WidthStatus.NoDeclaredLimit),
             InTemplateSites = localizable.Count(s => s.Width.Status == WidthStatus.InTemplate),
+            DrawnByWindowsSites = localizable.Count(s => s.Width.Status == WidthStatus.DrawnByWindows),
             SymbolOnlySites = symbolOnly,
             InvalidIgnores = localizable.Count(s => s.InvalidIgnore),
             BlockedReasons = blocked

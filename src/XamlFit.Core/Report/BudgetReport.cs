@@ -81,6 +81,7 @@ public static class BudgetReport
                     Layout.WidthStatus.Known => "measured",
                     Layout.WidthStatus.NoDeclaredLimit => "no-declared-limit",
                     Layout.WidthStatus.InTemplate => "in-template",
+                    Layout.WidthStatus.DrawnByWindows => "drawn-by-windows",
                     _ => "blocked",
                 };
 
@@ -124,6 +125,7 @@ public static class BudgetReport
                 blockedSites = s.BlockedSites,
                 noDeclaredLimitSites = s.NoDeclaredLimitSites,
                 inTemplateSites = b.InTemplateSites,
+                drawnByWindowsSites = b.DrawnByWindowsSites,
                 blockedReasons = b.BlockedReasons.Select(r => new { reason = r.Reason, sites = r.Count }),
                 undeclaredChrome = b.UndeclaredChrome.Select(c => new { element = c.Element, sites = c.Sites }),
                 foreignFiles = b.ForeignFiles.GroupBy(f => f.Dialect).Select(g => new { dialect = g.Key, files = g.Count() }),

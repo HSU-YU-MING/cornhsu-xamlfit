@@ -29,6 +29,10 @@ public enum WidthStatus
 
     /// <summary>其他看不下去的情形（內距未知、屬性讀不出來、兄弟元素寬度未知…）。</summary>
     Unmeasurable,
+
+    /// <summary>Windows 自己畫的文字（一般視窗的標題列）。有上界，但排法是系統的、工具沒有建模；
+    /// 專案也沒有辦法讓它變得量得到，所以跟 <see cref="InTemplate"/> 一樣不進閘門的分母，單獨列出來。</summary>
+    DrawnByWindows,
 }
 
 public sealed record AvailableWidth(
