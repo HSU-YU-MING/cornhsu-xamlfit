@@ -108,13 +108,22 @@ internal static class FontsCommand
             : null;
         // 掃過的每支字型的家族名（含沒匯出的）：讓解析時能照 WPF 把「Segoe UI Variable」拆成 Segoe UI + 字面名稱
         var installed = new System.Collections.Concurrent.ConcurrentDictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        // 沒給 --family 時預設不匯出的（授權只限 Microsoft 產品的 Segoe UI Variable）：記下來，最後說明
+        var restrictedSkipped = new System.Collections.Concurrent.ConcurrentDictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        bool Want(string family)
+        {
+            installed.TryAdd(family, true);
+            if (wanted.Count > 0) return wanted.Contains(family);
+            if (MetricsFile.IsRestrictedByDefault(family)) { restrictedSkipped.TryAdd(family, true); return false; }
+            return true;
+        }
         Parallel.For(0, files.Count, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, i =>
         {
             var f = files[i];
             var sw = System.Diagnostics.Stopwatch.StartNew();
             // 先只讀名稱就知道要不要：沒在 --family 裡的字型不跑形狀表
             IReadOnlyList<FontMetrics> got;
-            try { got = FontMetricsExtractor.FromFile(f, m => { installed.TryAdd(m, true); return wanted.Count == 0 || wanted.Contains(m); }); }
+            try { got = FontMetricsExtractor.FromFile(f, Want); }
             catch (Exception e) { if (Environment.GetEnvironmentVariable("XAMLFIT_DEBUG") is not null) Console.Error.WriteLine($"{f}: {e}"); return; }   // 一個資料夾裡有壞字型是常態，不要整批失敗
 
             foreach (var m in got) installed.TryAdd(m.Family, true);
@@ -162,7 +171,8 @@ internal static class FontsCommand
         }
 
         var file = MetricsFile.FromMetrics(deduped, ToolVersion(), DateOnly.FromDateTime(DateTime.Now));
-        file.InstalledFamilies = [.. installed.Keys.Concat(deduped.Select(m => m.Family)).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase)];
+        // 只記解析用得到的家族名，不整份記下這台機器裝了什麼（度量檔常進公開 repo）
+        file.InstalledFamilies = MetricsFile.RelevantInstalledFamilies(installed.Keys, deduped.Select(m => m.Family));
         var dir = Path.GetDirectoryName(Path.GetFullPath(outPath));
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         MetricsFile.Save(outPath, file.ToJson());
@@ -199,7 +209,14 @@ internal static class FontsCommand
                 foreach (var s in hintSkipped) Console.WriteLine($"    {s}");
             }
         }
+        if (!restrictedSkipped.IsEmpty)
+            Console.WriteLine(
+                $"  not exported: {string.Join(", ", restrictedSkipped.Keys.Order(StringComparer.OrdinalIgnoreCase))} — Microsoft's font FAQ says Segoe UI Variable " +
+                "is not available for licensing or use outside Microsoft products. Name it in --family if you decide to export it anyway.");
         Console.WriteLine("  contains advance widths, kerning adjustments and the widths of shaped letters and clusters only — no glyph outlines, no font software");
+        // 1.0 之前的授權項目還沒有答案（THIRD-PARTY-NOTICES.md）：commit 進公開 repo 之前要讓使用者知道
+        Console.WriteLine("  the numbers are derived from fonts licensed to this machine; before committing the file to a public repository, " +
+                          "read \"Font metrics and licensing\" in the README");
         return 0;
     }
 

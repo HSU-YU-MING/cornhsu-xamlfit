@@ -3,6 +3,35 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-11-19
+
+**Upgrading**: `fonts export` without `--family` no longer exports Segoe UI Variable; name it with
+`--family "Segoe UI Variable"` if you decide to. Files exported before keep working and keep the
+full list of installed families; export again to trim it.
+
+### Changed
+
+- **Segoe UI Variable is not exported unless named.** Microsoft's font FAQ says it is not available
+  for licensing or use outside Microsoft products. An export that skips it says so and how to
+  include it.
+- **The metrics file lists only the installed families that name resolution needs**: the exported
+  families and installed families whose names begin with one of them. It used to list every family
+  on the machine that ran the export, which said more about that machine than the check needs.
+  Resolving a name gives the same answer with either list (tested).
+- `fonts export` ends with a reminder that the numbers come from fonts licensed to that machine,
+  pointing at the README before the file goes into a public repository.
+
+### Documentation
+
+- README: **Font metrics and licensing**. What is known (nothing has been ruled either way), what
+  to do with a private and a public repository, and how to generate the file in CI instead of
+  committing it. GitHub's `windows-2022` and `windows-2025` runners were checked: they have the
+  common families, their widths match a Windows 11 desktop export for every character compared, and
+  their Segoe UI covers slightly fewer code points.
+- THIRD-PARTY-NOTICES lists everything the metrics file holds, and RELEASING.md no longer says the
+  package ships metrics.
+- `scripts/verify-readme-facts.sh` also checks the tool version in the README's CI install example.
+
 ## [0.5.0] - 2026-11-19
 
 **Upgrading**: `check` reports three new kinds when there are translations. Only one can fail the

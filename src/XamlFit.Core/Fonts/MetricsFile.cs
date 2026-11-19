@@ -355,6 +355,31 @@ public sealed class MetricsFile
         return text.ReadToEnd();
     }
 
+    /// <summary>
+    /// installedFamilies 只留解析時用得到的：匯出的家族，加上「以匯出的家族名 + 空白開頭」的已安裝家族
+    /// （Segoe UI Historic、Segoe UI Variable Text —— 不記它們，WPF 式的「家族 + 字面名稱」拆法會把它們誤當成 Segoe UI）。
+    ///
+    /// ⚠ 為什麼可以丟掉其他的：FontResolver.SplitFaceName 只在某個前綴是**匯出的**家族時才拆；一個不以任何匯出家族名開頭的名字，
+    ///   記不記它，拆的結果都一樣（都是不拆、找不到那個家族）。度量檔常進公開 repo，原本整份記下匯出那台機器裝了哪些字型。
+    /// </summary>
+    public static List<string> RelevantInstalledFamilies(IEnumerable<string> installed, IEnumerable<string> exported)
+    {
+        var families = exported.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var prefixes = families.Select(f => f + " ").ToList();
+        return [.. families
+            .Concat(installed.Where(name => prefixes.Any(p => name.StartsWith(p, StringComparison.OrdinalIgnoreCase))))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)];
+    }
+
+    /// <summary>
+    /// 預設不匯出的家族：授權只限 Microsoft 產品使用的字型。
+    /// Microsoft 的 Font redistribution FAQ：Segoe UI Variable「not available for licensing or use outside of Microsoft products」。
+    /// 使用者在 <c>--family</c> 明寫才匯出（那是使用者自己的決定）。
+    /// </summary>
+    public static bool IsRestrictedByDefault(string family) =>
+        family.StartsWith("Segoe UI Variable", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>預設的度量檔名（<c>fonts export</c> 寫壓縮的）與找度量檔時認得的兩個名字。</summary>
     public const string DefaultFileName = "xamlfit.fonts.json.gz";
     public static readonly string[] FileNames = ["xamlfit.fonts.json.gz", "xamlfit.fonts.json"];

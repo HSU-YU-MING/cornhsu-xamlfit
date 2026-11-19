@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# README 的 GitHub Action 範例釘的工具版本，要等於 CHANGELOG 最新的已發佈版本。
+# README 的 GitHub Action 範例與 CI 安裝範例釘的工具版本，要等於 CHANGELOG 最新的已發佈版本。
 #
 # 為什麼要擋：tag 是版本真相源、csproj 固定 0.0.0-dev，所以 repo 裡**唯一**會跟版本漂開的地方就是 README
 # 的範例（0.3.0 發完才發現兩份 README 還釘著 0.1.0）。沒有人改範例時會想到它，所以讓 CI 自己比。
@@ -23,12 +23,14 @@ fi
 FAIL=0
 for f in README.md README.zh-Hant.md; do
   if [ "${1:-}" = "--update" ]; then
-    sed -i -E "s/(cornhsu-xamlfit@v)[0-9]+\.[0-9]+\.[0-9]+/\1$VER/g; s/^([[:space:]]+version: )[0-9]+\.[0-9]+\.[0-9]+/\1$VER/" "$f"
+    sed -i -E "s/(cornhsu-xamlfit@v)[0-9]+\.[0-9]+\.[0-9]+/\1$VER/g; s/^([[:space:]]+version: )[0-9]+\.[0-9]+\.[0-9]+/\1$VER/; s/(Cornhsu\.XamlFit --version )[0-9]+\.[0-9]+\.[0-9]+/\1$VER/g" "$f"
   fi
   USES="$(grep -oE 'cornhsu-xamlfit@v[0-9]+\.[0-9]+\.[0-9]+' "$f" | sort -u | tr '\n' ' ')"
   PIN="$(grep -oE '^[[:space:]]+version: [0-9]+\.[0-9]+\.[0-9]+' "$f" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -u | tr '\n' ' ')"
-  if [ "$USES" != "cornhsu-xamlfit@v$VER " ] || [ "$PIN" != "$VER " ]; then
-    echo "FAIL: $f pins [${USES% }] / version [${PIN% }], but the latest released version in CHANGELOG.md is $VER"
+  # 「在 CI 裡產生度量檔」的範例直接裝工具（--tool-path），版本也要跟著
+  TOOL="$(grep -oE 'Cornhsu\.XamlFit --version [0-9]+\.[0-9]+\.[0-9]+' "$f" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+$' | sort -u | tr '\n' ' ')"
+  if [ "$USES" != "cornhsu-xamlfit@v$VER " ] || [ "$PIN" != "$VER " ] || [ "$TOOL" != "$VER " ]; then
+    echo "FAIL: $f pins [${USES% }] / version [${PIN% }] / tool install [${TOOL% }], but the latest released version in CHANGELOG.md is $VER"
     echo "      (run: bash scripts/verify-readme-facts.sh --update)"
     FAIL=1
   else

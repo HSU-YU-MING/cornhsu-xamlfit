@@ -57,18 +57,48 @@ data is included.
 
 ### Font metrics
 
-`xamlfit.fonts.json` is **not** shipped with the package. Users generate it themselves with
-`xamlfit fonts export`, from fonts already installed and licensed on their own machine, into
-their own repository.
+`xamlfit.fonts.json` (or `.json.gz`) is **not** shipped with the package. Users generate it
+themselves with `xamlfit fonts export`, from fonts already installed and licensed on their own
+machine, into their own repository. The demo project's metrics are for a synthetic font made by
+`prototype/DemoMetrics`, not taken from any real font.
 
-The file contains **integer numbers only**: an advance width per codepoint, pair kerning
-adjustments, and for Arabic-script letters the width of each letter form and of adjacent letters,
-worked out at export time from the font's own substitution and positioning rules. It contains no
-glyph outlines, hinting instructions, substitution or positioning tables, or any other part of
-the font software.
+What the file holds, per font face (family, weight, style, stretch). Everything is a number or a
+name, keyed by Unicode code point or OpenType script/language tag; glyph IDs are not kept:
+
+- **Naming:** the family name in English, the legacy family name, and the family names in the
+  font's other languages (`微軟正黑體`), as stored in its `name` table.
+- **Vertical metrics:** units per em, ascender, descender, line gap.
+- **Advance widths:** per code point (from `cmap` + `hmtx`), as ranges of equal widths, plus the
+  default advance. For a variable font, per named instance (`fvar` + `HVAR`).
+- **Kerning:** the pair adjustments of the font's GPOS `kern` lookups, **keeping their structure**:
+  per lookup and subtable either explicit pairs, or the first glyph's coverage, the first- and
+  second-class definitions and the non-zero cells of the class matrix — all re-keyed from glyphs
+  to code points — and which script/language systems each lookup is attached to. Variable fonts
+  add the `GDEF` variation deltas applied to each instance.
+- **Widths worked out by running the font's own GSUB/GPOS rules** at export time: Arabic letters
+  in each joining form and the change in width next to one or two neighbours, per language system;
+  Indic, Khmer, Myanmar, Mongolian and other complex-script clusters as the difference from the sum
+  of their letters; the width a letter takes when a language substitutes it (`locl`) or when a
+  combining mark follows it (`ccmp`); punctuation drawn differently inside Mongolian text.
+- **Hinted widths** (with `--hinted`): for 8–48 px, the whole-pixel width at each size where it
+  differs from the rounded linear width, from the font's `hdmx` table or from Windows GDI.
+- **Installed family names** (`installedFamilies`): only the names that resolving a font name the
+  way WPF does needs — the exported families, and installed families whose names begin with one of
+  them followed by a space (`Segoe UI Historic` next to `Segoe UI`), so that `Segoe UI Variable` is
+  read as Segoe UI but a real font missing from the file is not. Files exported before 0.6.0 list
+  every family the export saw, that is, what was installed on the machine that ran it.
+
+Segoe UI Variable is not exported unless the user names it with `--family`: Microsoft's font FAQ
+says it is not available for licensing or use outside Microsoft products.
+
+It contains no glyph outlines, hinting instructions, glyph IDs, or copies of the font's tables or
+software. The kerning section is, however, a transcription of the positioning data of part of the
+GPOS table into another key space, and several sections are the results of executing the font's
+substitution and positioning rules — that is what a legal review should be told, not just
+"widths".
 
 > **Before 1.0:** confirm the position of the relevant font EULAs on extracting these metrics
-> (advance widths, kerning, letter-form widths) and committing them to a repository. The maintainer's reading is that metrics are facts
+> (all of the above) and committing them to a repository. The maintainer's reading is that metrics are facts
 > rather than the creative expression a font licence protects, but that reading has not been
 > verified by counsel. Until it is, XamlFit ships metrics for **no** proprietary font.
 >
