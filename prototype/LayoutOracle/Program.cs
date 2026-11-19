@@ -305,6 +305,8 @@ internal static class Program
 
         if (args.Length > 0 && args[0] == "--popups") { Popups(); app.Shutdown(); return 0; }
 
+        if (args.Length > 1 && args[0] == "--watermark") { Watermark(app, args[1]); app.Shutdown(); return 0; }
+
         if (args.Length > 0 && args[0] == "--font-source")
         {
             // 沒寫 FontFamily 的文字到底用哪一支：相依屬性的預設值、實際排出來的字型、系統訊息字型
@@ -642,6 +644,18 @@ internal static class Program
         Add("TreeView default (scrolls)", W($"<TreeView Width='200' HorizontalAlignment='Left'><TreeViewItem IsExpanded='True' Header='A'><TreeViewItem><TreeViewItem.Header>{text}</TreeViewItem.Header></TreeViewItem></TreeViewItem></TreeView>"), Want.Open);
         Add("ItemsControl", W($"<ItemsControl Width='200' HorizontalAlignment='Left'>{text}</ItemsControl>"));
         Add("ItemsControl custom ItemsPanel", W($"<ItemsControl Width='200' HorizontalAlignment='Left'><ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation='Horizontal'/></ItemsPanelTemplate></ItemsControl.ItemsPanel>{text}</ItemsControl>"), Want.Blocked);
+        // 0.7.0：清單控制項的自訂範本。內容宿主是 ItemsPresenter；範本的 ScrollViewer 跟著清單的捲軸設定
+        const string listTemplate = "<ControlTemplate TargetType='ListBox'><Border BorderThickness='2' Padding='5'><ScrollViewer Focusable='False'><ItemsPresenter/></ScrollViewer></Border></ControlTemplate>";
+        Add("ListBox template, H/V Disabled", W($"<ListBox Width='200' HorizontalAlignment='Left' ScrollViewer.HorizontalScrollBarVisibility='Disabled' ScrollViewer.VerticalScrollBarVisibility='Disabled'><ListBox.Template>{listTemplate}</ListBox.Template><ListBoxItem>{text}</ListBoxItem></ListBox>"));
+        Add("ListBox template, H Disabled (bar assumed)", W($"<ListBox Width='200' HorizontalAlignment='Left' ScrollViewer.HorizontalScrollBarVisibility='Disabled'><ListBox.Template>{listTemplate}</ListBox.Template><ListBoxItem>{text}</ListBoxItem></ListBox>"));
+        Add("ListBox template, scrolls", W($"<ListBox Width='200' HorizontalAlignment='Left'><ListBox.Template>{listTemplate}</ListBox.Template><ListBoxItem>{text}</ListBoxItem></ListBox>"), Want.Open);
+        Add("ListBox template, TemplateBinding Padding 8", W($"<ListBox Width='200' Padding='8' HorizontalAlignment='Left' ScrollViewer.HorizontalScrollBarVisibility='Disabled' ScrollViewer.VerticalScrollBarVisibility='Disabled'><ListBox.Template><ControlTemplate TargetType='ListBox'><Border Padding='{{TemplateBinding Padding}}'><ScrollViewer Focusable='False'><ItemsPresenter/></ScrollViewer></Border></ControlTemplate></ListBox.Template><ListBoxItem>{text}</ListBoxItem></ListBox>"));
+        Add("ListBox template, ScrollViewer sets its own H=Auto", W($"<ListBox Width='200' HorizontalAlignment='Left' ScrollViewer.HorizontalScrollBarVisibility='Disabled' ScrollViewer.VerticalScrollBarVisibility='Disabled'><ListBox.Template><ControlTemplate TargetType='ListBox'><Border Padding='5'><ScrollViewer HorizontalScrollBarVisibility='Auto'><ItemsPresenter/></ScrollViewer></Border></ControlTemplate></ListBox.Template><ListBoxItem>{text}</ListBoxItem></ListBox>"), Want.Blocked);
+        Add("ListBox template, IsItemsHost panel", W($"<ListBox Width='200' HorizontalAlignment='Left' ScrollViewer.HorizontalScrollBarVisibility='Disabled' ScrollViewer.VerticalScrollBarVisibility='Disabled'><ListBox.Template><ControlTemplate TargetType='ListBox'><Border Padding='5'><StackPanel IsItemsHost='True'/></Border></ControlTemplate></ListBox.Template><ListBoxItem>{text}</ListBoxItem></ListBox>"), Want.Blocked);
+        Add("ListBox implicit style template, H/V Disabled", W($"<Grid Width='300' HorizontalAlignment='Left'><Grid.Resources><Style TargetType='ListBox'><Setter Property='Template'><Setter.Value>{listTemplate}</Setter.Value></Setter></Style></Grid.Resources><ListBox Width='200' HorizontalAlignment='Left' ScrollViewer.HorizontalScrollBarVisibility='Disabled' ScrollViewer.VerticalScrollBarVisibility='Disabled'><ListBoxItem>{text}</ListBoxItem></ListBox></Grid>"));
+        Add("ItemsControl template Padding 10,0,20,0", W($"<ItemsControl Width='200' HorizontalAlignment='Left'><ItemsControl.Template><ControlTemplate TargetType='ItemsControl'><Border Padding='10,0,20,0'><ItemsPresenter/></Border></ControlTemplate></ItemsControl.Template>{text}</ItemsControl>"));
+        Add("ItemsControl template with ScrollViewer", W($"<ItemsControl Width='200' HorizontalAlignment='Left'><ItemsControl.Template><ControlTemplate TargetType='ItemsControl'><ScrollViewer HorizontalScrollBarVisibility='Disabled' VerticalScrollBarVisibility='Auto'><ItemsPresenter/></ScrollViewer></ControlTemplate></ItemsControl.Template>{text}</ItemsControl>"));
+        Add("ListView template, H/V Disabled", W($"<ListView Width='200' HorizontalAlignment='Left' ScrollViewer.HorizontalScrollBarVisibility='Disabled' ScrollViewer.VerticalScrollBarVisibility='Disabled'><ListView.Template><ControlTemplate TargetType='ListView'><Border BorderThickness='1' Padding='3'><ScrollViewer Focusable='False'><ItemsPresenter/></ScrollViewer></Border></ControlTemplate></ListView.Template><ListViewItem>{text}</ListViewItem></ListView>"));
         // Playnite 的寫法：捲軸範本的根元素寫死寬度、ScrollViewer 範本把捲軸放在 Auto 欄
         Add("ScrollViewer custom bar, Track Width 17", W($"<Grid Width='300' HorizontalAlignment='Left'><Grid.Resources><Style TargetType='ScrollBar'><Setter Property='Template'><Setter.Value><ControlTemplate TargetType='ScrollBar'><Track x:Name='PART_Track' Orientation='Vertical' IsDirectionReversed='True' Width='17'><Track.Thumb><Thumb Width='8'/></Track.Thumb></Track></ControlTemplate></Setter.Value></Setter></Style><Style TargetType='ScrollViewer'><Setter Property='Template'><Setter.Value><ControlTemplate TargetType='ScrollViewer'><Grid><Grid.ColumnDefinitions><ColumnDefinition Width='*'/><ColumnDefinition Width='Auto'/></Grid.ColumnDefinitions><ScrollContentPresenter x:Name='PART_ScrollContentPresenter' Content='{{TemplateBinding Content}}' CanContentScroll='{{TemplateBinding CanContentScroll}}'/><ScrollBar x:Name='PART_VerticalScrollBar' Grid.Column='1' Orientation='Vertical' Visibility='{{TemplateBinding ComputedVerticalScrollBarVisibility}}' ViewportSize='{{TemplateBinding ViewportHeight}}' Maximum='{{TemplateBinding ScrollableHeight}}'/></Grid></ControlTemplate></Setter.Value></Setter></Style></Grid.Resources><ScrollViewer VerticalScrollBarVisibility='Visible' HorizontalScrollBarVisibility='Disabled'>{text}</ScrollViewer></Grid>"));
         Add("ScrollViewer custom bar, Border Width 10", W($"<Grid Width='300' HorizontalAlignment='Left'><Grid.Resources><Style TargetType='ScrollBar'><Setter Property='Template'><Setter.Value><ControlTemplate TargetType='ScrollBar'><Border Width='10' Background='Gray'/></ControlTemplate></Setter.Value></Setter></Style><Style TargetType='ScrollViewer'><Setter Property='Template'><Setter.Value><ControlTemplate TargetType='ScrollViewer'><Grid><Grid.ColumnDefinitions><ColumnDefinition Width='*'/><ColumnDefinition Width='Auto'/></Grid.ColumnDefinitions><ScrollContentPresenter x:Name='PART_ScrollContentPresenter' Content='{{TemplateBinding Content}}' CanContentScroll='{{TemplateBinding CanContentScroll}}'/><ScrollBar x:Name='PART_VerticalScrollBar' Grid.Column='1' Orientation='Vertical' Visibility='{{TemplateBinding ComputedVerticalScrollBarVisibility}}' ViewportSize='{{TemplateBinding ViewportHeight}}' Maximum='{{TemplateBinding ScrollableHeight}}'/></Grid></ControlTemplate></Setter.Value></Setter></Style></Grid.Resources><ScrollViewer VerticalScrollBarVisibility='Visible' HorizontalScrollBarVisibility='Disabled'>{text}</ScrollViewer></Grid>"));
@@ -1045,7 +1059,97 @@ internal static class Program
                 $"Popup        content {w,5:F0}: child {((FrameworkElement)pop.Child).ActualWidth,7:F2}"));
             pop.IsOpen = false;
         }
+
+        // 0.7.0：快顯的字型不從擁有者繼承。視窗設 Courier New 30，看 ToolTip／ContextMenu／MenuItem 實際用哪支字型，
+        // 再看 ToolTip 的字串內容是不是「系統字型量出來的寬度 + 內距 14」（ToolTip="…" 位置的量法）
+        host.FontFamily = new System.Windows.Media.FontFamily("Courier New");
+        host.FontSize = 30;
+        var sys = SystemFonts.StatusFontFamily;
+        var sysSize = SystemFonts.StatusFontSize;
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"== popup fonts (window: Courier New 30; system status font: {sys.Source} {sysSize}) =="));
+        const string tipText = "Save the file as a new name";
+        var stringTip = new ToolTip { Content = tipText };
+        var owner = new Button { Content = "z", ToolTip = stringTip };
+        var menu2 = new ContextMenu();
+        var item2 = new MenuItem { Header = "Open" };
+        menu2.Items.Add(item2);
+        owner.ContextMenu = menu2;
+        panel.Children.Add(owner);
+        host.UpdateLayout();
+        stringTip.PlacementTarget = owner;
+        stringTip.IsOpen = true;
+        menu2.PlacementTarget = owner;
+        menu2.IsOpen = true;
+        Idle();
+        var typeface = new System.Windows.Media.Typeface(stringTip.FontFamily, stringTip.FontStyle, stringTip.FontWeight, stringTip.FontStretch);
+        var text = new System.Windows.Media.FormattedText(tipText, CultureInfo.GetCultureInfo("en-US"), FlowDirection.LeftToRight,
+            typeface, stringTip.FontSize, System.Windows.Media.Brushes.Black, 1.0);
+        var same = (string a, double s) => a == sys.Source && Math.Abs(s - sysSize) < 0.01 ? "system font" : "NOT the system font";
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"ToolTip      {stringTip.FontFamily.Source} {stringTip.FontSize}  ({same(stringTip.FontFamily.Source, stringTip.FontSize)})"));
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"ContextMenu  {menu2.FontFamily.Source} {menu2.FontSize}  ({same(menu2.FontFamily.Source, menu2.FontSize)})"));
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"MenuItem     {item2.FontFamily.Source} {item2.FontSize}  ({same(item2.FontFamily.Source, item2.FontSize)})"));
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"string tip   width {stringTip.ActualWidth:F2} = text {text.WidthIncludingTrailingWhitespace:F2} + {stringTip.ActualWidth - text.WidthIncludingTrailingWhitespace:F2} (table: 14)"));
+        stringTip.IsOpen = false;
+        menu2.IsOpen = false;
         host.Close();
+    }
+
+    /// <summary>
+    /// --watermark mahapps|md2|md3|handycontrol|wpfui：佈景的浮水印／提示文字畫在哪裡、多寬、用什麼字型。
+    /// 0.7.0 要把它們當成文字位置；假設是「跟 TextBox 的文字同一塊區域」（寬 = TextBox 寬 − 佈景量到的 TextBox chrome）。
+    /// 這裡在真的視窗裡打開，找出畫著浮水印的 TextBlock，量它的版面槽寬度跟字型，跟那個假設比。
+    /// </summary>
+    private static void Watermark(Application app, string which)
+    {
+        var profile = Themes.Load(app, which);
+        const string mark = "Type the name of the file you want to open here please";
+        var (xmlns, attr, element) = which switch
+        {
+            "mahapps" => ("xmlns:t='http://metro.mahapps.com/winfx/xaml/controls'", $"t:TextBoxHelper.Watermark='{mark}'", "TextBox"),
+            "md2" or "md3" => ("xmlns:t='http://materialdesigninxaml.net/winfx/xaml/themes'", $"t:HintAssist.Hint='{mark}'", "TextBox"),
+            "handycontrol" => ("xmlns:t='https://handyorg.github.io/handycontrol'", $"t:InfoElement.Placeholder='{mark}'", "TextBox"),
+            "wpfui" => ("xmlns:t='http://schemas.lepo.co/wpfui/2022/xaml'", $"PlaceholderText='{mark}'", "t:TextBox"),
+            _ => throw new ArgumentException(which),
+        };
+        var chrome = profile.Controls.TryGetValue("TextBox", out var c) ? c.Chrome : null;
+        Console.WriteLine($"theme: {profile.Id}; TextBox chrome in the data: {chrome?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}");
+        foreach (var width in new[] { 200, 300 })
+        foreach (var extra in new[] { "", "Padding='10,0,10,0'", "FontSize='20'" })
+        {
+            var host = (Window)XamlReader.Parse(
+                $"<Window {Ns} {xmlns} Width='700' Height='200' WindowStyle='None' AllowsTransparency='True'>" +
+                $"<StackPanel><{element} Width='{width}' HorizontalAlignment='Left' {attr} {extra}/></StackPanel></Window>");
+            host.Left = -20000; host.Top = -20000; host.ShowInTaskbar = false; host.ShowActivated = false;
+            host.Show();
+            host.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+            var box = (FrameworkElement)((StackPanel)host.Content).Children[0];
+            TextBlock? found = null;
+            void Walk(DependencyObject d)
+            {
+                for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(d) && found is null; i++)
+                {
+                    var ch = System.Windows.Media.VisualTreeHelper.GetChild(d, i);
+                    if (ch is TextBlock tb && tb.Text == mark && tb.IsVisible) { found = tb; return; }
+                    Walk(ch);
+                }
+            }
+            Walk(box);
+            if (found is null) { Console.WriteLine($"  {element} {width} {extra,-22}: watermark not drawn"); host.Close(); continue; }
+            var slot = LayoutInformation.GetLayoutSlot(found);
+            var visible = slot.Width - found.Margin.Left - found.Margin.Right;
+            var scale = found.RenderTransform is System.Windows.Media.ScaleTransform st ? st.ScaleX : 1;
+            var expected = chrome is { } ch2 ? width - ch2 : double.NaN;
+            var boxFont = (Control)box;
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"  {element} {width} {extra,-22}: slot {visible,7:F2}  expected {expected,7:F2}  diff {visible - expected,6:F2}  " +
+                $"font {found.FontFamily.Source} {found.FontSize} {found.FontWeight} (box {boxFont.FontFamily.Source} {boxFont.FontSize})  trim {found.TextTrimming} scale {scale:F2}"));
+            host.Close();
+        }
     }
 
     private static Window Host()

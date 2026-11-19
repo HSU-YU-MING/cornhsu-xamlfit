@@ -46,6 +46,8 @@ internal static class BudgetCommand
         Console.WriteLine($"    blocked          {s.BlockedSites}  (a bound exists but could not be resolved)");
         Console.WriteLine($"    no width bound   {s.NoDeclaredLimitSites}");
         Console.WriteLine($"    in a template    {s.InTemplateSites}  (width is decided where the template is used)");
+        if (s.DrawnByWindowsSites > 0)
+            Console.WriteLine($"    drawn by Windows {s.DrawnByWindowsSites}  (window titles: the title bar is not modeled)");
         Console.WriteLine($"  resolution         {s.Resolution:F1}%  (measured ÷ (measured + blocked))");
         Console.WriteLine($"  coverage           {s.Coverage:F1}%  (of all localizable sites, informational)");
         if (s.Suppressed > 0) Console.WriteLine($"  suppressed         {s.Suppressed}");

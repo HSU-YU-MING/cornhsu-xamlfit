@@ -13,7 +13,7 @@
 - [x] M5 repo 骨架、CI、示範專案的計數斷言
 - [x] M6 全面重讀：把「高估可用寬度」的洞補掉、拿真的 WPF 視窗逐案對照
 - [x] GitHub repo 公開（2026-11-14），CI 在 Linux 與 Windows 上通過
-- [ ] Trusted Publishing 政策、推 tag 發 0.1.0
+- [x] Trusted Publishing 政策、推 tag 發 0.1.0（2026-11-17 上架）
 
 ~~**發版前必辦**：在 Linux 上實際執行一次~~ —— 2026-11-14 推上 GitHub 後 CI 第一次就在 Ubuntu 上全部通過（一般與 globalization-invariant 模式）。
 
@@ -37,18 +37,23 @@
 
 依「卡住的位置數」排序，數字來自公開語料的實跑：
 
-1. **清單控制項的自訂範本**（ListBox／ListView／ItemsControl）。現在一律放棄 ——
-   範本裡的捲動行為不是一個「內距」說得完的。
+1. ~~**清單控制項的自訂範本**（ListBox／ListView／ItemsControl）~~ ✅ 0.7.0：內距照範本裡的 ItemsPresenter 算，
+   捲軸照清單自己的 ScrollViewer.* 設定（LayoutOracle 10 案，0 高估）。TreeView、DataGrid 的範本照舊不讀。
 
 2. **標題放在巢狀控制項裡的範本**（Expander 的標題在 ToggleButton 裡）。
    現在報「標題跟內容並排」，算不出標題那一側有多寬。
 
-3. **沒掃描的文字屬性**：`ToolTip`、`Title`、浮水印／提示的附加屬性。
-   它們現在是「工具不知道它們存在」，比「量不到」更糟。
+3. ~~**沒掃描的文字屬性**：`ToolTip`、`Title`、浮水印／提示的附加屬性~~ ✅ 0.7.0：ToolTip（系統字型、popupMaxWidth）、
+   浮水印（MahApps／MaterialDesign／WPF-UI 在真的視窗裡量過的組合，其他列出來但量不到）、
+   視窗標題（drawn-by-windows，不進可解析率的分母）。
    （`Hyperlink`／`Span` 裡的文字 M6 已經會掃了：那三層包裝不改字寬，當成裡面的 `Run` 本身。）
 
-4. **合併圖。** 現在假設每個資源字典檔都被合併進應用程式。照 `MergedDictionaries` 的 `Source` 真的走一遍，
-   可以消掉一部分「同名定義互相矛盾」。
+4. ~~**合併圖**~~ **不做**（2026-11-19 實查）：ScreenToGif、Playnite、QuillNest、Cornea、Kindling 沒有任何位置
+   卡在「同名定義互相矛盾」。而 Playnite 在執行期從資料夾載入佈景字典 ——「沒被合併的檔案」不代表沒用到，
+   照合併圖把它們丟掉，會把「不知道」變成「沒設定」。有語料證明卡住了再談。
+
+5. **標題列的建模。** 視窗標題的可用寬度 = 視窗寬 − 圖示 − 標題列按鈕，系統的標題字型。
+   要在各 Windows 版本、縮放、WindowStyle／ResizeMode 組合下實量（DpiProbe 的 DWMWA_CAPTION_BUTTON_BOUNDS）才開。
 
 **不打算做的**：`SharedSizeGroup`（欄寬由整個 scope 的其他 Grid 共同決定）、
 Auto 欄裡的跨欄子元素（WPF 的分攤規則複雜，算錯會連帶弄錯星號分配）、
@@ -56,7 +61,7 @@ Auto 欄裡的跨欄子元素（WPF 的分攤規則複雜，算錯會連帶弄�
 
 其他：
 
-- `action.yml` 的實測（CI 現在只跑 build／test／verify 腳本，沒有真的跑一次 Action）
+- ~~`action.yml` 的實測~~ ✅ CI 的 `action`（Linux）與 `action-windows`（含 export-fonts）job 真的跑 Action
 - 中日韓系統預設字型的實機確認（現在只有繁中量過）
 - WPF 預設 TabControl 範本的選取標籤（用負邊距放大）沒建模，維持不知道
 

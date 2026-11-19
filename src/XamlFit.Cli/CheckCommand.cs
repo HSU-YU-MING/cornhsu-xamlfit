@@ -213,7 +213,8 @@ internal static class CheckCommand
         if (s.Suppressed > 0) Console.WriteLine($"  suppressed       {s.Suppressed}");
         if (baselined > 0) Console.WriteLine($"  in baseline      {baselined}");
         Console.WriteLine($"  resolution       {s.Budget.Resolution:F1}%  ({s.Budget.MeasuredSites} measured, {s.Budget.BlockedSites} blocked; " +
-                          $"{s.Budget.NoDeclaredLimitSites} with no width bound and {s.Budget.InTemplateSites} in templates are not checked)");
+                          $"{s.Budget.NoDeclaredLimitSites} with no width bound, {s.Budget.InTemplateSites} in templates" +
+                          (s.Budget.DrawnByWindowsSites > 0 ? $" and {s.Budget.DrawnByWindowsSites} window titles drawn by Windows" : "") + " are not checked)");
 
         Pipeline.PrintBlindSpots(scan, s.Budget);
 

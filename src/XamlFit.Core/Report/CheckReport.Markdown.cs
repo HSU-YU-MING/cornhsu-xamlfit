@@ -103,6 +103,7 @@ public static class CheckMarkdown
         if (b.BlockedSites > 0) notes.Add(string.Create(inv, $"{b.BlockedSites} site(s) blocked (width not readable)"));
         if (b.NoDeclaredLimitSites > 0) notes.Add(string.Create(inv, $"{b.NoDeclaredLimitSites} with no width bound"));
         if (b.InTemplateSites > 0) notes.Add(string.Create(inv, $"{b.InTemplateSites} in templates"));
+        if (b.DrawnByWindowsSites > 0) notes.Add(string.Create(inv, $"{b.DrawnByWindowsSites} window title(s) drawn by Windows"));
         if (s.Placeholders > 0) notes.Add(string.Create(inv, $"{s.Placeholders} with run-time placeholders like {{0}}"));
         if (s.Suppressed > 0) notes.Add(string.Create(inv, $"{s.Suppressed} suppressed via xamlfit-ignore"));
         if (notes.Count > 0)

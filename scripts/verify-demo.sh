@@ -55,10 +55,11 @@ expect vertical-clip  1
 expect trimmed        1
 expect tight          1
 expect reflow         1
-# 翻譯完整度（0.5.0）：Strings.resx 的 Farewell 沒有德文、SavedCount 的德文用了來源沒有的 {2}、AboutPanel.xaml 寫死一段字
+# 翻譯完整度（0.5.0）：Strings.resx 的 Farewell 沒有德文、SavedCount 的德文用了來源沒有的 {2}、AboutPanel.xaml 寫死一段字，
+# 0.7.0 起加上 MainWindow.xaml 寫死的視窗標題（Title="XamlFit demo"，Windows 畫在標題列上）
 expect missing-translation  1
 expect placeholder-mismatch 1
-expect hard-coded-text      1
+expect hard-coded-text      2
 
 # 樣式解析的斷言。
 # Caption 的字級由 <Style x:Key="Caption"> 設成 11 → 84.8 px，塞得進 92 px。

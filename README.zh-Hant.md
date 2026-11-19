@@ -75,6 +75,10 @@ XamlFit 讀你的 XAML，算出每段文字實際有幾個像素，拿真實的�
 dnSpy 的文字綁在 ViewModel 上；EarTrumpet 的位置都在範本裡。EarTrumpet 與 HandBrake 用 `TextFormattingMode="Display"`，用 hinting 寬度量。
 NETworkManager 原本 916 個位置卡在 MahApps，用了量過的佈景之後剩 49 個。
 
+0.7.0 起也列出 ToolTip、浮水印與視窗標題（見下面「已知限制」）；上面的表是在那之前量的。
+它們只增加位置、不增加量得到或卡住的位置，所以可解析率不變：ScreenToGif 的可在地化位置 1,277 → 1,555、
+QuillNest 685 → 746，`check` 的可解析率仍是 45.2% 與 86.2%。
+
 **控制項庫**幾乎是零，而那是對的答案：在那些 repo 裡，控制項**就是**佈景。
 用了它們的應用程式也會落在同樣的處境，除非告訴工具那個佈景做了什麼 —— 見下面「要你告訴它的事」。
 
@@ -258,6 +262,10 @@ HandyControl 與 WPF-UI 的範本把大部分控制項的寬度捨入到裝置�
 把 `{TemplateBinding Padding}` 換成控制項實際生效的值，然後算出內距。
 同一個樣式在好幾個佈景檔各有一份（深色、淺色）時，每一份都算，結果一致才採用。
 
+`ListBox`、`ListView`、`ItemsControl` 也一樣（0.7.0）：內距是控制項外框到範本裡 `ItemsPresenter` 之間的東西，
+`ListBox`／`ListView` 照舊依它自己的 `ScrollViewer.*` 設定捲動。範本的 `ScrollViewer` 自己寫死捲軸、
+或用 `IsItemsHost` 的面板自己排項目的，量不到。`TreeView` 與 `DataGrid` 的範本不讀。
+
 ### 預設字型
 
 WPF 的預設字型不是 Segoe UI，是**系統訊息字型**，而且跟著 Windows 的顯示語言走：
@@ -336,29 +344,27 @@ WPF 的候選字型在度量檔裡都畫不出來的字算量不到，報告會�
 Microsoft YaHei UI、Yu Gothic UI、Malgun Gothic、Nirmala UI、Leelawadee UI、Myanmar Text、Mongolian Baiti、Calibri、Tahoma、Arial 等；
 Segoe UI Variable 只有 `windows-2025` 有。匯出三個家族約 30 秒，加 `--hinted` 約 4 分鐘。
 比對過的每個字，寬度都跟 Windows 11 桌機匯出的一樣。機器上的 Segoe UI 收的字略少（`windows-2022` 最少），
-所以桌機量得到的罕用字在那裡可能量不到：會報出來，不會量錯。建議用 `windows-latest`。
-度量檔放在 job 的暫存資料夾，job 結束就消失：
+所以桌機量得到的罕用字在那裡可能量不到：會報出來，不會量錯。建議用 `windows-latest`。[GitHub Action](#github-action) 會替你做：
 
 ```yaml
 jobs:
   fit:
     runs-on: windows-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.7.0
         with:
-          dotnet-version: '10.0.x'
-      - name: XamlFit with this runner's fonts
-        shell: bash
-        run: |
-          dotnet tool install --tool-path "$RUNNER_TEMP/xf" Cornhsu.XamlFit --version 0.6.0
-          "$RUNNER_TEMP/xf/xamlfit" fonts export --family "Segoe UI" --family "Microsoft JhengHei UI" \
-            --out "$RUNNER_TEMP/xamlfit.fonts.json.gz"
-          "$RUNNER_TEMP/xf/xamlfit" check src/MyApp --resx src/MyApp/Resources \
-            --metrics "$RUNNER_TEMP/xamlfit.fonts.json.gz"
+          root: src/MyApp
+          resx: src/MyApp/Resources
+          version: 0.7.0
+          export-fonts: Segoe UI, Microsoft JhengHei UI
 ```
 
-[GitHub Action](#github-action) 是在 Linux 機器上測的，那裡沒有 Windows 字型；在 Windows 機器上請像上面那樣直接跑工具。
+`export-fonts` 用機器自己的字型匯出這些家族、拿它們檢查，並在上傳任何東西之前刪掉檔案。
+只能在 Windows 機器上用（Linux 上會被拒絕），不能跟 `metrics` 一起用。
 
 ## `budget` —— 翻譯之前
 
@@ -452,8 +458,10 @@ WPF 排水平的 `StackPanel`、`DockPanel` 就是這樣，`check` 報的也是�
 | 放在 `Auto` 欄裡的標籤 | 預算給到「它會被切掉」為止；在那之前它會先把 `*` 欄擠小 |
 | 控制項範本或程式碼設定的字型 | 看不到；用 XAML 寫的那個 |
 | 觸發器、視覺狀態、code-behind 套用的樣式 | 不追蹤 |
-| 沒掃描的文字屬性（`ToolTip`、`Title`、浮水印／提示的附加屬性、`Hyperlink`／`Span` 的內容） | 完全沒看到 |
-| 執行期用程式碼合併的資源字典 | 假設每個字典檔都有被合併；定義互相矛盾時那個值就是不知道 |
+| `ToolTip` | 是位置；沒宣告 `popupMaxWidth` 時查不到上界，宣告了就是它減掉 ToolTip 的內距 14。用系統字型 12 畫，不是擁有者的字型（WPF 實測） |
+| 浮水印／提示文字 | 在真的視窗裡量過的才量：MahApps 2.4 的 `TextBox`（寬 − 10）、MaterialDesign 5.3 的 `TextBox`（寬 − 它的 `Padding`）、WPF-UI 4.3 的 `ui:TextBox`（寬 − 21.6）。其他函式庫、控制項、設了 `BorderThickness` 或換了樣式：列出來、量不到 |
+| 一般視窗的 `Title` | 列成 `drawn-by-windows`：Windows 畫在標題列上、放不下時加刪節號，工具沒有建模標題列。不算進可解析率 —— 專案沒有辦法讓它量得到 |
+| 執行期用程式碼合併的資源字典 | 假設每個字典檔都有被合併；定義互相矛盾時那個值就是不知道。ScreenToGif、Playnite 與三個應用程式裡沒有任何位置卡在定義矛盾，所以不打算照 `MergedDictionaries` 走合併圖 |
 | 蒙古文 | 每個字母（或合字對）取匯出時同樣情況下最寬的寬度相加、偏寬（約 2.5%）；匯出時沒遇過的情況量不到；對照過產生的字、Windows 地區設定裡的 32 句與 312 句真實譯文 |
 | 印度系文字（天城、孟加拉、古木基、古吉拉特、奧里亞、坦米爾、泰盧固、卡納達、馬拉雅拉姆、僧伽羅文）、高棉文、緬甸文、藏文 | 各字素叢集相加、偏寬（奧里亞、卡納達文最多 2%、緬甸文產生的字 4.2%、真實緬甸文 0.9%）；對照裡最多偏窄 0.18%，包括印度系文字與高棉文的每個兩子音連寫 |
 | `TextFormattingMode="Display"` | 用字型的 hinting 寬度、`displayScales` 裡每個縮放都量（可變字型：線性寬度四捨五入）；靜態字型沒列的像素大小量不到 |
@@ -506,11 +514,11 @@ permissions:
   security-events: write          # 只有 sarif: true 才需要
 steps:
   - uses: actions/checkout@v4
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.6.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.7.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.6.0              # 工具的版本也要釘
+      version: 0.7.0              # 工具的版本也要釘
       sarif: true                 # 上傳到 code scanning
 ```
 
@@ -525,6 +533,7 @@ Action 會自己裝 .NET 與工具、跑 `xamlfit check`、把每一筆 finding 
 | `version` | 最新版 | 要裝的工具版本；工具還在 0.x，要釘 |
 | `resx` | 設定檔 | 放 `.resx` 譯文的資料夾 |
 | `metrics` | `root` 旁邊 | 字型度量檔 |
+| `export-fonts` | 無 | Windows 機器：用逗號分開的家族，從機器自己的字型匯出給這次檢查用；上傳任何東西之前就刪掉（見[字型度量與授權](#字型度量與授權)） |
 | `config` | `root` 旁邊 | `xamlfit.config.json` |
 | `baseline` | 無 | 棘輪檔：只有新的 finding 會擋 |
 | `pseudo` | `false` | 不用譯文、模擬膨脹（永遠不讓 job 紅） |

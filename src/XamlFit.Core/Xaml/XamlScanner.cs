@@ -318,10 +318,14 @@ public sealed partial class XamlScanner
             if (!_options.TrustDefaultChrome && ThemeFor(rels[i], themes) is { } themeName)
                 doc.AddAnnotation(new ExternalTheme(themeName, ProfileFor(rels[i], themes)));
 
-            foreach (var el in doc.Root.DescendantsAndSelf())
+            // ToList：ToolTip 的字型要在一個暫時掛上去的 <ToolTip> 上讀（見 TryToolTipSite），列舉中不能改文件
+            foreach (var el in doc.Root.DescendantsAndSelf().ToList())
             {
                 var site = TrySite(el, rels[i]);
                 if (site is not null) sites.Add(site);
+                if (TryToolTipSite(el, rels[i]) is { } tip) sites.Add(tip);
+                if (TryWatermarkSite(el, rels[i]) is { } mark) sites.Add(mark);
+                if (TryTitleSite(el, rels[i]) is { } title) sites.Add(title);
             }
             if (doc.Root.DescendantsAndSelf().Any(e => string.Equals((string?)e.Attribute("UseLayoutRounding"), "True", StringComparison.OrdinalIgnoreCase)))
                 rounding.Add(rels[i]);
@@ -1200,6 +1204,250 @@ public sealed partial class XamlScanner
     }
 
     /// <summary>
+    /// 任何元素的 <c>ToolTip="…"</c>（或 <c>&lt;X.ToolTip&gt;純文字&lt;/X.ToolTip&gt;</c>）。
+    ///
+    /// ⚠ 0.7.0 之前工具根本不知道它們存在 —— 比「量不到」更糟，因為報告不會提到。
+    /// WPF 把字串包進一個 ToolTip 控制項顯示：
+    /// - 寬度：快顯跟著內容變寬、不裁切，所以沒宣告 <c>popupMaxWidth</c> 時是「查不到上界」（照樣計入、照樣做翻譯完整度）；
+    ///   宣告了就是 popupMaxWidth 扣掉 ToolTip 的內距（LayoutOracle --popups 量的 14）。
+    /// - 字型：**不是**擁有者的。WPF 實測：視窗設 Courier New 30，Button 的 ToolTip 是系統字型 12
+    ///   （ToolTip 的預設樣式設了 SystemFonts.StatusFont）。專案的隱含 ToolTip 樣式設了字型就用它的。
+    /// - 專案的隱含 ToolTip 樣式換了範本或內距：內距不知道 → 量不到。
+    /// </summary>
+    private TextSite? TryToolTipSite(XElement el, string file)
+    {
+        var local = el.Name.LocalName;
+        if (local.Contains('.', StringComparison.Ordinal) || IsIgnorableNamespace(el.Name.NamespaceName)) return null;
+        // ToolTip 元素自己、ToolTipService 之類的不是「某個元素的 ToolTip 屬性」
+        if (local.EndsWith("ToolTip", StringComparison.Ordinal)) return null;
+
+        var (source, text, key) = ExtractText(el, "ToolTip");
+        if (text is null) return null;
+
+        var sourceText = source == TextSource.Literal ? text
+            : key is not null && _sourceStrings.TryGetValue(key, out var known) ? known : null;
+        var localizable = source != TextSource.DataBound && BudgetAnalyzer.HasLetter(sourceText ?? text);
+
+        // 字型在一個暫時掛上去的 <X.ToolTip><ToolTip/></X.ToolTip> 上讀：隱含 ToolTip 樣式照常生效，
+        // 走到 .ToolTip 屬性元素就停（StyleIndex.ResolveEx），不會繼承到擁有者的字型
+        var wpf = XNamespace.Get(WpfNamespace);
+        var probe = new XElement(wpf + "ToolTip");
+        var holder = new XElement(el.Name.Namespace + $"{local}.ToolTip", probe);
+        el.Add(holder);
+        FontSpec font;
+        bool styled;
+        try
+        {
+            font = FontSpec.Read(_styles, probe, _defaultFont, _options.DefaultFontSize, _language);
+            styled = _styles.ImplicitStyleMaySetTemplate(probe, "ToolTip")
+                     || _styles.ImplicitSetter(probe, "ToolTip", "Padding").Kind != ResolveKind.NotSet
+                     || _styles.ImplicitSetter(probe, "ToolTip", "BorderThickness").Kind != ResolveKind.NotSet;
+        }
+        finally { holder.Remove(); }
+
+        AvailableWidth width;
+        if (_options.PopupMaxWidth is not { } max)
+            width = AvailableWidth.NotKnown(WidthStatus.NoDeclaredLimit, "popup content (ToolTip); declare popupMaxWidth to check tooltips");
+        else if (styled)
+            width = AvailableWidth.NotKnown(WidthStatus.Unmeasurable, "the project's ToolTip style changes its template or padding");
+        else
+        {
+            var tip = _chrome.Lookup(XName.Get("ToolTip", WpfNamespace), WidthResolver.ThemeOf(el));
+            width = tip.Kind != ChromeKind.Control
+                ? AvailableWidth.NotKnown(WidthStatus.Unmeasurable, $"the chrome of ToolTip is unknown ({tip.Why})")
+                : new AvailableWidth(WidthStatus.Known, max - tip.Chrome, $"popupMaxWidth={max:G} (declared) on the ToolTip",
+                    WidthResolver.LineOf(el), true, "popup content (ToolTip, popupMaxWidth)");
+        }
+        if (width.Status == WidthStatus.Known)
+            width = FinalFont(width, font, localizable);
+
+        var ignore = IgnoreReason(el);
+        return new TextSite
+        {
+            File = file,
+            Line = WidthResolver.LineOf(el),
+            Element = "ToolTip",
+            Source = source,
+            Text = text,
+            ResourceKey = key,
+            SourceText = sourceText,
+            FontFamily = font.Family,
+            FontSize = font.Size,
+            FontWeight = font.Weight,
+            FontStyle = font.Style,
+            Language = font.Language,
+            DisplayScales = font.Display ? _options.DisplayScales : null,
+            Width = width,
+            SuppressedReason = ignore is { Length: > 0 } ? ignore : null,
+            InvalidIgnore = ignore is { Length: 0 },
+        };
+    }
+
+    private const string MahAppsNamespace = "http://metro.mahapps.com/winfx/xaml/controls";
+    private const string MaterialDesignNamespace = "http://materialdesigninxaml.net/winfx/xaml/themes";
+    private const string WpfUiNamespace = "http://schemas.lepo.co/wpfui/2022/xaml";
+
+    /// <summary>
+    /// 輸入框的浮水印／提示文字（0.7.0 之前工具不知道它們存在）：MahApps 的 <c>TextBoxHelper.Watermark</c>、
+    /// MaterialDesign 的 <c>HintAssist.Hint</c>、WPF-UI 的 <c>ui:TextBox PlaceholderText</c>，
+    /// 以及其他函式庫名為 *.Watermark／*.Hint／*.Placeholder 的附加屬性。
+    ///
+    /// ⚠ 浮水印不是畫在「TextBox 打字的那塊區域」。LayoutOracle --watermark 在真的視窗裡量（字型一律是 TextBox 自己的）：
+    /// - MahApps 2.4 的 TextBox：TextBox 外框 − 10，明寫的 Padding 不影響（打字區是 − 14）；
+    /// - MaterialDesign 5.3（2、3 都一樣）的 TextBox：外框 − 明寫的左右 Padding（預設 0；打字區是 − 2）；
+    /// - WPF-UI 4.3 的 ui:TextBox：外框 − 21.6，Padding 不影響；
+    /// - HandyControl 3.5 的一般 TextBox 根本不畫 InfoElement.Placeholder（要它自己的樣式或控制項）。
+    /// 量過的組合以外（別的控制項、別的佈景、明寫的 BorderThickness、換了樣式或範本）一律量不到 —— 位置照樣列出來。
+    /// </summary>
+    private TextSite? TryWatermarkSite(XElement el, string file)
+    {
+        if (IsIgnorableNamespace(el.Name.NamespaceName) || el.Name.LocalName.Contains('.', StringComparison.Ordinal)) return null;
+
+        var attr = el.Attributes().FirstOrDefault(a =>
+            !a.IsNamespaceDeclaration && a.Name.LocalName.Contains('.', StringComparison.Ordinal)
+            && (a.Name.LocalName.EndsWith(".Watermark", StringComparison.Ordinal)
+                || a.Name.LocalName.EndsWith(".Hint", StringComparison.Ordinal)
+                || a.Name.LocalName.EndsWith(".Placeholder", StringComparison.Ordinal)));
+        var wpfUiBox = el.Name == XName.Get("TextBox", WpfUiNamespace) && el.Attribute("PlaceholderText") is not null;
+        if (attr is null && !wpfUiBox) return null;
+
+        var (source, text, key) = ClassifyValue(wpfUiBox ? el.Attribute("PlaceholderText")!.Value : attr!.Value);
+        if (text is null) return null;
+
+        var sourceText = source == TextSource.Literal ? text
+            : key is not null && _sourceStrings.TryGetValue(key, out var known) ? known : null;
+        var localizable = source != TextSource.DataBound && BudgetAnalyzer.HasLetter(sourceText ?? text);
+        var font = FontSpec.Read(_styles, el, _defaultFont, _options.DefaultFontSize, _language);
+
+        var profile = el.Document?.Annotation<ExternalTheme>()?.Profile?.Id ?? "";
+        var isWpfTextBox = ChromeTable.IsWpf(el, "TextBox");
+        var lib = wpfUiBox ? "WPF-UI"
+            : attr!.Name == XName.Get("TextBoxHelper.Watermark", MahAppsNamespace) ? "MahApps"
+            : attr.Name == XName.Get("HintAssist.Hint", MaterialDesignNamespace) ? "MaterialDesign"
+            : null;
+
+        AvailableWidth Blocked(string why) => AvailableWidth.NotKnown(WidthStatus.Unmeasurable, why);
+        AvailableWidth width;
+        double? deduction = null;
+        string? why = null;
+        if (lib is null)
+            why = $"where {(attr is null ? "this placeholder" : attr.Name.LocalName)} is drawn has not been measured";
+        else if (!wpfUiBox && !isWpfTextBox)
+            why = $"where the {lib} watermark of <{el.Name.LocalName}> is drawn has not been measured (only TextBox)";
+        else if (lib == "MahApps" && !profile.StartsWith("MahApps.Metro", StringComparison.Ordinal)
+                 || lib == "MaterialDesign" && !profile.StartsWith("MaterialDesignThemes", StringComparison.Ordinal)
+                 || lib == "WPF-UI" && !profile.StartsWith("WPF-UI", StringComparison.Ordinal))
+            why = $"the {lib} watermark needs the {lib} theme this tool has measured, and this file does not use it";
+        else if (el.Attribute("Style") is not null || el.Attribute("Template") is not null
+                 || el.Elements().Any(e => e.Name.LocalName.EndsWith(".Style", StringComparison.Ordinal) || e.Name.LocalName.EndsWith(".Template", StringComparison.Ordinal))
+                 || _styles.ImplicitStyleMaySetTemplate(el, el.Name.LocalName))
+            why = "the box has a style or template other than the theme's default";
+        else if (_styles.ResolveEx(el, "BorderThickness", inheritable: false).Kind != ResolveKind.NotSet)
+            why = "BorderThickness is set, and the watermark was measured only with the theme's border";
+        else if (lib == "MaterialDesign")
+        {
+            var padding = _styles.ResolveEx(el, "Padding", inheritable: false);
+            if (padding.Kind == ResolveKind.NotSet) deduction = 0;
+            else if (padding.IsValue && TryHorizontal(padding.Value!, out var lr)) deduction = lr;
+            else why = "the box's Padding is not statically readable";
+        }
+        else deduction = lib == "MahApps" ? 10 : 21.6;
+
+        if (why is not null) width = Blocked(why);
+        else
+        {
+            var outer = _width.OuterWidth(el, 0);
+            width = outer.Status != WidthStatus.Known
+                ? outer
+                : FinalFont(outer with { Px = outer.Px - deduction!.Value, Reason = $"{lib} watermark (LayoutOracle --watermark)" }, font, localizable);
+        }
+
+        var ignore = IgnoreReason(el);
+        return new TextSite
+        {
+            File = file,
+            Line = WidthResolver.LineOf(el),
+            Element = "Watermark",
+            Source = source,
+            Text = text,
+            ResourceKey = key,
+            SourceText = sourceText,
+            FontFamily = font.Family,
+            FontSize = font.Size,
+            FontWeight = font.Weight,
+            FontStyle = font.Style,
+            Language = font.Language,
+            DisplayScales = font.Display ? _options.DisplayScales : null,
+            Width = width,
+            SuppressedReason = ignore is { Length: > 0 } ? ignore : null,
+            InvalidIgnore = ignore is { Length: 0 },
+        };
+    }
+
+    /// <summary>
+    /// 一般視窗的 <c>Title</c>：Windows 自己畫在標題列上，放不下時用刪節號縮短。
+    /// 標題列的排法（圖示、最小化／最大化／關閉按鈕、系統的標題字型）工具沒有建模，所以量不到，
+    /// 但位置要列出來 —— 0.7.0 之前工具不知道它存在（寫死的標題連 hard-coded-text 都不會報）。
+    /// 狀態是 <see cref="WidthStatus.DrawnByWindows"/>，不是 Unmeasurable：專案沒有任何辦法讓它量得到，
+    /// 算進可解析率的分母只會讓每個專案永久掉幾個百分點（實測 Cornea 100% → 95.2%），那就是永遠開火的閘門。
+    /// WindowStyle="None"、WindowChrome（本地或樣式設的）：標題由視窗自己的範本畫（或根本不畫），那裡的文字另外是位置 → 不列。
+    /// 只認 WPF 的 Window：MetroWindow 這類子類別的標題畫在它自己的範本裡。
+    /// </summary>
+    private TextSite? TryTitleSite(XElement el, string file)
+    {
+        if (el.Parent is not null || !ChromeTable.IsWpf(el, "Window")) return null;
+        var (source, text, key) = ExtractText(el, "Title");
+        if (text is null) return null;
+
+        var style = _styles.ResolveEx(el, "WindowStyle", inheritable: false);
+        if (style.IsValue && IsNone(style.Value)) return null;
+        if (el.Attribute(XName.Get("WindowChrome.WindowChrome")) is not null
+            || el.Elements().Any(e => e.Name.LocalName == "WindowChrome.WindowChrome")
+            || _styles.ResolveEx(el, "WindowChrome.WindowChrome", inheritable: false).Kind != ResolveKind.NotSet)
+            return null;
+
+        var sourceText = source == TextSource.Literal ? text
+            : key is not null && _sourceStrings.TryGetValue(key, out var known) ? known : null;
+        var ignore = IgnoreReason(el);
+        return new TextSite
+        {
+            File = file,
+            Line = WidthResolver.LineOf(el),
+            Element = "Window.Title",
+            Source = source,
+            Text = text,
+            ResourceKey = key,
+            SourceText = sourceText,
+            FontFamily = _defaultFont,
+            FontSize = _options.DefaultFontSize,
+            Width = AvailableWidth.NotKnown(WidthStatus.DrawnByWindows,
+                "drawn by Windows in the title bar, shortened with an ellipsis; the title bar's layout is not modeled"),
+            SuppressedReason = ignore is { Length: > 0 } ? ignore : null,
+            InvalidIgnore = ignore is { Length: 0 },
+        };
+
+        static bool IsNone(string? v) => string.Equals(v?.Trim(), "None", StringComparison.OrdinalIgnoreCase)
+                                         || string.Equals(v?.Trim(), "WindowStyle.None", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Thickness 的左右合計（"5"、"5,2"、"1,2,3,4"）。</summary>
+    private static bool TryHorizontal(string thickness, out double sum)
+    {
+        sum = 0;
+        var parts = thickness.Split([',', ' '], StringSplitOptions.RemoveEmptyEntries);
+        var nums = new double[parts.Length];
+        for (var i = 0; i < parts.Length; i++)
+            if (!double.TryParse(parts[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out nums[i])) return false;
+        switch (nums.Length)
+        {
+            case 1: sum = nums[0] * 2; return true;
+            case 2: sum = nums[0] * 2; return true;
+            case 4: sum = nums[0] + nums[2]; return true;
+            default: return false;
+        }
+    }
+
+    /// <summary>
     /// 版面寬度算得出來還不夠 —— 字型也要讀得出來、度量檔裡要有，這個位置才算「量得到」。
     /// 第一版把這兩種情形照樣算成量到了，然後在判定時默默跳過。
     /// </summary>
@@ -1214,6 +1462,12 @@ public sealed partial class XamlScanner
             if (width.Status != WidthStatus.Known) return width;
         }
 
+        return FinalFont(width, font, localizable);
+    }
+
+    /// <summary>寬度已經算得出來的位置：字型也要讀得出來、度量檔裡要有。</summary>
+    private AvailableWidth FinalFont(AvailableWidth width, FontSpec font, bool localizable)
+    {
         if (font.Unreadable is { } why)
             return AvailableWidth.NotKnown(WidthStatus.Unmeasurable, why);
 
@@ -1355,30 +1609,34 @@ public sealed partial class XamlScanner
         ns.Contains("/blend/", StringComparison.OrdinalIgnoreCase) ||
         ns == "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
+    /// <summary>屬性值是字面文字、資源字串還是綁定。</summary>
+    private (TextSource, string?, string?) ClassifyValue(string raw)
+    {
+        var v = raw.Trim();
+        if (v.Length == 0) return (TextSource.Literal, null, null);
+
+        // "{}" 是 XAML 的跳脫前綴：{}{0} 其實是字面的 "{0}"
+        if (v.StartsWith("{}", StringComparison.Ordinal))
+            return (TextSource.Literal, v[2..], null);
+
+        if (v.StartsWith('{'))
+        {
+            var key = ResourceKeyOf(v) ?? StringResourceKeyOf(v);
+            return key is not null
+                ? (TextSource.Resource, v, key)
+                : (TextSource.DataBound, v, null);
+        }
+
+        // 屬性值裡的換行在 XML 剖析時已經被正規化成空格；&#x0a; 寫的才是真的換行，保留
+        return (TextSource.Literal, v, null);
+    }
+
     private (TextSource, string?, string?) ExtractText(XElement el, string property)
     {
         var local = el.Name.LocalName;
 
         if (el.Attribute(property)?.Value is { } raw)
-        {
-            var v = raw.Trim();
-            if (v.Length == 0) return (TextSource.Literal, null, null);
-
-            // "{}" 是 XAML 的跳脫前綴：{}{0} 其實是字面的 "{0}"
-            if (v.StartsWith("{}", StringComparison.Ordinal))
-                return (TextSource.Literal, v[2..], null);
-
-            if (v.StartsWith('{'))
-            {
-                var key = ResourceKeyOf(v) ?? StringResourceKeyOf(v);
-                return key is not null
-                    ? (TextSource.Resource, v, key)
-                    : (TextSource.DataBound, v, null);
-            }
-
-            // 屬性值裡的換行在 XML 剖析時已經被正規化成空格；&#x0a; 寫的才是真的換行，保留
-            return (TextSource.Literal, v, null);
-        }
+            return ClassifyValue(raw);
 
         // 屬性元素寫法：<Button.Content>Save</Button.Content>
         var holder = el.Elements().FirstOrDefault(e => e.Name.LocalName == $"{local}.{property}");
