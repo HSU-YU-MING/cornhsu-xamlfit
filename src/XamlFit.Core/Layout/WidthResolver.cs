@@ -1531,37 +1531,79 @@ public sealed class WidthResolver
         var roots = template.Elements().Where(e => !e.Name.LocalName.Contains('.', StringComparison.Ordinal)).ToList();
         if (roots.Count != 1) return (null, "that template does not have exactly one root element", 0);
 
-        // 會把項目排進捲動區的控制項：範本裡的捲動行為不是一個「內距」說得完的
+        // TreeView（項目一層層縮排）、DataGrid（欄有自己的尺寸系統）：範本裡的排法不是一個「內距」說得完的
         var controlName = control.Name.LocalName;
-        if (EndsWithAny(controlName, "ListBox", "ListView", "TreeView", "DataGrid", "ItemsControl"))
+        if (EndsWithAny(controlName, "TreeView", "DataGrid"))
             return (null, "the control lays out items, which a single chrome figure cannot describe", 0);
+
+        // 0.7.0：ListBox／ListView／ItemsControl 的自訂範本。項目畫在範本的 ItemsPresenter 裡，
+        // 所以內距 = 控制項外框到 ItemsPresenter 之間的東西（LayoutOracle「ListBox template…」實測）。
+        // 捲軸與水平捲動：ListBox／ListView 範本裡的 ScrollViewer 跟著清單自己的 ScrollViewer.* 設定（WPF 把它綁到範本的父層），
+        // 那部分照預設範本的規則算（Step 的 ScrollingLists）；這裡把複本的捲軸關掉、只量內距。
+        // 範本的 ScrollViewer 自己寫死了捲軸、或用 IsItemsHost 的面板自己排項目 → 不知道。
+        var isItemsList = !header && EndsWithAny(controlName, "ListBox", "ListView", "ItemsControl");
 
         // ScrollViewer 的內容宿主是 ScrollContentPresenter。換了捲軸樣式的 App 幾乎都會重寫它的範本
         //（實查 ScreenToGif：296 個位置卡在這裡）。垂直捲軸照舊假設它在。
         var isScrollViewer = controlName.EndsWith("ScrollViewer", StringComparison.Ordinal);
 
-        // 這個控制項的「內容」是哪個屬性：ComboBox 關起來時顯示的是選中的項目，TabControl 是選中的分頁
-        var contentSource = header ? "Header"
-            : controlName.EndsWith("ComboBox", StringComparison.Ordinal) ? "SelectionBoxItem"
-            : controlName.EndsWith("TabControl", StringComparison.Ordinal) ? "SelectedContent"
-            : "Content";
+        List<List<int>> presenters;
+        if (isItemsList)
+        {
+            if (roots[0].DescendantsAndSelf().Any(e => string.Equals(e.Attribute("IsItemsHost")?.Value.Trim(), "True", StringComparison.OrdinalIgnoreCase)))
+                return (null, "that template lays the items out in its own panel (IsItemsHost)", 0);
+            presenters = [];
+            FindItemsPresenters(roots[0], [], presenters);
+            if (presenters.Count != 1)
+                return (null, presenters.Count == 0 ? "that template has no ItemsPresenter" : $"that template has {presenters.Count} ItemsPresenters", 0);
+        }
+        else
+        {
+            // 這個控制項的「內容」是哪個屬性：ComboBox 關起來時顯示的是選中的項目，TabControl 是選中的分頁
+            var contentSource = header ? "Header"
+                : controlName.EndsWith("ComboBox", StringComparison.Ordinal) ? "SelectionBoxItem"
+                : controlName.EndsWith("TabControl", StringComparison.Ordinal) ? "SelectedContent"
+                : "Content";
 
-        var hosts = new List<(List<int> Path, string Source)>();
-        FindHosts(roots[0], [], hosts, isScrollViewer ? "ScrollContentPresenter" : "ContentPresenter");
+            var hosts = new List<(List<int> Path, string Source)>();
+            FindHosts(roots[0], [], hosts, isScrollViewer ? "ScrollContentPresenter" : "ContentPresenter");
 
-        // 範本裡常常不只一個內容宿主（標題、浮動提示、圖示…）。要的是顯示這個控制項「內容」的那一個
-        var presenters = hosts.Where(h => h.Source == contentSource).Select(h => h.Path).ToList();
-        if (presenters.Count == 0 && !header && contentSource != "Content")
-            presenters = hosts.Where(h => h.Source == "Content").Select(h => h.Path).ToList();
+            // 範本裡常常不只一個內容宿主（標題、浮動提示、圖示…）。要的是顯示這個控制項「內容」的那一個
+            presenters = hosts.Where(h => h.Source == contentSource).Select(h => h.Path).ToList();
+            if (presenters.Count == 0 && !header && contentSource != "Content")
+                presenters = hosts.Where(h => h.Source == "Content").Select(h => h.Path).ToList();
 
-        if (presenters.Count != 1)
-            return (null, presenters.Count == 0
-                ? $"that template has no element that hosts the {contentSource}"
-                : $"that template has {presenters.Count} elements that host the {contentSource}", 0);
+            if (presenters.Count != 1)
+                return (null, presenters.Count == 0
+                    ? $"that template has no element that hosts the {contentSource}"
+                    : $"that template has {presenters.Count} elements that host the {contentSource}", 0);
+        }
 
         var clone = new XElement(roots[0]);
         var presenter = clone;
         foreach (var index in presenters[0]) presenter = presenter.Elements().ElementAt(index);
+
+        if (isItemsList)
+        {
+            var scrollingList = EndsWithAny(controlName, ScrollingLists);
+            for (var e = presenter.Parent; e is not null; e = e.Parent)
+            {
+                if (!e.Name.LocalName.EndsWith("ScrollViewer", StringComparison.Ordinal)) continue;
+                var h = e.Attribute("HorizontalScrollBarVisibility");
+                var v = e.Attribute("VerticalScrollBarVisibility");
+                bool Literal(XAttribute? a) => a is not null && TemplateBindingProperty(a.Value) is null;
+                if (scrollingList)
+                {
+                    if (Literal(h) || Literal(v))
+                        return (null, "the ScrollViewer in that template sets its own scroll bars", 0);
+                    e.SetAttributeValue("HorizontalScrollBarVisibility", "Disabled");
+                    e.SetAttributeValue("VerticalScrollBarVisibility", "Disabled");
+                }
+                else if (!Literal(h) || !Literal(v))
+                    // ItemsControl 的預設樣式沒設 ScrollViewer.*：範本的 ScrollViewer 拿到什麼沒實測，不猜
+                    return (null, "the ScrollViewer in that template takes its scroll bars from the ItemsControl", 0);
+            }
+        }
 
         // 標籤列在左右兩側：範本靠 TabStripPlacement 的觸發器重排（標籤列那一欄變 Auto…）。
         // 這個屬性是靜態讀得到的，所以把那些觸發器先套到複本上。
@@ -1864,6 +1906,24 @@ public sealed class WidthResolver
     /// （<c>&lt;materialDesign:Ripple Content="{TemplateBinding Content}"/&gt;</c>、<c>mah:ContentControlEx</c>）。
     /// 任何把控制項的屬性綁到自己 <c>Content</c> 上的元素都算 —— 它自己的內距由解析器照常去算。
     /// </summary>
+    /// <summary>範本裡的 ItemsPresenter（路徑是 Elements() 的索引，跟 <see cref="FindHosts"/> 一樣）。</summary>
+    private static void FindItemsPresenters(XElement e, List<int> path, List<List<int>> found)
+    {
+        var local = e.Name.LocalName;
+        if (local.EndsWith("Popup", StringComparison.Ordinal)
+            || local.EndsWith(".Resources", StringComparison.Ordinal) || local.EndsWith(".Triggers", StringComparison.Ordinal))
+            return;
+        if (local == "ItemsPresenter") { found.Add([.. path]); return; }
+
+        var i = 0;
+        foreach (var child in e.Elements())
+        {
+            path.Add(i++);
+            FindItemsPresenters(child, path, found);
+            path.RemoveAt(path.Count - 1);
+        }
+    }
+
     private static void FindHosts(
         XElement e, List<int> path, List<(List<int> Path, string Source)> found, string presenterName)
     {
