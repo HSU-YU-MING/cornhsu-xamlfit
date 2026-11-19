@@ -567,7 +567,19 @@ public sealed class StyleIndex
         for (var cur = element; cur is not null; cur = inheritable ? cur.Parent : null)
         {
             // 屬性元素（<Grid.Children>）不是物件，沒有屬性也沒有樣式
-            if (cur.Name.LocalName.Contains('.', StringComparison.Ordinal)) continue;
+            if (cur.Name.LocalName.Contains('.', StringComparison.Ordinal))
+            {
+                // ⚠ 快顯的字型不從擁有者繼承。WPF 實測（視窗 Courier New 30）：Button 的 ToolTip、ContextMenu
+                //   與裡面的 MenuItem 都是系統字型 12（這台繁中 Windows 是 Microsoft JhengHei UI）——
+                //   預設樣式用 SystemFonts.StatusFont／MenuFont 設了字型，樣式贏過繼承。
+                //   所以走到 <X.ToolTip>／<X.ContextMenu> 就停：沒人設定就是預設字型，不是視窗的。
+                //   直接放在 <X.ToolTip> 裡的內容由 WPF 包進一個隱含的 ToolTip，它的隱含樣式也算
+                var isTip = cur.Name.LocalName.EndsWith(".ToolTip", StringComparison.Ordinal);
+                var isMenu = cur.Name.LocalName.EndsWith(".ContextMenu", StringComparison.Ordinal);
+                if (inheritable && (isTip || isMenu) && setterName.StartsWith("Font", StringComparison.Ordinal))
+                    return isTip ? ImplicitSetter(cur, "ToolTip", property) : Resolved.NotSet;
+                continue;
+            }
 
             // 1. 本地屬性
             if (LocalAttribute(cur, property) is { } raw)

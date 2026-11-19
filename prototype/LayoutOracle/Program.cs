@@ -305,6 +305,8 @@ internal static class Program
 
         if (args.Length > 0 && args[0] == "--popups") { Popups(); app.Shutdown(); return 0; }
 
+        if (args.Length > 1 && args[0] == "--watermark") { Watermark(app, args[1]); app.Shutdown(); return 0; }
+
         if (args.Length > 0 && args[0] == "--font-source")
         {
             // 沒寫 FontFamily 的文字到底用哪一支：相依屬性的預設值、實際排出來的字型、系統訊息字型
@@ -1045,7 +1047,97 @@ internal static class Program
                 $"Popup        content {w,5:F0}: child {((FrameworkElement)pop.Child).ActualWidth,7:F2}"));
             pop.IsOpen = false;
         }
+
+        // 0.7.0：快顯的字型不從擁有者繼承。視窗設 Courier New 30，看 ToolTip／ContextMenu／MenuItem 實際用哪支字型，
+        // 再看 ToolTip 的字串內容是不是「系統字型量出來的寬度 + 內距 14」（ToolTip="…" 位置的量法）
+        host.FontFamily = new System.Windows.Media.FontFamily("Courier New");
+        host.FontSize = 30;
+        var sys = SystemFonts.StatusFontFamily;
+        var sysSize = SystemFonts.StatusFontSize;
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"== popup fonts (window: Courier New 30; system status font: {sys.Source} {sysSize}) =="));
+        const string tipText = "Save the file as a new name";
+        var stringTip = new ToolTip { Content = tipText };
+        var owner = new Button { Content = "z", ToolTip = stringTip };
+        var menu2 = new ContextMenu();
+        var item2 = new MenuItem { Header = "Open" };
+        menu2.Items.Add(item2);
+        owner.ContextMenu = menu2;
+        panel.Children.Add(owner);
+        host.UpdateLayout();
+        stringTip.PlacementTarget = owner;
+        stringTip.IsOpen = true;
+        menu2.PlacementTarget = owner;
+        menu2.IsOpen = true;
+        Idle();
+        var typeface = new System.Windows.Media.Typeface(stringTip.FontFamily, stringTip.FontStyle, stringTip.FontWeight, stringTip.FontStretch);
+        var text = new System.Windows.Media.FormattedText(tipText, CultureInfo.GetCultureInfo("en-US"), FlowDirection.LeftToRight,
+            typeface, stringTip.FontSize, System.Windows.Media.Brushes.Black, 1.0);
+        var same = (string a, double s) => a == sys.Source && Math.Abs(s - sysSize) < 0.01 ? "system font" : "NOT the system font";
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"ToolTip      {stringTip.FontFamily.Source} {stringTip.FontSize}  ({same(stringTip.FontFamily.Source, stringTip.FontSize)})"));
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"ContextMenu  {menu2.FontFamily.Source} {menu2.FontSize}  ({same(menu2.FontFamily.Source, menu2.FontSize)})"));
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"MenuItem     {item2.FontFamily.Source} {item2.FontSize}  ({same(item2.FontFamily.Source, item2.FontSize)})"));
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+            $"string tip   width {stringTip.ActualWidth:F2} = text {text.WidthIncludingTrailingWhitespace:F2} + {stringTip.ActualWidth - text.WidthIncludingTrailingWhitespace:F2} (table: 14)"));
+        stringTip.IsOpen = false;
+        menu2.IsOpen = false;
         host.Close();
+    }
+
+    /// <summary>
+    /// --watermark mahapps|md2|md3|handycontrol|wpfui：佈景的浮水印／提示文字畫在哪裡、多寬、用什麼字型。
+    /// 0.7.0 要把它們當成文字位置；假設是「跟 TextBox 的文字同一塊區域」（寬 = TextBox 寬 − 佈景量到的 TextBox chrome）。
+    /// 這裡在真的視窗裡打開，找出畫著浮水印的 TextBlock，量它的版面槽寬度跟字型，跟那個假設比。
+    /// </summary>
+    private static void Watermark(Application app, string which)
+    {
+        var profile = Themes.Load(app, which);
+        const string mark = "Type the name of the file you want to open here please";
+        var (xmlns, attr, element) = which switch
+        {
+            "mahapps" => ("xmlns:t='http://metro.mahapps.com/winfx/xaml/controls'", $"t:TextBoxHelper.Watermark='{mark}'", "TextBox"),
+            "md2" or "md3" => ("xmlns:t='http://materialdesigninxaml.net/winfx/xaml/themes'", $"t:HintAssist.Hint='{mark}'", "TextBox"),
+            "handycontrol" => ("xmlns:t='https://handyorg.github.io/handycontrol'", $"t:InfoElement.Placeholder='{mark}'", "TextBox"),
+            "wpfui" => ("xmlns:t='http://schemas.lepo.co/wpfui/2022/xaml'", $"PlaceholderText='{mark}'", "t:TextBox"),
+            _ => throw new ArgumentException(which),
+        };
+        var chrome = profile.Controls.TryGetValue("TextBox", out var c) ? c.Chrome : null;
+        Console.WriteLine($"theme: {profile.Id}; TextBox chrome in the data: {chrome?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}");
+        foreach (var width in new[] { 200, 300 })
+        foreach (var extra in new[] { "", "Padding='10,0,10,0'", "FontSize='20'" })
+        {
+            var host = (Window)XamlReader.Parse(
+                $"<Window {Ns} {xmlns} Width='700' Height='200' WindowStyle='None' AllowsTransparency='True'>" +
+                $"<StackPanel><{element} Width='{width}' HorizontalAlignment='Left' {attr} {extra}/></StackPanel></Window>");
+            host.Left = -20000; host.Top = -20000; host.ShowInTaskbar = false; host.ShowActivated = false;
+            host.Show();
+            host.Dispatcher.Invoke(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+            var box = (FrameworkElement)((StackPanel)host.Content).Children[0];
+            TextBlock? found = null;
+            void Walk(DependencyObject d)
+            {
+                for (var i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(d) && found is null; i++)
+                {
+                    var ch = System.Windows.Media.VisualTreeHelper.GetChild(d, i);
+                    if (ch is TextBlock tb && tb.Text == mark && tb.IsVisible) { found = tb; return; }
+                    Walk(ch);
+                }
+            }
+            Walk(box);
+            if (found is null) { Console.WriteLine($"  {element} {width} {extra,-22}: watermark not drawn"); host.Close(); continue; }
+            var slot = LayoutInformation.GetLayoutSlot(found);
+            var visible = slot.Width - found.Margin.Left - found.Margin.Right;
+            var scale = found.RenderTransform is System.Windows.Media.ScaleTransform st ? st.ScaleX : 1;
+            var expected = chrome is { } ch2 ? width - ch2 : double.NaN;
+            var boxFont = (Control)box;
+            Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                $"  {element} {width} {extra,-22}: slot {visible,7:F2}  expected {expected,7:F2}  diff {visible - expected,6:F2}  " +
+                $"font {found.FontFamily.Source} {found.FontSize} {found.FontWeight} (box {boxFont.FontFamily.Source} {boxFont.FontSize})  trim {found.TextTrimming} scale {scale:F2}"));
+            host.Close();
+        }
     }
 
     private static Window Host()

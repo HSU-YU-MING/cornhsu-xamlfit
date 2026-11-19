@@ -776,7 +776,7 @@ public sealed class WidthResolver
     /// <summary>量兄弟元素時查了幾次在地化字串。寬度用到它們的位置要標出來。</summary>
     private int ResourceLookups => (_measurer as ElementMeasurer)?.ResourceLookups ?? 0;
 
-    private static string? ThemeOf(XElement el) => el.Document?.Annotation<ExternalTheme>()?.Name;
+    internal static string? ThemeOf(XElement el) => el.Document?.Annotation<ExternalTheme>()?.Name;
 
     internal static List<XElement> LayoutChildren(XElement element)
     {
