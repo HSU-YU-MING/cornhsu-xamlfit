@@ -234,6 +234,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 150 | **快顯的內距要真的打開才量得到** | ContextMenu 13（Padding 4 + Border 2 + 範本其他 7）、ToolTip 14、子選單的 Popup 6、裸 Popup 0；MenuItem 子項 85 跟表一致。ChromeGen 離線 Measure 量不到快顯（坑 61）；`LayoutOracle --popups` 放進真的視窗、IsOpen 再量，兩個內容寬度斜率都是 1。這幾個條目只在使用者宣告 `popupMaxWidth` 時用到，不宣告快顯照舊不檢查 | LayoutOracle `--popups` |
 | 151 | **PR 留言截斷要截在整行上** | `head -c 60000` 會把一行切在 code span 中間：收尾的反引號沒了，被切開的那段裡的 `[文字](網址)`、`@帳號` 在留言裡生效（也可能切在 UTF-8 字中間）。每一行都自己關好 code span，所以 `head -c 60000 | sed '$d'` 丟掉最後那半行。XamlContrast 1.8.1 的 action.yml 有同一段 | 提交後的自動安全審查 |
 | 152 | **翻譯完整度只讓會當掉的那一種擋 build** | 漏翻（warn）與寫死的字（info）一升級就會在每個有譯文的專案冒出來；拿它們擋預設的 gate 等於「永遠開火的閘門」。只有 `placeholder-mismatch` 的 fail（譯文的編號超過來源、或大括號不成對 → String.Format 丟例外）擋。看的是整份字串表（程式碼用的字串也是翻譯對象），不是只看 XAML 引用的鍵。來源語言不是組合格式字串（`{name}` 這種）就不比 —— 不知道它怎麼被用 | 設計決定（0.5.0） |
+| 153 | **度量檔不該說出匯出那台機器裝了什麼；Segoe UI Variable 不預設匯出** | `installedFamilies` 原本記整台機器的全部家族，只是為了拆「Segoe UI Variable」這種名字。拆名字只需要匯出的家族與「名稱以它們開頭」的家族（`MetricsFile.RelevantInstalledFamilies`；測試比過兩份清單對每個名字的答案一樣）。Segoe UI Variable 依 Microsoft 字型 FAQ 不授權在 Microsoft 產品之外使用：不帶 `--family` 時跳過並說明。CI 現場產生：GitHub 的 windows-2022／2025 字型齊全、寬度跟桌機一樣，只有 Segoe UI 收的字略少（2022 最少）。授權沒有答案，法務筆記在 `docs/歸檔/`（不進 git） | 設計決定（0.6.0）、探測分支實跑 |
 
 ### 環境層級的坑
 
@@ -250,7 +251,7 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 803 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 818 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 50 條 CLI 路徑的退出碼

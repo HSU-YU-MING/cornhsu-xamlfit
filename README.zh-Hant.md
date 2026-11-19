@@ -320,6 +320,46 @@ git add xamlfit.fonts.json.gz
 WPF 的候選字型在度量檔裡都畫不出來的字算量不到，報告會列出候選字型。
 看不見的字（變體選擇符、零寬空白、零寬連接符、BOM）寬度是 0。
 
+### 字型度量與授權
+
+從商用字型萃取這些數字可不可以，目前沒有人給過答案。Microsoft 的字型轉散布 FAQ 禁止轉散布、修改、轉換字型格式，
+對度量數字一個字都沒提；字型度量也沒有任何判決。XamlFit 本身不附任何商用字型的度量：檔案是你從這台機器上有授權的字型產生的。
+檔案裡有什麼，[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md#font-metrics) 全部列出來了。以上不是法律意見。
+
+- **私人 repo：** 檔案留在你的團隊裡，跟字型授權本來涵蓋的範圍一樣。
+- **公開 repo：** commit 這個檔案等於公開從商用字型算出來的數字。在有答案之前，建議在 CI 裡產生（見下方）而不要 commit；
+  也不要把它上傳成 workflow artifact —— 公開 repo 的 artifact 下載得到。
+- **Segoe UI Variable 預設不匯出**，要用 `--family` 點名才會匯出：Microsoft 的 FAQ 說它不提供 Microsoft 產品以外的授權或使用。
+- 檔案只記「解析字型名稱用得到的」已安裝家族名稱（匯出的家族，以及名稱以它們開頭的已安裝家族），不是匯出那台機器裝的全部字型。
+
+**在 CI 裡產生。** GitHub 的 Windows 機器（`windows-2022` 與 `windows-2025`，2026-11-19 實查）有 Segoe UI、Microsoft JhengHei UI、
+Microsoft YaHei UI、Yu Gothic UI、Malgun Gothic、Nirmala UI、Leelawadee UI、Myanmar Text、Mongolian Baiti、Calibri、Tahoma、Arial 等；
+Segoe UI Variable 只有 `windows-2025` 有。匯出三個家族約 30 秒，加 `--hinted` 約 4 分鐘。
+比對過的每個字，寬度都跟 Windows 11 桌機匯出的一樣。機器上的 Segoe UI 收的字略少（`windows-2022` 最少），
+所以桌機量得到的罕用字在那裡可能量不到：會報出來，不會量錯。建議用 `windows-latest`。
+度量檔放在 job 的暫存資料夾，job 結束就消失：
+
+```yaml
+jobs:
+  fit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: XamlFit with this runner's fonts
+        shell: bash
+        run: |
+          dotnet tool install --tool-path "$RUNNER_TEMP/xf" Cornhsu.XamlFit --version 0.6.0
+          "$RUNNER_TEMP/xf/xamlfit" fonts export --family "Segoe UI" --family "Microsoft JhengHei UI" \
+            --out "$RUNNER_TEMP/xamlfit.fonts.json.gz"
+          "$RUNNER_TEMP/xf/xamlfit" check src/MyApp --resx src/MyApp/Resources \
+            --metrics "$RUNNER_TEMP/xamlfit.fonts.json.gz"
+```
+
+[GitHub Action](#github-action) 是在 Linux 機器上測的，那裡沒有 Windows 字型；在 Windows 機器上請像上面那樣直接跑工具。
+
 ## `budget` —— 翻譯之前
 
 單位是**字串**不是 UI 位置：
@@ -466,11 +506,11 @@ permissions:
   security-events: write          # 只有 sarif: true 才需要
 steps:
   - uses: actions/checkout@v4
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.5.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.6.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.5.0              # 工具的版本也要釘
+      version: 0.6.0              # 工具的版本也要釘
       sarif: true                 # 上傳到 code scanning
 ```
 

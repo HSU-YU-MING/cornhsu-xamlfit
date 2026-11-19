@@ -357,6 +357,45 @@ public class FontResolverTests
     }
 
     [Fact]
+    public void Only_the_installed_families_that_name_resolution_needs_are_kept()
+    {
+        // 度量檔常進公開 repo：原本整份記下匯出那台機器裝了哪些字型。只留匯出的家族與「匯出的家族名 + 空白」開頭的
+        string[] installed = ["Segoe UI", "Segoe UI Historic", "Segoe UI Variable Text", "Segoe UIX", "Arial", "Fancy Paid Font", "Segoe"];
+        Assert.Equal(["Segoe UI", "Segoe UI Historic", "Segoe UI Variable Text"],
+            MetricsFile.RelevantInstalledFamilies(installed, ["Segoe UI"]));
+    }
+
+    [Theory]
+    [InlineData("Segoe UI Variable", 700)]
+    [InlineData("Segoe UI Variable", 400)]
+    [InlineData("Segoe UI Bold", 400)]
+    [InlineData("Segoe UI Historic", 400)]
+    [InlineData("Segoe UI Variable Text", 400)]
+    [InlineData("Segoe UI Foo Bold", 400)]
+    [InlineData("Arial Bold", 400)]
+    [InlineData("Fancy Paid Font Italic", 400)]
+    [InlineData("Segoe Bold", 400)]
+    public void Trimming_the_installed_families_does_not_change_how_a_name_resolves(string name, int weight)
+    {
+        // 拆「家族 + 字面名稱」只看匯出的家族當前綴：不以匯出家族名開頭的已安裝名字，記不記都一樣
+        FontMetrics[] faces = [Plain("Segoe UI", 400), Plain("Segoe UI", 700)];
+        string[] full = ["Segoe UI", "Segoe UI Historic", "Segoe UI Variable Text", "Arial", "Fancy Paid Font", "Segoe"];
+        var before = new FontResolver(faces, installedFamilies: full).Resolve(name, weight, FontStyleKind.Normal, "Segoe UI").Chain;
+        var after = new FontResolver(faces, installedFamilies: MetricsFile.RelevantInstalledFamilies(full, ["Segoe UI"]))
+            .Resolve(name, weight, FontStyleKind.Normal, "Segoe UI").Chain;
+        Assert.Equal(before.Select(f => (f.Family, f.Weight)), after.Select(f => (f.Family, f.Weight)));
+    }
+
+    [Theory]
+    [InlineData("Segoe UI Variable", true)]
+    [InlineData("Segoe UI Variable Text", true)]
+    [InlineData("segoe ui variable display", true)]
+    [InlineData("Segoe UI", false)]
+    [InlineData("Segoe UI Historic", false)]
+    public void Segoe_UI_Variable_is_not_exported_unless_named(string family, bool restricted) =>
+        Assert.Equal(restricted, MetricsFile.IsRestrictedByDefault(family));
+
+    [Fact]
     public void Language_system_tables_are_stored_as_differences_and_read_back_whole()
     {
         var face = Plain("Indic", 400);

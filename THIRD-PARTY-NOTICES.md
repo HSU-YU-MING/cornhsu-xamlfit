@@ -82,9 +82,14 @@ name, keyed by Unicode code point or OpenType script/language tag; glyph IDs are
   combining mark follows it (`ccmp`); punctuation drawn differently inside Mongolian text.
 - **Hinted widths** (with `--hinted`): for 8–48 px, the whole-pixel width at each size where it
   differs from the rounded linear width, from the font's `hdmx` table or from Windows GDI.
-- **The machine's installed family names** (`installedFamilies`): every family name the export
-  saw, including fonts that were not exported, so that `Segoe UI Variable` can be resolved the way
-  WPF does. This lists what is installed on the machine that ran the export.
+- **Installed family names** (`installedFamilies`): only the names that resolving a font name the
+  way WPF does needs — the exported families, and installed families whose names begin with one of
+  them followed by a space (`Segoe UI Historic` next to `Segoe UI`), so that `Segoe UI Variable` is
+  read as Segoe UI but a real font missing from the file is not. Files exported before 0.6.0 list
+  every family the export saw, that is, what was installed on the machine that ran it.
+
+Segoe UI Variable is not exported unless the user names it with `--family`: Microsoft's font FAQ
+says it is not available for licensing or use outside Microsoft products.
 
 It contains no glyph outlines, hinting instructions, glyph IDs, or copies of the font's tables or
 software. The kerning section is, however, a transcription of the positioning data of part of the

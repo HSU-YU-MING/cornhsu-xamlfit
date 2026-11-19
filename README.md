@@ -450,6 +450,56 @@ that does not set `Language` draws Chinese with Yu Gothic UI. A character none o
 candidates in the metrics file can draw is unmeasurable, and the report names the candidates.
 Invisible characters (variation selectors, zero-width space and joiner, BOM) have no width.
 
+### Font metrics and licensing
+
+Nobody has said whether extracting these numbers from a commercial font is allowed. Microsoft's
+font redistribution FAQ forbids redistributing, modifying or converting the fonts and says nothing
+about metrics, and no court has ruled on font metrics either way. XamlFit itself ships metrics for
+no proprietary font: you generate the file from fonts licensed to your machine. Everything the file
+holds is listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md#font-metrics). This is not
+legal advice.
+
+- **Private repository:** the file stays where your fonts' licence already applies, with your team.
+- **Public repository:** committing the file publishes numbers derived from commercial fonts. Until
+  there is an answer, prefer generating it in CI (below) instead of committing it, and do not upload
+  it as a workflow artifact — a public repository's artifacts can be downloaded.
+- **Segoe UI Variable is skipped** unless you name it with `--family`: Microsoft's FAQ says it is
+  not available for licensing or use outside Microsoft products.
+- The file lists only the installed family names that resolving a name needs (the exported families
+  and installed families whose names begin with one of them), not everything installed on the
+  machine that exported it.
+
+**Generating the file in CI.** GitHub's Windows runners (`windows-2022` and `windows-2025`, checked
+on 2026-11-19) have Segoe UI, Microsoft JhengHei UI, Microsoft YaHei UI, Yu Gothic UI, Malgun Gothic,
+Nirmala UI, Leelawadee UI, Myanmar Text, Mongolian Baiti, Calibri, Tahoma and Arial, among others;
+Segoe UI Variable is on `windows-2025` only. Exporting three families took about 30 s, with
+`--hinted` about 4 minutes. The widths matched a Windows 11 desktop export for every character
+compared. The runners' Segoe UI covers slightly fewer code points (`windows-2022` the fewest), so a
+rare character a desktop export can measure may be unmeasurable there: reported, not measured wrong.
+Prefer `windows-latest`. The metrics live in the job's temporary folder and go away with it:
+
+```yaml
+jobs:
+  fit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: XamlFit with this runner's fonts
+        shell: bash
+        run: |
+          dotnet tool install --tool-path "$RUNNER_TEMP/xf" Cornhsu.XamlFit --version 0.6.0
+          "$RUNNER_TEMP/xf/xamlfit" fonts export --family "Segoe UI" --family "Microsoft JhengHei UI" \
+            --out "$RUNNER_TEMP/xamlfit.fonts.json.gz"
+          "$RUNNER_TEMP/xf/xamlfit" check src/MyApp --resx src/MyApp/Resources \
+            --metrics "$RUNNER_TEMP/xamlfit.fonts.json.gz"
+```
+
+The [GitHub Action](#github-action) is tested on Linux runners, where there are no Windows fonts; on
+a Windows runner run the tool directly as above.
+
 ## `budget` — before translation
 
 The unit is the **string**, not the UI slot:
@@ -631,11 +681,11 @@ permissions:
   security-events: write          # only with sarif: true
 steps:
   - uses: actions/checkout@v4
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.5.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.6.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.5.0              # pin the tool too
+      version: 0.6.0              # pin the tool too
       sarif: true                 # upload to code scanning
 ```
 
