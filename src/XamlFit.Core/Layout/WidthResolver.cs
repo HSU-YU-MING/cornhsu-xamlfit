@@ -1256,6 +1256,9 @@ public sealed class WidthResolver
     /// ⚠ chrome 表量的是 **WPF 內建控制項的預設範本**。不是內建的、範本被換掉的、
     ///   樣式來自專案外的，一律是「不知道」，不是「照舊用表」也不是「當成 0」。
     /// </summary>
+    /// <summary>Aero2 的 Expander 標題在左右兩側時，箭頭那一列的寬（標題比它窄時，那一欄照它算；LayoutOracle「header H」：19 + 2 = 21）。</summary>
+    private const double SideHeaderArrow = 19;
+
     private InsetResult InnerInset(XElement el, string? theme)
     {
         var local = el.Name.LocalName;
@@ -1319,11 +1322,27 @@ public sealed class WidthResolver
             }
         }
 
+        // ⚠ ExpandDirection 左右：預設範本（Aero2）把標題放在旁邊的一欄，**不轉向**，內容拿剩下的寬度。
+        //   LayoutOracle「Expander Right／Left content…」實測：那一欄 = max(標題寬, 箭頭 19) + 2 + 左右 Padding；
+        //   內容區照上方的排法再扣一次 Padding（ToggleButton 與 ExpandSite 都綁 Padding）。標題寬含它自己的 Margin。
+        //   專案自己的範本、外部佈景：標題那欄怎麼排沒量過 → 不知道。
         if (EndsWithAny(local, "Expander"))
         {
             var direction = _styles.ResolveEx(el, "ExpandDirection", inheritable: false);
-            if (direction.IsUnreadable || (direction.IsValue && IsOneOf(direction.Value, "Left", "Right")))
-                return new(0, false, false, "the header of <Expander> is placed beside the content");
+            if (direction.IsUnreadable)
+                return new(0, false, false, "ExpandDirection of <Expander> is not statically readable");
+            if (direction.IsValue && IsOneOf(direction.Value, "Left", "Right"))
+            {
+                if (_styles.TemplateOf(el).Kind != TemplateKind.Default || theme is not null || !ChromeTable.IsWpf(el))
+                    return new(0, false, false, "the header of <Expander> is placed beside the content, in a template XamlFit has not measured");
+                if ((_measurer as ElementMeasurer)?.SideHeaderWidth(el, 0) is not { } header)
+                    return new(0, false, false, "the header of <Expander> is placed beside the content, and its width is not statically knowable");
+                var content = DefaultChrome(el, info, theme);
+                if (content.Blocked is not null) return content;
+                var padding = Thickness(el, "Padding");
+                if (padding.Blocked is { } paddingWhy) return new(0, false, false, paddingWhy);
+                return new(content.Inset + Math.Max(header, SideHeaderArrow) + 2 + padding.Sum, true, false, null);
+            }
         }
 
         // 範本被換掉了？換成專案裡看得到的範本就從它算；看不到就是不知道

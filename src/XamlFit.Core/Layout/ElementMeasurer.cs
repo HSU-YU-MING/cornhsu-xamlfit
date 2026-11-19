@@ -500,6 +500,27 @@ public sealed class ElementMeasurer : IElementMeasurer
         return null;   // 綁定，或查不到的鍵：值未知
     }
 
+    /// <summary>
+    /// ExpandDirection 左右時，Expander 的標題本身有多寬（含它自己的 Margin，不含範本加的 2 與 Padding）。
+    /// 字串標題用 Expander 的字型量（標題的 ContentPresenter 繼承它）；元素標題量那個元素。
+    /// 有 HeaderTemplate、綁定、查不到的鍵、好幾個子元素：null。
+    /// </summary>
+    internal double? SideHeaderWidth(XElement expander, int depth)
+    {
+        var template = _styles.ResolveEx(expander, "HeaderTemplate", inheritable: false);
+        if (template.IsUnreadable || template.IsValue) return null;
+
+        var holder = expander.Elements().FirstOrDefault(e => e.Name.LocalName.EndsWith(".Header", StringComparison.Ordinal));
+        if (holder is not null)
+        {
+            var children = holder.Elements().ToList();
+            if (children.Count == 1) return DesiredWidth(children[0], depth + 1);
+            if (children.Count == 0 && !string.IsNullOrWhiteSpace(holder.Value)) return MeasureText(expander, holder.Value.Trim());
+            return null;
+        }
+        return TabHeaderText(expander) is { } text ? MeasureText(expander, text) : null;
+    }
+
     /// <summary>TabItem 標題的文字。用範本或子元素畫的標題、讀不出來的值回 null。</summary>
     private string? TabHeaderText(XElement item)
     {
