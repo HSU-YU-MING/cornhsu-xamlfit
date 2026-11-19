@@ -3,6 +3,34 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.12.0] - 2026-11-19
+
+**Upgrading**: pages drawn by a `DataTemplate DataType=…` (the MVVM "view model picks the view" pattern) are
+now measured at the place that draws them, so sites that were "in a template" get a width. Kindling's
+resolution went from 72.9% to 78.8% (16 sites); a site next to an element of unknown width can now be
+blocked where it was "no declared limit", because the walk reaches the window's width.
+
+### Fixed (report 5, ZeroCel Studio)
+
+- **A page placed by a typed `DataTemplate` gets the width of the `ContentControl` that shows it.**
+  ZeroCel Studio's five pages are `<DataTemplate DataType="{x:Type vm:IntakeViewModel}"><views:IntakeView/></DataTemplate>`
+  in `Window.Resources`, shown by `<ContentControl Content="{Binding CurrentPage}"/>`; 89 of 128 sites
+  stopped at the template and the resolution was 44.2%. When exactly one element in the same resource
+  scope could draw the template (a `ContentControl` or `ContentPresenter` with a bound `Content` and
+  no template of its own, and no bound list without an `ItemTemplate`), the width is resolved from
+  there. Two or more candidates, none, or a typed template in the application's resources: still "in a
+  template", and the reason says how many were found. LayoutOracle `--wrap` has three new cases.
+
+### Fixed (report 4, re-check on 0.11.0)
+
+- **A content template's `TextBlock` takes its font from the application's implicit `TextBlock` style.**
+  0.11.0 blocked every such template once any style set a font: ZeroCel's App.xaml sets a fixed
+  `FontFamily="Segoe UI"` on all TextBlocks, and 32 sites went from measured to blocked. A fixed value is
+  now used; a binding, a dynamic resource or conflicting definitions still block, and so do `Margin`,
+  `Padding` and widths. Implicit styles in a window's or a Grid's own resources do not reach into the
+  template: LayoutOracle measured both (WPF keeps the control's font), and the application-level one
+  does apply (WPF wraps to five lines at the style's size).
+
 ## [0.11.0] - 2026-11-19
 
 **Upgrading**: a control whose string content is drawn by a `ContentTemplate` or `HeaderTemplate` is now

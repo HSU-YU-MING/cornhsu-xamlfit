@@ -111,12 +111,37 @@ public class ContentTemplateTests
     }
 
     [Fact]
-    public void An_implicit_textblock_style_that_changes_the_font_makes_it_unmeasurable()
+    public void The_applications_implicit_textblock_style_sets_the_font_of_the_template()
     {
+        // 回報 4 複驗：ZeroCel App.xaml 的全域 TextBlock 樣式寫死 FontFamily；0.11.0 一律擋（32 處）。
+        // 寫死的值照它量（LayoutOracle「template: application's implicit TextBlock style」：WPF 有套）
         var site = Site("<Button ContentTemplate=\"{StaticResource WrapCenterText}\" Content=\"Save the file\"/>",
             styles: "<Style TargetType=\"TextBlock\"><Setter Property=\"FontSize\" Value=\"16\"/></Style>");
+        Assert.Equal(WidthStatus.Known, site.Width.Status);
+        Assert.Equal(WrapMode.Wrap, site.Wrap);
+        Assert.Equal(16, site.FontSize, 3);
+    }
+
+    [Fact]
+    public void A_windows_implicit_textblock_style_does_not_reach_into_the_template()
+    {
+        // LayoutOracle「template: window's / Grid's implicit TextBlock style」：範本邊界擋住，字還是控制項的
+        var site = Site("<Button ContentTemplate=\"{StaticResource Mine}\" Content=\"Save the file\"/>",
+            resources: "<Style TargetType=\"TextBlock\"><Setter Property=\"FontSize\" Value=\"16\"/></Style>" +
+                       "<DataTemplate x:Key=\"Mine\"><TextBlock Text=\"{Binding}\" TextWrapping=\"Wrap\"/></DataTemplate>");
+        Assert.Equal(WidthStatus.Known, site.Width.Status);
+        Assert.Equal(MonoSize, site.FontSize, 3);
+    }
+
+    [Theory]
+    [InlineData("<Setter Property=\"FontSize\" Value=\"{DynamicResource Big}\"/>", "not statically readable")]
+    [InlineData("<Setter Property=\"Margin\" Value=\"4\"/>", "gets Margin")]
+    public void An_application_style_that_cannot_be_read_or_adds_space_is_unmeasurable(string setter, string why)
+    {
+        var site = Site("<Button ContentTemplate=\"{StaticResource WrapCenterText}\" Content=\"Save the file\"/>",
+            styles: $"<Style TargetType=\"TextBlock\">{setter}</Style>");
         Assert.Equal(WidthStatus.Unmeasurable, site.Width.Status);
-        Assert.Contains("gets FontSize from a Style", site.Width.Reason);
+        Assert.Contains(why, site.Width.Reason);
     }
 
     [Fact]

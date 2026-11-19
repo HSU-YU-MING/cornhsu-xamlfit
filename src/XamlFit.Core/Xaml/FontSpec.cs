@@ -21,8 +21,10 @@ public readonly record struct FontSpec(
     public bool Display { get; init; }
 
     /// <summary>字型屬性會繼承：本地 → 樣式 → 祖先，都沒有才用預設值。</summary>
+    /// <param name="drawnBy">字是內容範本裡的 TextBlock 畫的時候，它自己（含 App 層級的隱含樣式）設的字型屬性。
+    /// 有設的照它，沒設的照控制項繼承下來的。</param>
     public static FontSpec Read(StyleIndex styles, XElement el, string defaultFamily, double defaultSize,
-        string defaultLanguage = FontFallback.DefaultLanguage)
+        string defaultLanguage = FontFallback.DefaultLanguage, IReadOnlyDictionary<string, Resolved>? drawnBy = null)
     {
         string? unreadable = null;
 
@@ -33,8 +35,8 @@ public readonly record struct FontSpec(
 
         string Get(string property, string fallback)
         {
-            var r = headerKey is null
-                ? styles.ResolveEx(el, property, inheritable: true)
+            var r = drawnBy is not null && drawnBy.TryGetValue(property, out var own) && own.Kind != ResolveKind.NotSet ? own
+                : headerKey is null ? styles.ResolveEx(el, property, inheritable: true)
                 : HeaderFont(property);
             if (r.IsUnreadable) { unreadable ??= $"{property} is not statically readable ({r.Why})"; return fallback; }
             return r.IsValue ? r.Value! : fallback;

@@ -327,7 +327,16 @@ public sealed class WidthResolver
                 var isSite = ReferenceEquals(cur, site);
 
                 if (TemplateHosts.Contains(local))
-                    return TemplateExit($"inside <{local}>");
+                {
+                    // 依型別、沒有 key 的 DataTemplate（MVVM 換頁）：同一個資源範圍裡只有一個地方畫得出它時，從那裡接著走
+                    if (local == "DataTemplate" && owner.TypedTemplateHost(cur) is { Host: { } host })
+                    {
+                        cur = host;
+                        continue;
+                    }
+                    return TemplateExit(local == "DataTemplate" && owner.TypedTemplateHost(cur) is { Why: { } why }
+                        ? $"inside <{local}> ({why})" : $"inside <{local}>");
+                }
 
                 // 規則：快顯與依內容決定大小的宿主不受外層寬度約束（實查：QuillNest NoteEditorWindow.xaml:838）
                 double? popupStop = null;   // 使用者宣告了快顯的最大寬度：這一層扣完內距就用它結算
@@ -917,6 +926,68 @@ public sealed class WidthResolver
                 list.AddRange(e.Elements().Where(x => !x.Name.LocalName.Contains('.', StringComparison.Ordinal)));
         }
         return list;
+    }
+
+    private sealed record TypedHost(XElement? Host, string? Why);
+
+    /// <summary>
+    /// 依型別、沒有 key 的 DataTemplate（<c>&lt;DataTemplate DataType="{x:Type vm:HomeViewModel}"&gt;</c>）會畫在哪裡。
+    ///
+    /// ⚠ 回報 5（ZeroCel 工作室版）：五個頁面都是 Window.Resources 裡依型別的 DataTemplate 放進
+    ///   <c>&lt;ContentControl Content="{Binding CurrentPage}"/&gt;</c>，工具走到 DataTemplate 就停 —— 128 處裡 89 處
+    ///   擋住或沒查，解析度 44.2%（0.2.0 時 100%，那時還不管範本）。
+    /// 宣告它的資源範圍裡，Content 是綁定、自己沒有 ContentTemplate／Selector 的元素，與 ItemsSource 是綁定、沒有 ItemTemplate 的清單，
+    /// 都可能用到它。**只有一個、而且是 ContentControl／ContentPresenter** 時就是它的位置（LayoutOracle --wrap「typed template:」）；
+    /// 好幾個或一個都沒有：照舊是「在範本裡」，原因寫出找到幾個。App 層級的（整個 App 都可能用到）不找。
+    /// Host 為 null 且 Why 為 null：不是依型別的 DataTemplate。
+    /// </summary>
+    internal (XElement? Host, string? Why) TypedTemplateHost(XElement template)
+    {
+        if (template.Annotation<TypedHost>() is { } cached) return (cached.Host, cached.Why);
+        var found = FindTypedTemplateHost(template);
+        template.AddAnnotation(new TypedHost(found.Host, found.Why));
+        return found;
+    }
+
+    private (XElement? Host, string? Why) FindTypedTemplateHost(XElement template)
+    {
+        var x = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
+        if (template.Attribute("DataType") is null || template.Attribute(x + "Key") is not null) return (null, null);
+
+        var resources = template.Ancestors().FirstOrDefault(a => a.Name.LocalName.EndsWith(".Resources", StringComparison.Ordinal));
+        if (resources?.Parent is not { } scope)
+            return (null, "a DataTemplate by DataType outside a window or control's own Resources can be drawn anywhere in the app");
+        if (template.Ancestors().TakeWhile(a => !ReferenceEquals(a, resources)).Any(a => a.Name.LocalName != "ResourceDictionary"))
+            return (null, null);
+
+        static bool Bound(string? v) => v is not null && v.TrimStart().StartsWith("{Binding", StringComparison.Ordinal);
+        bool NotSet(XElement e, string property) => !HasProperty(e, property) && _styles.ResolveEx(e, property, inheritable: false).Kind == ResolveKind.NotSet;
+
+        var hosts = new List<XElement>();
+        var others = 0;
+        foreach (var e in scope.DescendantsAndSelf())   // 範本寫在宿主自己的 Resources 裡（Kindling 的 MainWindow）也算
+        {
+            // 別的資源、別的範本裡的不算（它們自己的範圍另外找）
+            if (e.Ancestors().TakeWhile(a => !ReferenceEquals(a, scope))
+                .Any(a => a.Name.LocalName.EndsWith(".Resources", StringComparison.Ordinal) || TemplateHosts.Contains(a.Name.LocalName)))
+                continue;
+
+            if (Bound(e.Attribute("Content")?.Value) && NotSet(e, "ContentTemplate") && NotSet(e, "ContentTemplateSelector"))
+            {
+                if (e.Name.LocalName is "ContentControl" or "ContentPresenter" && ChromeTable.IsWpf(e)) hosts.Add(e);
+                else others++;
+            }
+            else if (Bound(e.Attribute("ItemsSource")?.Value) && NotSet(e, "ItemTemplate") && NotSet(e, "ItemTemplateSelector"))
+            {
+                others++;
+            }
+        }
+
+        if (hosts.Count == 1 && others == 0) return (hosts[0], null);
+        var count = hosts.Count + others;
+        return (null, count == 0
+            ? $"no element in <{scope.Name.LocalName}> shows a bound Content without its own template, so where it is drawn is not known"
+            : $"{count} elements in <{scope.Name.LocalName}> could draw this DataTemplate by DataType, so where it is drawn is not known");
     }
 
     private static bool HasProperty(XElement el, string property) =>
