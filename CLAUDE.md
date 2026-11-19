@@ -240,6 +240,9 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 156 | **清單範本的捲軸不在範本裡算** | ListBox／ListView 範本的 ScrollViewer 跟著清單的 ScrollViewer.*（WPF 把它綁到範本的父層）。TemplateChrome 把複本的捲軸關掉只量內距，捲軸與水平捲動留給 Step 的 ScrollingLists（跟預設範本同一套）；範本的 ScrollViewer 自己寫死捲軸 → 不知道（LayoutOracle「ScrollViewer sets its own H=Auto」WPF 185、清單說 Disabled） | LayoutOracle「ListBox template…」 |
 | 157 | **專案改不了的「量不到」不能進可解析率的分母** | 視窗標題第一版用 Unmeasurable：Cornea 100% → 95.2%、QuillNest −1.9 點，而專案沒有任何辦法讓它量得到 —— 就是永遠開火的閘門。改成新的 WidthStatus.DrawnByWindows，跟 InTemplate 一樣單獨列、不進分母 | 五個專案實跑 |
 | 158 | **路線圖上的規則也要先有語料證明它卡住了** | 「照 MergedDictionaries 走合併圖」排在 0.x 第 4 項；實查五個專案（含 ScreenToGif、Playnite）0 個位置卡在定義矛盾，而 Playnite 在執行期從資料夾載入佈景字典。沒做，理由寫進 ROADMAP | budget CSV 全文搜尋 |
+| 159 | **Expander 左右展開時標題不轉向** | 直覺以為標題轉 90 度、旁邊那欄只有一行字高；WPF 實測那一欄 = max(標題寬, 箭頭 19) + 2 + 左右 Padding，內容區再扣一次 Padding（ToggleButton 與 ExpandSite 都綁 Padding）。字級 12／20 兩組量出來的「欄寬 − 字寬」都是 2，用來確認常數 | LayoutOracle「Expander Right／Left content…」 |
+| 160 | **路線圖寫的卡點要先重現** | 「標題在巢狀 ToggleButton 裡算不出來」寫進 ROADMAP 時是對的，0.8.0 加案例時已經全部一致（後來的 TemplateChrome 早就處理了）；真正還卡著的是左右展開。先加案例看工具現在怎麼答，再決定要修什麼 | LayoutOracle |
+| 161 | **標題列的 DIP 尺寸跟著縮放變** | 125% 時標題列按鈕一顆 49.3 DIP，不是名義上的 46。只在一種縮放量出來的模型拿去其他縮放可能高估，所以標題維持 drawn-by-windows。改縮放是系統設定，不要為了量測去改；要在不同縮放的機器上各量一次 | titlebar 量測（PrintWindow 比對） |
 
 ### 環境層級的坑
 
@@ -258,12 +261,12 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 852 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 859 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 50 條 CLI 路徑的退出碼
 bash scripts/verify-readme-facts.sh          # README 的 Action 範例釘的版本 = CHANGELOG 最新版（--update 重貼）
-dotnet run -c Release --project prototype/LayoutOracle   # 251 案 vs 真的 WPF 視窗（--check 用檢查模式的排法再跑一次；--wrap 比換行的行數；--popups 量快顯的內距）（Windows）；有高估就回 1
+dotnet run -c Release --project prototype/LayoutOracle   # 261 案 vs 真的 WPF 視窗（--check 用檢查模式的排法再跑一次；--wrap 比換行的行數；--popups 量快顯的內距）（Windows）；有高估就回 1
 ```
 
 **來源語言自我檢驗**（沒有腳本，手動跑）：對一個已經出貨的 App 跑

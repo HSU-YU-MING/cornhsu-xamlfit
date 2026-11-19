@@ -3,6 +3,29 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.8.0] - 2026-11-19
+
+**Upgrading**: text inside an `Expander` whose `ExpandDirection` is `Left` or `Right` is now measured
+with WPF's default template, so sites that were unmeasurable can now pass or fail.
+
+### Added
+
+- **Expanders with the header on the side.** WPF's default template puts the header in a column beside
+  the content, not rotated: that column is the wider of the header and the 19-wide arrow, plus 2 and
+  the left and right `Padding`, and the content loses its `Padding` once more. A string header is
+  measured in the expander's font, an element header with its margin. A `HeaderTemplate`, a bound
+  header, a project template or an external theme stays not measurable. `LayoutOracle` gained seven
+  cases (font sizes 12 and 20, both sides, a one-letter header, padding, an element header).
+
+### Checked
+
+- An `Expander` template of your own that draws the header in a `ToggleButton` was already measured
+  correctly; `LayoutOracle` now has three such cases. No `Expander` site in ScreenToGif or Playnite
+  was blocked.
+- Window titles stay `drawn-by-windows`. The title bar was measured on one machine at 125% (see the
+  roadmap), but its sizes in DIPs change with the display scaling, and one scaling is not enough to
+  avoid over-estimating at the others.
+
 ## [0.7.0] - 2026-11-19
 
 **Upgrading**: the action installs the tool into its own folder instead of globally, so it no longer
