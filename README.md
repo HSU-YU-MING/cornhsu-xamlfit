@@ -510,11 +510,11 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.12.0
+      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.13.0
         with:
           root: src/MyApp
           resx: src/MyApp/Resources
-          version: 0.12.0
+          version: 0.13.0
           export-fonts: Segoe UI, Microsoft JhengHei UI
 ```
 
@@ -708,11 +708,11 @@ permissions:
   security-events: write          # only with sarif: true
 steps:
   - uses: actions/checkout@v4
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.12.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.13.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.12.0              # pin the tool too
+      version: 0.13.0              # pin the tool too
       sarif: true                 # upload to code scanning
 ```
 
@@ -750,6 +750,9 @@ Suppress a single slot with a reason — the reason is required, and suppressed 
 <!-- xamlfit-ignore: decorative, never translated -->
 <TextBlock Width="40" Text="{x:Static p:Strings.Arrow}"/>
 ```
+
+The comment must start with `xamlfit-ignore` and applies to the next element. Other comments may stand in
+between, so it can be stacked with `xamlcontrast-ignore` and the like; a commented-out element or text may not.
 
 ## Related tools
 

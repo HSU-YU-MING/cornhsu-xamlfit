@@ -1781,7 +1781,7 @@ public sealed class WidthResolver
                 : "Content";
 
             var hosts = new List<(List<int> Path, string Source)>();
-            FindHosts(roots[0], [], hosts, isScrollViewer ? "ScrollContentPresenter" : "ContentPresenter");
+            FindHosts(roots[0], [], hosts, isScrollViewer ? "ScrollContentPresenter" : "ContentPresenter", controlName);
 
             // 範本裡常常不只一個內容宿主（標題、浮動提示、圖示…）。要的是顯示這個控制項「內容」的那一個
             presenters = hosts.Where(h => h.Source == contentSource).Select(h => h.Path).ToList();
@@ -1806,7 +1806,7 @@ public sealed class WidthResolver
                 if (!e.Name.LocalName.EndsWith("ScrollViewer", StringComparison.Ordinal)) continue;
                 var h = e.Attribute("HorizontalScrollBarVisibility");
                 var v = e.Attribute("VerticalScrollBarVisibility");
-                bool Literal(XAttribute? a) => a is not null && TemplateBindingProperty(a.Value) is null;
+                bool Literal(XAttribute? a) => a is not null && TemplateBindingProperty(a.Value, controlName) is null;
                 if (scrollingList)
                 {
                     if (Literal(h) || Literal(v))
@@ -1835,10 +1835,9 @@ public sealed class WidthResolver
         for (XElement? e = presenter; e is not null; e = e.Parent)
             foreach (var a in e.Attributes())
             {
-                var name = a.Name.LocalName;
-                var property = name[(name.LastIndexOf('.') + 1)..];
+                var property = PropertyName.Normalize(a.Name.LocalName);
                 if (property is "FontSize" or "FontFamily" or "FontWeight" or "FontStretch"
-                    && TemplateBindingProperty(a.Value) != property)
+                    && TemplateBindingProperty(a.Value, controlName) != property)
                     return (null, $"that template sets {property} on the content", 0);
             }
 
@@ -1849,7 +1848,7 @@ public sealed class WidthResolver
         {
             foreach (var a in e.Attributes().ToList())
             {
-                if (TemplateBindingProperty(a.Value) is not { } property) continue;
+                if (TemplateBindingProperty(a.Value, controlName) is not { } property) continue;
 
                 // ScrollViewer 算出來的捲軸可見性：垂直的照控制項的設定（沒關掉就假設它在）；
                 // 水平的不佔寬度
@@ -1879,6 +1878,8 @@ public sealed class WidthResolver
                     // 它的預設樣式就在專案裡、我們已經讀過了，沒設定就是相依屬性的預設值 0
                     "Padding" or "BorderThickness" when IsProjectType(control) => "0",
                     "Padding" or "BorderThickness" => null,
+                    // 附加屬性：預設值寫在它的程式碼裡，不是「沒有」
+                    _ when property.Contains('.', StringComparison.Ordinal) => null,
                     // 其他屬性（Background、HorizontalContentAlignment、Width…）沒設定就是沒有
                     _ => "",
                 };
@@ -2039,10 +2040,19 @@ public sealed class WidthResolver
                     (string?)e.Attribute(x + "Name") == target || (string?)e.Attribute("Name") == target);
                 if (element is null)
                     return $"a TabStripPlacement trigger in that template targets {target}, which is not in it";
-                if (property is "Style" or "Template"
-                    || element.Elements().Any(c => c.Name.LocalName == element.Name.LocalName + "." + property))
+
+                // 「Border.Padding」是元素自己的 Padding；「hc:IconElement.Width」是附加屬性，冒號不能進屬性名（XName 會丟例外）
+                var name = PropertyName.Normalize(property, element.Name.LocalName);
+                if (name.Contains(':', StringComparison.Ordinal) || !System.Xml.XmlReader.IsName(name))
+                    return $"a TabStripPlacement trigger in that template sets {property} of {target}, which this tool cannot read";
+                var attached = name.Contains('.', StringComparison.Ordinal);
+                if (name is "Style" or "Template"
+                    || element.Elements().Any(c => c.Name.LocalName == (attached ? name : element.Name.LocalName + "." + name)))
                     return $"a TabStripPlacement trigger in that template replaces {property} of {target}";
-                element.SetAttributeValue(property, value);
+                if (attached && element.Attributes().FirstOrDefault(a => a.Name.LocalName == name) is { } written)
+                    written.Value = value;
+                else
+                    element.SetAttributeValue(name, value);
             }
         }
         return null;
@@ -2140,14 +2150,14 @@ public sealed class WidthResolver
     }
 
     private static void FindHosts(
-        XElement e, List<int> path, List<(List<int> Path, string Source)> found, string presenterName)
+        XElement e, List<int> path, List<(List<int> Path, string Source)> found, string presenterName, string controlName)
     {
         var local = e.Name.LocalName;
         if (TemplateHosts.Contains(local) || local.EndsWith("Popup", StringComparison.Ordinal)
             || local.EndsWith(".Resources", StringComparison.Ordinal) || local.EndsWith(".Triggers", StringComparison.Ordinal))
             return;
 
-        var bound = TemplateBindingProperty(e.Attribute("Content")?.Value ?? "");
+        var bound = TemplateBindingProperty(e.Attribute("Content")?.Value ?? "", controlName);
 
         if (local == presenterName)
         {
@@ -2165,13 +2175,17 @@ public sealed class WidthResolver
         foreach (var child in e.Elements())
         {
             path.Add(i++);
-            FindHosts(child, path, found, presenterName);
+            FindHosts(child, path, found, presenterName, controlName);
             path.RemoveAt(path.Count - 1);
         }
     }
 
-    /// <summary><c>{TemplateBinding X}</c> 或 <c>{Binding X, RelativeSource={RelativeSource TemplatedParent}}</c> 的 X。</summary>
-    private static string? TemplateBindingProperty(string raw)
+    /// <summary>
+    /// <c>{TemplateBinding X}</c> 或 <c>{Binding X, RelativeSource={RelativeSource TemplatedParent}}</c> 的 X。
+    /// 附加屬性（<c>{TemplateBinding hc:IconElement.Width}</c>）連擁有者一起回（IconElement.Width），跟樣式的 Setter 同一套名字 ——
+    /// 截成 Width 就會讀到控制項自己的寬度。
+    /// </summary>
+    private static string? TemplateBindingProperty(string raw, string controlName)
     {
         var t = raw.Trim();
         if (!t.StartsWith('{') || !t.EndsWith('}')) return null;
@@ -2192,8 +2206,8 @@ public sealed class WidthResolver
         if (property is null) return null;
         if (property.StartsWith("Path=", StringComparison.Ordinal)) property = property["Path=".Length..].Trim();
         if (property.StartsWith("Property=", StringComparison.Ordinal)) property = property["Property=".Length..].Trim();
-        property = property[(property.LastIndexOf('.') + 1)..];
-        return property.Length > 0 && property.All(c => char.IsLetterOrDigit(c) || c == '_') ? property : null;
+        property = PropertyName.Normalize(property, controlName);
+        return property.Length > 0 && property.All(c => char.IsLetterOrDigit(c) || c is '_' or '.') ? property : null;
     }
 
     /// <summary>

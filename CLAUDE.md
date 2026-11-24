@@ -253,6 +253,10 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 | 169 | **控制項的字串內容由 ContentTemplate 畫的時候，字是範本畫的** | ZeroCel 的共用樣板 `<DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap"/>` 讓按鈕折成兩行，工具沒讀 ContentTemplate、照一行量 → 23 筆誤報。換行寬度就是控制項的內容區（跟 ContentPresenter 自己的 TextBlock 一樣），水平 StackPanel 裡沒寬度的照樣不換行（LayoutOracle `--wrap`「template:」7 案）。只認「整個範本就是一個 TextBlock、Text 是 {Binding}」，其他範本（圖示、自己的字型或 Margin、綁別的屬性、Selector、同名好幾份、隱含 TextBlock 樣式改了字型）一律量不到 —— 以前照「沒有範本」量，錯在看起來裝得下那一邊。DataTemplate 資源在 StyleIndex 裡解析成帶編號的記號（`DataTemplateOf` 換回元素），樣式鏈、同檔優先不用重寫 | 回報 4 |
 | 170 | **範本裡的 TextBlock 只吃 App 層級的隱含樣式** | 0.11.0 只要有樣式設了字型就擋：ZeroCel App.xaml 的全域 TextBlock 樣式寫死 FontFamily，32 處從量到變成擋住。LayoutOracle `--wrap`：視窗、Grid 自己 Resources 裡的 FontSize=20 不會套進 DataTemplate（範本邊界）、App 層級的會（`Application.Current.Resources`，WPF 折成 5 行）。寫死的值照它量，讀不出來才擋（`StyleIndex.ApplicationImplicitSetter`、`FontSpec.Read` 的 drawnBy）。對照程式的「APP:」案例把樣式放進 Application.Resources、工具那邊寫 App.xaml | 回報 4 §4、LayoutOracle |
 | 171 | **依型別的 DataTemplate 畫在唯一能畫它的 ContentControl 裡** | ZeroCel 工作室版五個頁面都是 Window.Resources 裡 `DataTemplate DataType=…` + `ContentControl Content="{Binding CurrentPage}"`，工具走到 DataTemplate 就停 → 44.2%。同一個資源範圍裡（**含宿主自己的 Resources**：Kindling 把範本寫在 ContentControl.Resources，第一版只找子孫、漏掉它）Content 綁定且沒有自己範本的元素、ItemsSource 綁定且沒有 ItemTemplate 的清單只有一個、而且是 ContentControl／ContentPresenter → 從它接著走（`WidthResolver.TypedTemplateHost`）。好幾個、沒有、App 層級的 → 照舊在範本裡，原因寫幾個。副作用：原本「到根都沒上界」的位置現在走得到視窗寬，旁邊的未知鄰居變成真的擋路者（Kindling「✨ 新生成」） | 回報 5、LayoutOracle「typed template:」 |
+| 172 | **樣式的附加屬性不是元素自己的屬性，TemplateBinding 要用同一套名字** | Setter 的 `Property` 一律取最後一段 → `hc:IconElement.Width=12` 變成「這個元素寬 12」。擁有者是 WPF 元素型別（反射列出的清單，只比名字不比命名空間：`hc:ScrollViewer` 是同名的衍生類別）或樣式的 TargetType 才去掉（`PropertyName.Normalize`）。⚠ `{TemplateBinding hc:IconElement.Width}` 也截成 Width，兩邊剛好錯得互相抵銷 —— 只修一邊會壞掉；沒人設時預設值在程式碼裡，是不知道。`Canvas.Width`、`Control.Width` 設在 TextBlock 上 WPF 照吃（同一個 DependencyProperty），LayoutOracle「attached setter:」14 案。語料的 finding 沒有變化（這些位置本來就卡在別的原因），所以另外把「去前綴」整段拿掉跑一次：五個專案立刻變，證明語料看得到該留的那一半 | XamlA11y 的語料 → nuget.org 0.12.0 實跑 |
+| 173 | **ignore 註解不能只看最近的那一個** | XamlContrast、XamlKeys、XamlA11y 各有自己的 ignore，會疊在同一個元素上；最近的不是 xamlfit-ignore 就放棄 → 失效。跳過別的註解與 PI；內容（元素、被註解掉的元素〔註解以 `<` 開頭〕、非空白文字，CDATA 也算）就停，更遠處有自己的標記時不壓、算進 `InvalidIgnores` 警告 —— 把草稿註解掉不能讓 ignore 默默改壓正文。最靠近的 `xamlfit-ignore` 說了算，無效也不往更遠的找。註解要以 `xaml…-ignore` 開頭（「TODO 拿掉 xamlfit-ignore」不是）。四支工具同一條規則（2026-11-24 定） | 四支實跑 |
+| 174 | **`<Style.Setters>` 是另一種寫法，不是另一個東西** | 只讀 `<Style>` 的直接子元素 → 整個樣式等於什麼都沒設（漏報那一邊）。語料有 14 個檔案這樣寫（5 個是 WinUI），沒有一筆 finding 改變（抽樣看到的是背景、資料列的範本、或值等於沒設的 Width=Auto），所以靠 LayoutOracle「Style.Setters:」5 案證明。觸發器的 `<Trigger.Setters>` 不算基底值 | 修坑 172 時讀到 |
+| 175 | **repo 寫的屬性名不能直接當 XName** | TabStripPlacement 觸發器的 `Property="hc:Foo.Bar"` 帶冒號 → XmlException、整支工具當掉；`Border.Padding` 則設成沒人讀的屬性 → 內容區多算。一律先過 `PropertyName.Normalize`，不合法的名字就說量不到 | 修坑 172 時讀到 |
 
 ### 環境層級的坑
 
@@ -271,12 +275,12 @@ M0 第一版把它當成覆蓋率的缺口，算出一個撐不住的「84% 覆�
 ## 驗收怎麼跑
 
 ```bash
-dotnet test XamlFit.slnx -c Release          # 909 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
+dotnet test XamlFit.slnx -c Release          # 987 個單元測試（改到語言相關的程式時，再用 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 跑一次）
 bash scripts/verify-demo.sh                  # 示範專案：預期 exit 1 + 五種判定各一個
 bash scripts/verify-budget.sh                # budget 不擋門 + 每列都有具名 status
 bash scripts/verify-cli.sh                   # 50 條 CLI 路徑的退出碼
 bash scripts/verify-readme-facts.sh          # README 的 Action 範例釘的版本 = CHANGELOG 最新版（--update 重貼）
-dotnet run -c Release --project prototype/LayoutOracle   # 261 案 vs 真的 WPF 視窗（--check 用檢查模式的排法再跑一次；--wrap 比換行的行數；--popups 量快顯的內距）（Windows）；有高估就回 1
+dotnet run -c Release --project prototype/LayoutOracle   # 285 案 vs 真的 WPF 視窗（--check 用檢查模式的排法再跑一次；--wrap 比換行的行數；--popups 量快顯的內距）（Windows）；有高估就回 1
 ```
 
 **來源語言自我檢驗**（沒有腳本，手動跑）：對一個已經出貨的 App 跑

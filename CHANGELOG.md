@@ -3,6 +3,57 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [0.13.0] - 2026-11-24
+
+**Upgrading**: a style that sets an attached property named like one of the element's own
+(`hc:IconElement.Width`, `hc:TitleElement.Padding`, `materialDesign:HintAssist.FontFamily`) no longer
+changes the element's own width, padding or font. Overflows reported against such a width go away, and
+sites where the attached value had replaced the real one can report new ones. A template that binds to
+an attached property nobody sets (`Width="{TemplateBinding hc:IconElement.Width}"`) is now blocked, where
+before the property was treated as absent: its default is in code this tool does not read.
+
+Styles that put their setters in `<Style.Setters>` now count: such a style used to be read as setting
+nothing, so a site it makes narrower or whose font it enlarges can report an overflow it did not before,
+and one whose template it replaces is measured through that template or blocked.
+
+None of the 17 public projects and 3 apps in the corpus changed, so expect a difference only if your own
+styles do one of these.
+
+`xamlfit-ignore` comments: the comment has to **start** with `xamlfit-ignore` (or another tool's
+`xaml…-ignore`, see below). `<!-- TODO xamlfit-ignore: x -->` used to suppress and no longer does. Nor does
+an ignore with text between it and the element (`<!-- xamlfit-ignore: x -->text<Run …/>`): it is listed with
+the ignores that were not applied. In the other direction, an ignore that had no effect because another comment stood between it and the element
+now suppresses.
+
+### Fixed
+
+- **An attached property in a style is no longer read as the element's own property.** Only the last part
+  of a `Setter`'s `Property` was kept, so `<Setter Property="local:IconElement.Width" Value="12"/>` became
+  `Width="12"`, and a TextBlock with that style was reported as an overflow with 12 px available. The other direction
+  is worse: an attached `Padding`, `Margin` or `Width` after the real one replaced it and could make the
+  available width too large. The owner is now dropped only when it is a WPF element type
+  (`Control.FontSize`, `FrameworkElement.Width`, `TextElement.FontSize`,
+  `ScrollViewer.VerticalScrollBarVisibility`) or the style's own `TargetType`. Any other owner stays part
+  of the name. LayoutOracle has fourteen new cases ("attached setter:").
+- **`{TemplateBinding owner.property}` uses the same names.** `{TemplateBinding hc:IconElement.Width}` read
+  the control's own `Width`. It now reads the attached property, from the style or from the element
+  (`hc:IconElement.Width="40"`). A template that sets `TextElement.FontFamily` from another property is no
+  longer taken for the control's own font.
+- **Setters inside `<Style.Setters>` are read.** Only setters written directly in `<Style>` were, so a
+  `Width`, `Margin`, font or `Template` in the long form was missed. LayoutOracle has five new cases.
+- **A prefixed property in a `TabStripPlacement` trigger no longer crashes the tool.** `<Setter
+  Property="hc:IconElement.Width" TargetName="…"/>` in a TabControl template ended with an unhandled
+  exception. `Border.Padding` in such a trigger was ignored, which made the content area too wide; it is the
+  element's own `Padding`. A name the tool cannot read blocks the site. LayoutOracle has five new cases.
+- **`xamlfit-ignore` works when another tool's ignore is stacked on the same element.** Only the comment
+  nearest to the element was looked at, so in `<!-- xamlfit-ignore: f --><!-- xamlcontrast-ignore: c -->`
+  the first one did nothing. Other comments are now skipped; another element still ends the search, and so
+  does a commented-out one (`<!-- <TextBlock …/> -->`) or text: the ignore before it was for that, so it does
+  not move on to the next element and is listed with the ignores that were not applied. The nearest
+  `xamlfit-ignore` decides; one without a reason is reported, also with another comment after it. One
+  comment can also hold several (`<!-- xamlcontrast-ignore: c; xamlfit-ignore: f -->`), and each reason ends
+  where the next tool's begins.
+
 ## [0.12.0] - 2026-11-19
 
 **Upgrading**: pages drawn by a `DataTemplate DataType=…` (the MVVM "view model picks the view" pattern) are

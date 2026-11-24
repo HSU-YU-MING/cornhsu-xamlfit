@@ -1899,24 +1899,55 @@ public sealed partial class XamlScanner
         _ => TrimMode.None,
     };
 
-    /// <summary>&lt;!-- xamlfit-ignore: 理由 --&gt; 管它後面的下一個元素。理由必填。</summary>
+    /// <summary>
+    /// &lt;!-- xamlfit-ignore: 理由 --&gt; 管它後面的下一個元素。理由必填。
+    ///
+    /// ⚠ 中間可以隔別的註解：XamlContrast、XamlKeys、XamlA11y 各有自己的 ignore，會疊在同一個元素上。
+    ///   0.12.0 只看最近的那一個註解，所以後面又跟著 xamlcontrast-ignore 的就失效了。隔了元素才停。
+    ///   被註解掉的元素（註解內容以 &lt; 開頭）與文字（CDATA 也是）也算隔了內容：前面的 ignore 管的是它，把草稿註解掉不能讓 ignore 改壓下一個。
+    ///   四支工具同一條規則（註解與 PI 跳過，內容就停）；那個 ignore 當成無效的來警告，不沉默。
+    ///   最靠近的 xamlfit-ignore 說了算，無效也不往更遠的找。
+    /// </summary>
+    /// <returns>理由；有寫 ignore 但沒有理由、或隔了被註解掉的元素或文字是空字串（無效，呼叫端會警告）；沒寫是 null。</returns>
     internal static string? IgnoreReason(XElement el)
     {
-        for (var node = el.PreviousNode; node is not null; node = node.PreviousNode)
+        var stranded = false;
+        for (var node = el.PreviousNode; node is not null and not XElement; node = node.PreviousNode)
         {
-            if (node is XComment c)
-            {
-                var m = IgnoreRegex().Match(c.Value);
-                if (!m.Success) return null;
-                var reason = m.Groups["reason"].Value.Trim();
-                // 理由必填：沒理由的 ignore 視為無效（呼叫端會警告）
-                return reason.Length > 0 ? reason : "";
-            }
-            if (node is XElement) return null;   // 中間隔了別的元素就不算
+            if (node is XText text) stranded |= !string.IsNullOrWhiteSpace(text.Value);
+            if (node is not XComment c) continue;
+            if (ParseIgnore(c.Value) is { } reason) return stranded ? "" : reason;
+            stranded |= c.Value.AsSpan().TrimStart().StartsWith("<");
         }
         return null;
     }
 
-    [GeneratedRegex(@"xamlfit-ignore\s*:?\s*(?<reason>.*)", RegexOptions.Singleline)]
-    private static partial Regex IgnoreRegex();
+    /// <summary>
+    /// 註解要以 xaml…-ignore **開頭**才算（「TODO 拿掉下面的 xamlfit-ignore」不是）。
+    /// 一個註解可以寫好幾支工具的，每一支的理由到下一支為止；第二支起要有冒號才算數
+    /// （「xamlcontrast-ignore: 理由同 xamlfit-ignore」只是提到它）。
+    /// </summary>
+    internal static string? ParseIgnore(string comment)
+    {
+        var t = comment.Trim();
+        var first = IgnoreStartRegex().Match(t);
+        if (!first.Success) return null;
+
+        var marks = new List<Match> { first };
+        marks.AddRange(NextIgnoreRegex().Matches(t, first.Length));
+        for (var i = 0; i < marks.Count; i++)
+        {
+            if (marks[i].Groups["tool"].Value != "xamlfit") continue;
+            var end = i + 1 < marks.Count ? marks[i + 1].Index : t.Length;
+            var reason = t[(marks[i].Index + marks[i].Length)..end].Trim();
+            return i + 1 < marks.Count ? reason.TrimEnd(';', ',', ' ', '\t', '\r', '\n') : reason;
+        }
+        return null;
+    }
+
+    [GeneratedRegex(@"^(?<tool>xaml[a-z0-9]*)-ignore(?![\w-])\s*:?")]
+    private static partial Regex IgnoreStartRegex();
+
+    [GeneratedRegex(@"(?<![\w-])(?<tool>xaml[a-z0-9]*)-ignore\s*:")]
+    private static partial Regex NextIgnoreRegex();
 }

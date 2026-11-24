@@ -594,6 +594,34 @@ internal static class Program
         Add("template: implicit style", W($"<ToggleButton Width='200' HorizontalAlignment='Left'>{text}</ToggleButton>", resources: buttonTemplate));
         Add("template: local Button.Template", W($"<Button Width='200' HorizontalAlignment='Left'><Button.Template><ControlTemplate TargetType='Button'><Border Padding='25,0'><ContentPresenter/></Border></ControlTemplate></Button.Template>{text}</Button>"));
 
+        // ── 4b. 樣式設的附加屬性剛好跟元素自己的屬性同名（HandyControl 的 hc:IconElement.Width）──
+        const string own = "xmlns:o='clr-namespace:OracleTypes;assembly=layoutoracle'";
+        string attached(string setters, string type = "TextBlock") =>
+            $"<Window.Resources><Style x:Key='A' TargetType='{type}' {own}>{setters}</Style></Window.Resources>";
+        string styledText = $"<Border Width='300' HorizontalAlignment='Left'><TextBlock x:Name='probe' Style='{{StaticResource A}}' Text='{Long}'/></Border>";
+        foreach (var setter in new[] { "o:IconElement.Width|12", "o:IconElement.Margin|40,0", "o:IconElement.Padding|40,0",
+                                       "FrameworkElement.Width|60", "TextBlock.Width|60", "Control.Width|60", "Canvas.Width|60", "FrameworkElement.Margin|40,0" })
+            Add($"attached setter: {setter.Split('|')[0]} on a TextBlock", W(styledText, resources: attached($"<Setter Property='{setter.Split('|')[0]}' Value='{setter.Split('|')[1]}'/>")));
+        Add("attached setter: Width then o:IconElement.Width", W(styledText, resources: attached("<Setter Property='Width' Value='60'/><Setter Property='o:IconElement.Width' Value='200'/>")));
+        string iconTemplate(string width) => "<Setter Property='Template'><Setter.Value><ControlTemplate TargetType='Button'><Grid><Grid.ColumnDefinitions><ColumnDefinition Width='Auto'/><ColumnDefinition/></Grid.ColumnDefinitions>" +
+            $"<Border Width='{width}'/><ContentPresenter Grid.Column='1'/></Grid></ControlTemplate></Setter.Value></Setter>";
+        string iconButton = $"<Button Style='{{StaticResource A}}' Width='200' HorizontalAlignment='Left'>{text}</Button>";
+        Add("attached setter: TemplateBinding o:IconElement.Width", W(iconButton, resources: attached("<Setter Property='o:IconElement.Width' Value='30'/>" + iconTemplate("{TemplateBinding o:IconElement.Width}"), "Button")));
+        Add("attached setter: TemplateBinding + local o:IconElement.Width", W($"<Button {own} Style='{{StaticResource A}}' o:IconElement.Width='40' Width='200' HorizontalAlignment='Left'>{text}</Button>", resources: attached("<Setter Property='o:IconElement.Width' Value='30'/>" + iconTemplate("{TemplateBinding o:IconElement.Width}"), "Button")));
+        Add("attached setter: TemplateBinding, nobody sets it", W(iconButton, resources: attached(iconTemplate("{TemplateBinding o:IconElement.Width}"), "Button")), Want.Blocked);
+        Add("attached setter: TemplateBinding Button.MinWidth", W(iconButton, resources: attached("<Setter Property='MinWidth' Value='30'/>" + iconTemplate("{TemplateBinding Button.MinWidth}"), "Button")));
+        Add("attached setter: ScrollViewer.* on a TextBox style", W($"<TextBox x:Name='probe' Style='{{StaticResource A}}' Width='200' HorizontalAlignment='Left'/>", resources: attached("<Setter Property='ScrollViewer.VerticalScrollBarVisibility' Value='Visible'/>", "TextBox")));
+
+        // ── 4c. 包在 <Style.Setters> 裡的 Setter ──
+        string inSetters(string setters, string type = "TextBlock") => attached($"<Style.Setters>{setters}</Style.Setters>", type);
+        Add("Style.Setters: Width", W(styledText, resources: inSetters("<Setter Property='Width' Value='60'/>")));
+        Add("Style.Setters: Margin", W(styledText, resources: inSetters("<Setter Property='Margin' Value='40,0'/>")));
+        Add("Style.Setters: Width, BasedOn overrides it", W(styledText.Replace("{StaticResource A}", "{StaticResource B}", StringComparison.Ordinal),
+            resources: inSetters("<Setter Property='Width' Value='60'/>").Replace("</Window.Resources>", "<Style x:Key='B' TargetType='TextBlock' BasedOn='{StaticResource A}'><Style.Setters><Setter Property='Width' Value='90'/></Style.Setters></Style></Window.Resources>", StringComparison.Ordinal)));
+        Add("Style.Setters: Template", W(iconButton, resources: inSetters("<Setter Property='MinWidth' Value='30'/>" + iconTemplate("{TemplateBinding MinWidth}"), "Button")));
+        Add("Style.Setters: implicit style", W($"<Border Width='300' HorizontalAlignment='Left'><TextBlock x:Name='probe' Text='{Long}'/></Border>",
+            resources: "<Window.Resources><Style TargetType='TextBlock'><Style.Setters><Setter Property='Width' Value='60'/></Style.Setters></Style></Window.Resources>"));
+
         const string scrollTemplate =
             "<Window.Resources><Style TargetType='ScrollViewer'><Setter Property='Template'><Setter.Value>" +
             "<ControlTemplate TargetType='ScrollViewer'><Grid><Grid.ColumnDefinitions><ColumnDefinition Width='*'/><ColumnDefinition Width='Auto'/></Grid.ColumnDefinitions>" +
@@ -736,6 +764,11 @@ internal static class Program
         Add("side tabs Bottom, Playnite templates", Side("Bottom", probeTab + "<TabItem Header='Categories'/>"));
         Add("side tabs Left, element header", Side("Left", probeTab + "<TabItem><TabItem.Header><StackPanel><TextBlock Text='Wide header here'/></StackPanel></TabItem.Header></TabItem>"), Want.Blocked);
         Add("side tabs Left, bound header", Side("Left", probeTab + "<TabItem Header='{Binding Name}'/>"), Want.Blocked);
+        // 觸發器的 Setter 寫「擁有者.屬性」：附加屬性（帶前綴）不影響版面，元素自己的照吃
+        string sideSetter(string setter) => sideTabControl.Replace("<ControlTemplate.Triggers>", $"<ControlTemplate.Triggers><Trigger Property='TabStripPlacement' Value='Left' {own}>{setter}</Trigger>", StringComparison.Ordinal);
+        foreach (var (property, value) in new[] { ("o:IconElement.Width", "200"), ("o:IconElement.Padding", "20,0"), ("Border.Padding", "5,0"), ("Control.Margin", "7,0"), ("FrameworkElement.Margin", "7,0") })
+            Add($"side tabs Left, trigger sets {property}",
+                W($"<Grid Width='500' HorizontalAlignment='Left'><Grid.Resources>{sideSetter($"<Setter Property='{property}' TargetName='HeaderBorder' Value='{value}'/>").Replace("<Setter Property='Margin' TargetName='HeaderBorder' Value='0,0,0,0'/>", "", StringComparison.Ordinal)}{sideTabItem}</Grid.Resources><TabControl TabStripPlacement='Left'>{probeTab}<TabItem Header='Age ratings and regions'/></TabControl></Grid>"));
         // 預設範本的側邊標籤：拆開量（標籤選取與否、Padding、TabControl 的 Padding／邊框）
         Add("default tabs: Left, long tab selected", W($"<TabControl Width='500' HorizontalAlignment='Left' TabStripPlacement='Left'><TabItem Header='Age ratings and regions' IsSelected='True'><Border x:Name='probe'/></TabItem><TabItem Header='Platforms'/></TabControl>"));
         Add("default tabs: Left, TabItem Padding 20,2", W($"<TabControl Width='500' HorizontalAlignment='Left' TabStripPlacement='Left'>{probeTab}<TabItem Header='Age ratings and regions' Padding='20,2'/></TabControl>"));

@@ -59,6 +59,57 @@ public class SideTabStripTests
         Assert.Equal(400 - 76, w.Px, 3);
     }
 
+    // ───────── 觸發器的 Setter 寫「擁有者.屬性」 ─────────
+
+    private static AvailableWidth WithSetter(string setter, string ns = "") => Resolve(Xaml("Left", Items,
+        trigger: $"<Trigger Property=\"TabStripPlacement\" Value=\"Left\" {ns}>{setter}</Trigger>"));
+
+    private const string Hc = "xmlns:hc=\"clr-namespace:App\"";
+
+    [Fact]
+    public void A_prefixed_attached_property_in_the_trigger_does_not_crash()
+    {
+        // 0.12.0：帶冒號的名字直接拿去當 XName → XmlException，整支工具當掉
+        var w = WithSetter("<Setter Property=\"hc:IconElement.Width\" TargetName=\"HeaderBorder\" Value=\"200\"/>", Hc);
+        Assert.Equal(WidthStatus.Known, w.Status);
+        Assert.Equal(400 - 76, w.Px, 3);
+    }
+
+    [Fact]
+    public void A_prefixed_attached_property_replaces_the_one_on_the_element()
+    {
+        // 範本元素自己也寫了同一個附加屬性：蓋掉它，不是留兩份
+        var xaml = Xaml("Left", Items, trigger: $"<Trigger Property=\"TabStripPlacement\" Value=\"Left\" {Hc}><Setter Property=\"hc:IconElement.Width\" TargetName=\"HeaderBorder\" Value=\"2\"/></Trigger>")
+            .Replace("<Border x:Name=\"HeaderBorder\"", $"<Border {Hc} hc:IconElement.Width=\"1\" x:Name=\"HeaderBorder\"", StringComparison.Ordinal);
+        Assert.Equal(400 - 76, Resolve(xaml).Px, 3);
+    }
+
+    [Theory]
+    [InlineData("Border.Padding")]
+    [InlineData("hc:Border.Padding")]
+    public void An_owner_qualified_own_property_in_the_trigger_applies(string property)
+    {
+        // 0.12.0 設成叫「Border.Padding」的屬性，沒有人讀 → 內容區多算 10
+        var w = WithSetter($"<Setter Property=\"{property}\" TargetName=\"HeaderBorder\" Value=\"5,0\"/>", Hc);
+        Assert.Equal(400 - 86, w.Px, 3);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("hc:Width")]
+    [InlineData("(hc:IconElement.Width)")]
+    [InlineData("a b.c d")]
+    public void A_property_name_this_tool_cannot_read_blocks_instead_of_crashing(string property) =>
+        Assert.Equal(WidthStatus.Unmeasurable, WithSetter($"<Setter Property=\"{property}\" TargetName=\"HeaderBorder\" Value=\"5\"/>", Hc).Status);
+
+    [Fact]
+    public void A_property_element_the_trigger_replaces_still_blocks()
+    {
+        var xaml = Xaml("Left", Items, trigger: "<Trigger Property=\"TabStripPlacement\" Value=\"Left\"><Setter Property=\"Border.Padding\" TargetName=\"HeaderBorder\" Value=\"5\"/></Trigger>")
+            .Replace("BorderThickness=\"0,0,0,1\">", "BorderThickness=\"0,0,0,1\"><Border.Padding><Thickness>1</Thickness></Border.Padding>", StringComparison.Ordinal);
+        Assert.Equal(WidthStatus.Unmeasurable, Resolve(xaml).Status);
+    }
+
     [Fact]
     public void A_top_strip_does_not_take_width() =>
         Assert.Equal(400, Resolve(Xaml("Top", Items)).Px, 3);

@@ -123,7 +123,7 @@ internal static class Pipeline
 
         if (s.InvalidIgnores > 0)
             Console.Error.WriteLine(
-                $"  !! {s.InvalidIgnores} xamlfit-ignore comment(s) have no reason and were NOT applied");
+                $"  !! {s.InvalidIgnores} xamlfit-ignore comment(s) have no reason, or a commented-out element or text after them, and were NOT applied");
     }
 
     public static void PrintBlockedReasons(BudgetSummary s, int take = 10)
