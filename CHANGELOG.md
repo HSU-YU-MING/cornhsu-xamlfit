@@ -3,7 +3,12 @@
 All notable changes to this project are documented here.
 This project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.13.1] - 2026-11-24
+
+**Upgrading**: only the GitHub Action changed; the tool gives the same results as 0.13.0.
+If your workflow writes `root` in one of the ways below, or your XAML is in a folder whose name
+needs encoding, code scanning alerts move to the right file: expect the ones at the old path to close and new ones
+to open.
 
 ### Fixed
 
