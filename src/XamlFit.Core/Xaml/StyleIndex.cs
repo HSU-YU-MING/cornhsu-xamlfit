@@ -325,14 +325,18 @@ public sealed class StyleIndex
         var setsTemplate = false;
         XElement? template = null;
         string? templateKey = null;
+        var targetType = NormalizeType(style.Attribute("TargetType")?.Value);
 
-        foreach (var setter in style.Elements().Where(e => e.Name.LocalName == "Setter"))
+        // 直接寫在 <Style> 裡，或包在 <Style.Setters> 裡（觸發器裡的不算）
+        foreach (var setter in style.Elements()
+                     .SelectMany(e => e.Name.LocalName == "Style.Setters" ? e.Elements() : [e])
+                     .Where(e => e.Name.LocalName == "Setter"))
         {
             var prop = setter.Attribute("Property")?.Value;
             if (prop is null) continue;
 
-            // 「Control.FontSize」「ScrollViewer.VerticalScrollBarVisibility」取最後一段
-            var name = prop[(prop.LastIndexOf('.') + 1)..];
+            // 「Control.FontSize」→ FontSize；「hc:IconElement.Width」是附加屬性，不是這個元素的 Width
+            var name = PropertyName.Normalize(prop, targetType);
 
             if (name == "Template")
             {
@@ -355,7 +359,7 @@ public sealed class StyleIndex
         var basedOnType = basedOnKey is null && basedOnRaw is not null ? TypeKeyOf(basedOnRaw) : null;
 
         return new StyleRecord(
-            file, KeyOf(style), NormalizeType(style.Attribute("TargetType")?.Value),
+            file, KeyOf(style), targetType,
             basedOnKey, basedOnType, basedOnRaw is not null && basedOnKey is null && basedOnType is null,
             setters, setsTemplate, template, templateKey, origin);
     }
@@ -535,7 +539,7 @@ public sealed class StyleIndex
     public Resolved ImplicitSetter(XElement from, string targetType, string property)
     {
         var file = FileOf(from);
-        var setterName = property[(property.LastIndexOf('.') + 1)..];
+        var setterName = PropertyName.Normalize(property);
         var styles = ImplicitStyles(from, targetType, file);
         return styles.Count == 0 ? Resolved.NotSet : Agree(styles, s => FromRecord(s, setterName, file, 0));
     }
@@ -547,7 +551,7 @@ public sealed class StyleIndex
     /// </summary>
     public Resolved ApplicationImplicitSetter(string targetType, string property, string file)
     {
-        var setterName = property[(property.LastIndexOf('.') + 1)..];
+        var setterName = PropertyName.Normalize(property);
         var styles = ImplicitStyles(null, targetType, file);
         return styles.Count == 0 ? Resolved.NotSet : Agree(styles, s => FromRecord(s, setterName, file, 0));
     }
@@ -591,7 +595,7 @@ public sealed class StyleIndex
     public Resolved ResolveEx(XElement element, string property, bool inheritable)
     {
         var file = FileOf(element);
-        var setterName = property[(property.LastIndexOf('.') + 1)..];
+        var setterName = PropertyName.Normalize(property);
 
         for (var cur = element; cur is not null; cur = inheritable ? cur.Parent : null)
         {
@@ -936,10 +940,15 @@ public sealed class StyleIndex
     // ───────────────────────── 小工具 ─────────────────────────
 
     /// <summary>本地屬性。字型屬性另外認 TextElement.X／TextBlock.X／Control.X 這種附加寫法 ——
-    /// `&lt;StackPanel TextElement.FontSize="14"&gt;` 是常見的設定繼承值的方式。</summary>
+    /// `&lt;StackPanel TextElement.FontSize="14"&gt;` 是常見的設定繼承值的方式。
+    /// 帶擁有者的查詢（IconElement.Width）另外認帶前綴的寫法（hc:IconElement.Width）。</summary>
     private static string? LocalAttribute(XElement el, string property)
     {
         if (el.Attribute(property)?.Value is { } direct && !string.IsNullOrWhiteSpace(direct)) return direct;
+
+        if (property.Contains('.', StringComparison.Ordinal)
+            && el.Attributes().FirstOrDefault(a => a.Name.LocalName == property)?.Value is { } prefixed && !string.IsNullOrWhiteSpace(prefixed))
+            return prefixed;
 
         if (FontProperties.Contains(property))
         {

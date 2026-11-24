@@ -365,11 +365,11 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.12.0
+      - uses: HSU-YU-MING/cornhsu-xamlfit@v0.13.0
         with:
           root: src/MyApp
           resx: src/MyApp/Resources
-          version: 0.12.0
+          version: 0.13.0
           export-fonts: Segoe UI, Microsoft JhengHei UI
 ```
 
@@ -527,11 +527,11 @@ permissions:
   security-events: write          # 只有 sarif: true 才需要
 steps:
   - uses: actions/checkout@v4
-  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.12.0
+  - uses: HSU-YU-MING/cornhsu-xamlfit@v0.13.0
     with:
       root: src/MyApp
       resx: src/MyApp/Resources
-      version: 0.12.0              # 工具的版本也要釘
+      version: 0.13.0              # 工具的版本也要釘
       sarif: true                 # 上傳到 code scanning
 ```
 
@@ -565,6 +565,8 @@ Action 會自己裝 .NET 與工具、跑 `xamlfit check`、把每一筆 finding 
 <!-- xamlfit-ignore: 裝飾用，不翻譯 -->
 <TextBlock Width="40" Text="{x:Static p:Strings.Arrow}"/>
 ```
+
+註解要以 `xamlfit-ignore` 開頭，管它後面的下一個元素。中間可以隔別的註解，所以能跟 `xamlcontrast-ignore` 之類的疊在一起；隔了被註解掉的元素或文字就不算。
 
 ## 相關工具
 

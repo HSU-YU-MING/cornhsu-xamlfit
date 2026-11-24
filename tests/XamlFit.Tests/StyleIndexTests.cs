@@ -153,4 +153,56 @@ public class StyleIndexTests
     [InlineData("Hint", null)]
     public void Resource_key_extraction(string input, string? expected) =>
         Assert.Equal(expected, StyleIndex.ResourceKeyOf(input));
+
+    // ───────── <Style.Setters>（0.12.0 整段沒讀，等於樣式什麼都沒設）─────────
+
+    [Fact]
+    public void Setters_in_a_Style_Setters_element_are_read()
+    {
+        var (idx, probe) = Build("""
+            <Root.Resources>
+              <Style x:Key="Base" TargetType="TextBlock">
+                <Style.Setters><Setter Property="FontSize" Value="20"/><Setter Property="Width" Value="12"/></Style.Setters>
+              </Style>
+              <Style x:Key="Hint" TargetType="TextBlock" BasedOn="{StaticResource Base}">
+                <Style.Setters><Setter Property="Width" Value="{Binding W}"/></Style.Setters>
+              </Style>
+            </Root.Resources>
+            """ + """<TextBlock x:Name="probe" Style="{StaticResource Hint}" Text="hi"/>""");
+
+        Assert.Equal("20", idx.Resolve(probe, "FontSize", inheritable: false));
+        Assert.Equal(ResolveKind.Unreadable, idx.ResolveEx(probe, "Width", inheritable: false).Kind);
+    }
+
+    [Fact]
+    public void A_template_in_a_Style_Setters_element_replaces_the_template()
+    {
+        var (idx, probe) = Build("""
+            <Root.Resources>
+              <Style TargetType="Button">
+                <Style.Setters>
+                  <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><ContentPresenter/></ControlTemplate></Setter.Value></Setter>
+                </Style.Setters>
+              </Style>
+            </Root.Resources>
+            """ + """<Button x:Name="probe"/>""");
+
+        Assert.Equal(TemplateKind.Custom, idx.TemplateOf(probe).Kind);
+        Assert.True(idx.ImplicitStyleMaySetTemplate(probe, "Button"));
+    }
+
+    [Fact]
+    public void Setters_inside_triggers_are_still_not_the_base_value()
+    {
+        var (idx, probe) = Build("""
+            <Root.Resources>
+              <Style x:Key="Hint" TargetType="TextBlock">
+                <Style.Setters><Setter Property="FontSize" Value="11"/></Style.Setters>
+                <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Trigger.Setters><Setter Property="FontSize" Value="30"/></Trigger.Setters></Trigger></Style.Triggers>
+              </Style>
+            </Root.Resources>
+            """ + """<TextBlock x:Name="probe" Style="{StaticResource Hint}" Text="hi"/>""");
+
+        Assert.Equal("11", idx.Resolve(probe, "FontSize", inheritable: false));
+    }
 }
