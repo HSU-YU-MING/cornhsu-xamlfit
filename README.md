@@ -757,8 +757,10 @@ between, so it can be stacked with `xamlcontrast-ignore` and the like; a comment
 ## Related tools
 
 [XamlContrast](https://www.nuget.org/packages/Cornhsu.XamlContrast) audits WCAG contrast in the
-same XAML, and [XamlKeys](https://www.nuget.org/packages/Cornhsu.XamlKeys) audits resource-key
-scope. Same exit-code contract, same baseline shape, same mental model.
+same XAML, [XamlKeys](https://www.nuget.org/packages/Cornhsu.XamlKeys) audits resource-key
+scope, and [XamlA11y](https://www.nuget.org/packages/Cornhsu.XamlA11y) finds controls a screen reader
+cannot name or a keyboard cannot reach. Same exit-code contract, same baseline shape, same mental model.
+[All four in one job](https://github.com/HSU-YU-MING/cornhsu-xamla11y/blob/main/docs/four-tools.md).
 
 ## Licence
 
