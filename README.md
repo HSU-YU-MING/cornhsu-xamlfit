@@ -482,6 +482,15 @@ no proprietary font: you generate the file from fonts licensed to your machine. 
 holds is listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md#font-metrics). This is not
 legal advice.
 
+We did ask. Microsoft's FAQ directs extended licensing of its fonts to Monotype, so five questions
+went to Monotype on 2026-11-19 — may a user extract these numbers, does a public repository change
+the answer, is generating them in CI and discarding them acceptable, does Segoe UI Variable need
+separate treatment, and if none of that is permitted, what licence would cover it. As of 2026-11-25
+none of them has been answered. The questions, the correspondence and what the tool does while the
+question is open are recorded in
+[docs/font-metrics-licensing.md](docs/font-metrics-licensing.md), and that page will be updated
+whatever the answer turns out to be.
+
 - **Private repository:** the file stays where your fonts' licence already applies, with your team.
 - **Public repository:** committing the file publishes numbers derived from commercial fonts. Until
   there is an answer, prefer generating it in CI (below) instead of committing it, and do not upload
