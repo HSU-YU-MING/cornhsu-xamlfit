@@ -48,6 +48,9 @@ jobs:
       # README 的 Action 範例釘的版本要等於 CHANGELOG 最新的已發佈版本（0.3.0 發完才發現還釘著 0.1.0）
       - name: README pins the released version
         run: bash scripts/verify-readme-facts.sh
+      # 發版才會用到的東西，平常就跑一次：CHANGELOG 最新那一版抽得出來
+      - name: Release notes of the latest version
+        run: bash scripts/release-notes.sh "$(sed -nE 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\] - [0-9].*/\1/p' CHANGELOG.md | head -n 1)"
 
   # 真的跑一次 action.yml：單元測試只看得到文字，看不到 jq 註記、stop-commands、最後一步才擋有沒有接起來。
   # 裝的是**這個分支**打包出來的 CLI（本地 feed + nuget.config），不是 nuget.org 上的正式版 ——
