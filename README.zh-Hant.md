@@ -364,7 +364,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: HSU-YU-MING/cornhsu-xamlfit@v0.13.1
         with:
           root: src/MyApp
@@ -526,7 +526,7 @@ permissions:
   pull-requests: write            # PR 留言用
   security-events: write          # 只有 sarif: true 才需要
 steps:
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@v7
   - uses: HSU-YU-MING/cornhsu-xamlfit@v0.13.1
     with:
       root: src/MyApp
