@@ -571,8 +571,10 @@ Action 會自己裝 .NET 與工具、跑 `xamlfit check`、把每一筆 finding 
 ## 相關工具
 
 [XamlContrast](https://www.nuget.org/packages/Cornhsu.XamlContrast) 稽核同一份 XAML 的
-WCAG 對比度，[XamlKeys](https://www.nuget.org/packages/Cornhsu.XamlKeys) 稽核資源鍵的作用域。
+WCAG 對比度，[XamlKeys](https://www.nuget.org/packages/Cornhsu.XamlKeys) 稽核資源鍵的作用域，
+[XamlA11y](https://www.nuget.org/packages/Cornhsu.XamlA11y) 找螢幕閱讀器念不出來、鍵盤到不了的控制項。
 同一套退出碼契約、同一種 baseline 形狀、同一個心智模型。
+[四支放在同一個 job](https://github.com/HSU-YU-MING/cornhsu-xamla11y/blob/main/docs/four-tools.md)（英文）。
 
 ## 授權
 
