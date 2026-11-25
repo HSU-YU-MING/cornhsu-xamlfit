@@ -344,6 +344,11 @@ WPF 的候選字型在度量檔裡都畫不出來的字算量不到，報告會�
 對度量數字一個字都沒提；字型度量也沒有任何判決。XamlFit 本身不附任何商用字型的度量：檔案是你從這台機器上有授權的字型產生的。
 檔案裡有什麼，[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md#font-metrics) 全部列出來了。以上不是法律意見。
 
+我們問過了。Microsoft 的 FAQ 把自家字型的延伸授權指向 Monotype，所以 2026-11-19 寄了五個問題給 Monotype：
+使用者能不能萃取這些數字、公開 repo 會不會不一樣、在 CI 現場產生用完即丟可不可以、Segoe UI Variable 要不要另外處理、
+以上都不行的話有沒有適用的授權。到 2026-11-25 為止一題都沒有被回答。問題原文、往來經過，以及在有答案之前工具採取的做法，
+記在 [docs/font-metrics-licensing.md](docs/font-metrics-licensing.md)；不管答案是什麼，那一頁都會更新。
+
 - **私人 repo：** 檔案留在你的團隊裡，跟字型授權本來涵蓋的範圍一樣。
 - **公開 repo：** commit 這個檔案等於公開從商用字型算出來的數字。在有答案之前，建議在 CI 裡產生（見下方）而不要 commit；
   也不要把它上傳成 workflow artifact —— 公開 repo 的 artifact 下載得到。
