@@ -21,6 +21,9 @@ jobs:
       - id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      # 套件推上去之前先抽好 Release 的內容：那之後才失敗就救不回來
+      - run: bash scripts/release-notes.sh "${{ steps.version.outputs.version }}" > /dev/null
+
       - run: dotnet build XamlFit.slnx -c Release -p:Version=${{ steps.version.outputs.version }}
       - run: dotnet test XamlFit.slnx -c Release --no-build
       - run: bash scripts/verify-demo.sh
@@ -37,3 +40,25 @@ jobs:
           user: Cornhsu
 
       - run: dotnet nuget push ./artifacts/*.nupkg --source https://api.nuget.org/v3/index.json --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --skip-duplicate
+
+  # GitHub Release：使用者釘確切版本，Releases 頁是看得到「這版改了什麼」的地方。內容取自 CHANGELOG。
+  # 另外一個 job：推套件的那個拿得到 OIDC，不需要能寫 repo；這個能寫 repo，拿不到 OIDC。
+  github-release:
+    needs: publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Create or update the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          bash scripts/release-notes.sh "${GITHUB_REF_NAME#v}" > "$RUNNER_TEMP/notes.md"
+          # 重跑 job 時更新既有的，不報錯
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag
+          fi
