@@ -62,10 +62,37 @@ Sent in these words:
 | 11-23 | Support wrote again with the same request for contact details that had already been answered on 11-19, without saying what was missing and without answering any question. Answered again. |
 | 11-24 | A Monotype licensing representative wrote, asking to be telephoned to discuss the matter. **None of the five questions was addressed.** |
 | 11-25 | Replied in writing: restated the five questions, explained that the answer has to be something the project can quote in its documentation, and offered a call once there is a written answer. |
+| 11-26 | Monotype replied in writing. See below. |
 
-**Current status: no answer to any of the five questions.** This page will be updated when one
-arrives, whatever it says. If the answer is that this use is not permitted, the tool's defaults and
-its recommendations will change to match, and that change will be recorded here too.
+## What came back
+
+Monotype's stated position is that because these are fonts that ship with Windows, **their terms of
+use are ultimately Microsoft's to define**, not Monotype's. The five questions were therefore not
+answered.
+
+The representative added a reading of his own, explicitly marked as a personal view and not as an
+answer from Monotype. We record its substance because it is the only reasoned response we have, and
+not because it settles anything: that Windows permits its fonts to be used within Windows and its
+products, and that since the numbers all derive from the font software itself, the font's existing
+terms would be expected to apply to them; that a repository opened to the public by the rights
+holder carries that rights holder's endorsement, whereas treating something as a "public resource"
+without it is where compliance problems tend to start.
+
+On licensing, Monotype said that extended rights are obtainable in principle, but that some fonts
+shipped with Windows cannot be licensed onward at all, that the kind of licence this would need
+would have to be determined internally, and that the request was the first of its kind they had
+seen. They also said plainly that they handle **enterprise** licensing only, that an individual
+cannot be offered a licence, and that they run no service channel for individual users.
+
+**Current status: the five questions are unanswered, and this route is closed.** The licensor of
+record for these fonts is Microsoft; Monotype will neither speak for Microsoft's terms nor sell an
+individual a licence. We have a written statement of who the question belongs to, and one
+explicitly non-binding opinion that points the same way as the precautions below. Neither is
+permission, and neither is legal advice.
+
+If anything further arrives — from Microsoft or anyone else — this page will be updated, whatever
+it says. If the answer turns out to be that this use is not permitted, the tool's defaults and its
+recommendations will change to match, and that change will be recorded here too.
 
 ## What the tool does in the meantime
 
